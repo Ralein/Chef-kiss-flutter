@@ -1,0 +1,320 @@
+[
+  {
+    "id": "pasta-pomodoro",
+    "profileId": "system",
+    "title": "Artisanal Ribbon Fettuccine al Pomodoro",
+    "slug": "pasta-pomodoro",
+    "summary": "Silky handmade egg pasta tossed with sweet San Marzano tomatoes, garlic, extra virgin olive oil, and fragrant fresh basil.",
+    "status": "ready",
+    "baseServingsNum": 2,
+    "baseServingsDen": 1,
+    "difficulty": "medium",
+    "totalMinutes": 35,
+    "visualTemplate": "ingredient_forward",
+    "visualStyleVersion": "v1",
+    "isCurated": true,
+    "origin": "curated",
+    "isFavorite": true,
+    "coverImage": "assets/illustrations/sketchbook_pasta.jpg",
+    "polaroidCaption": "Handmade Pasta al Pomodoro",
+    "theme": "terracotta-classic",
+    "moodStamps": ["Al Dente", "Slow Simmered", "Chef's Signature"],
+    "chefTip": "Vigorously toss the pasta with a splash of starchy cooking water to emulsify the sauce into a glossy glaze.",
+    "chefTipIcon": "chefHat",
+    "chefTipIconColor": "#C85A32",
+    "stickers": [],
+    "washiTapes": [],
+    "ingredients": [
+      { "id": "p-1", "displayName": "Type 00 Flour", "quantityNum": 200, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
+      { "id": "p-2", "displayName": "Fresh Farm Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "egg", "iconColor": "#E5A124" },
+      { "id": "p-3", "displayName": "San Marzano Tomatoes", "quantityNum": 1, "quantityDen": 1, "unitCode": "can (400g)", "position": 3, "icon": "apple", "iconColor": "#D94B34" },
+      { "id": "p-4", "displayName": "Extra Virgin Olive Oil", "quantityNum": 3, "quantityDen": 1, "unitCode": "tbsp", "position": 4, "icon": "droplets", "iconColor": "#4A6B53" },
+      { "id": "p-5", "displayName": "Garlic Cloves (thinly sliced)", "quantityNum": 3, "quantityDen": 1, "unitCode": "cloves", "position": 5, "icon": "leaf", "iconColor": "#8C7355" },
+      { "id": "p-6", "displayName": "Fresh Basil Leaves", "quantityNum": 1, "quantityDen": 1, "unitCode": "handful", "position": 6, "icon": "leaf", "iconColor": "#3D7A5A" },
+      { "id": "p-7", "displayName": "Parmigiano Reggiano", "quantityNum": 40, "quantityDen": 1, "unitCode": "g", "position": 7, "icon": "milk", "iconColor": "#E5A124" }
+    ],
+    "steps": [
+      {
+        "id": "ps-1",
+        "position": 1,
+        "actionKey": "Knead",
+        "iconKey": "chefHat",
+        "instructionShort": "Make a flour well on your wooden board, crack in the eggs, and knead into silky dough.",
+        "instructionDetail": "Knead for 8-10 mins until elastic and smooth, then rest wrapped for 20 mins.",
+        "timers": [{ "id": "pt-1", "label": "Dough Rest", "durationSeconds": 1200, "position": 1 }]
+      },
+      {
+        "id": "ps-2",
+        "position": 2,
+        "actionKey": "Slice",
+        "iconKey": "scissors",
+        "instructionShort": "Roll out dough thinly and slice into delicate ribbon fettuccine strands.",
+        "instructionDetail": "Dust lightly with semolina flour to prevent sticking."
+      },
+      {
+        "id": "ps-3",
+        "position": 3,
+        "actionKey": "Sauté",
+        "iconKey": "flame",
+        "instructionShort": "Sauté garlic in olive oil until golden, then crush in tomatoes and simmer 15 mins.",
+        "instructionDetail": "Cook over low heat until sauce is sweet, glossy, and fragrant.",
+        "timers": [{ "id": "pt-2", "label": "Sauce Simmer", "durationSeconds": 900, "position": 1 }]
+      },
+      {
+        "id": "ps-4",
+        "position": 4,
+        "actionKey": "Simmer",
+        "iconKey": "cookingPot",
+        "instructionShort": "Boil pasta 2-3 minutes, toss vigorously into sauce with fresh basil and parmesan.",
+        "instructionDetail": "Toss with starchy pasta water to emulsify the sauce into a rich glaze.",
+        "timers": [{ "id": "pt-3", "label": "Pasta Boil", "durationSeconds": 150, "position": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "french-crepes",
+    "profileId": "system",
+    "title": "French Crêpes Suzette with Sweet Berries",
+    "slug": "french-crepes",
+    "summary": "Delicate French crêpes layered with sweet strawberry compote, whipped vanilla cream, and dusted with powdered sugar.",
+    "status": "ready",
+    "baseServingsNum": 2,
+    "baseServingsDen": 1,
+    "difficulty": "easy",
+    "totalMinutes": 25,
+    "visualTemplate": "ingredient_forward",
+    "visualStyleVersion": "v1",
+    "isCurated": true,
+    "origin": "curated",
+    "isFavorite": true,
+    "coverImage": "assets/illustrations/sketchbook_crepes.jpg",
+    "polaroidCaption": "French Crêpes Suzette",
+    "theme": "artisan-kraft",
+    "moodStamps": ["Pastry Craft", "Chef's Signature", "Golden Crust"],
+    "chefTip": "Rest the batter for 15 minutes before cooking so the gluten relaxes for paper-thin, delicate crêpes.",
+    "chefTipIcon": "chefHat",
+    "chefTipIconColor": "#8C7355",
+    "stickers": [],
+    "washiTapes": [],
+    "ingredients": [
+      { "id": "c-1", "displayName": "Type 00 Pastry Flour", "quantityNum": 120, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
+      { "id": "c-2", "displayName": "Ceremonial Matcha Powder", "quantityNum": 2, "quantityDen": 1, "unitCode": "tsp", "position": 2, "icon": "leaf", "iconColor": "#4A6B53" },
+      { "id": "c-3", "displayName": "Farm Fresh Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "eggs", "position": 3, "icon": "egg", "iconColor": "#E5A124" },
+      { "id": "c-4", "displayName": "Whole Milk", "quantityNum": 250, "quantityDen": 1, "unitCode": "ml", "position": 4, "icon": "milk", "iconColor": "#4A6B53" },
+      { "id": "c-5", "displayName": "Melted Sweet Butter", "quantityNum": 25, "quantityDen": 1, "unitCode": "g", "position": 5, "icon": "droplets", "iconColor": "#E5A124" },
+      { "id": "c-6", "displayName": "Fresh Strawberries", "quantityNum": 150, "quantityDen": 1, "unitCode": "g", "position": 6, "icon": "cherry", "iconColor": "#D94B34" },
+      { "id": "c-7", "displayName": "Pure Honey or Maple", "quantityNum": 2, "quantityDen": 1, "unitCode": "tbsp", "position": 7, "icon": "droplets", "iconColor": "#D9822B" }
+    ],
+    "steps": [
+      {
+        "id": "cs-1",
+        "position": 1,
+        "actionKey": "Whisk",
+        "iconKey": "utensils",
+        "instructionShort": "Whisk flour, matcha powder, eggs, and milk into a smooth emerald batter.",
+        "instructionDetail": "Strain through fine sieve to remove any lumps and let rest 15 mins.",
+        "timers": [{ "id": "ct-1", "label": "Batter Rest", "durationSeconds": 900, "position": 1 }]
+      },
+      {
+        "id": "cs-2",
+        "position": 2,
+        "actionKey": "Bake",
+        "iconKey": "flame",
+        "instructionShort": "Swirl thin layer in buttered pan and cook 1 min per side until edges curl.",
+        "instructionDetail": "Flip gently with spatula once the surface sets.",
+        "timers": [{ "id": "ct-2", "label": "Crêpe Flip Timer", "durationSeconds": 60, "position": 1 }]
+      },
+      {
+        "id": "cs-3",
+        "position": 3,
+        "actionKey": "Fold",
+        "iconKey": "layers",
+        "instructionShort": "Layer with sliced sweet strawberries, whipped cream, and fold gently into triangles.",
+        "instructionDetail": "Garnish with fresh mint and a light dusting of powdered sugar."
+      }
+    ]
+  },
+  {
+    "id": "avocado-brioche",
+    "profileId": "system",
+    "title": "Smashed Avocado Brioche & Jammy Egg",
+    "slug": "avocado-brioche",
+    "summary": "Golden toasted brioche loaded with lemon-mashed avocado, heirloom cherry tomatoes, flaky sea salt, and a 6-minute jammy egg.",
+    "status": "ready",
+    "baseServingsNum": 2,
+    "baseServingsDen": 1,
+    "difficulty": "easy",
+    "totalMinutes": 15,
+    "visualTemplate": "ingredient_forward",
+    "visualStyleVersion": "v1",
+    "isCurated": true,
+    "origin": "curated",
+    "isFavorite": true,
+    "coverImage": "assets/illustrations/sketchbook_salad.jpg",
+    "polaroidCaption": "Artisan Brioche & Avocado",
+    "theme": "matcha-sage",
+    "moodStamps": ["Garden Fresh", "Slow Morning", "Culinary Craft"],
+    "chefTip": "A splash of fresh lemon juice prevents avocado oxidation and adds a bright zesty punch.",
+    "chefTipIcon": "chefHat",
+    "chefTipIconColor": "#4A6B53",
+    "stickers": [],
+    "washiTapes": [],
+    "ingredients": [
+      { "id": "a-1", "displayName": "Artisan Brioche Slices", "quantityNum": 2, "quantityDen": 1, "unitCode": "thick slices", "position": 1, "icon": "wheat", "iconColor": "#D9822B" },
+      { "id": "a-2", "displayName": "Ripe Hass Avocado", "quantityNum": 1, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "salad", "iconColor": "#4A6B53" },
+      { "id": "a-3", "displayName": "Meyer Lemon Juice", "quantityNum": 1, "quantityDen": 1, "unitCode": "tbsp", "position": 3, "icon": "citrus", "iconColor": "#E5A124" },
+      { "id": "a-4", "displayName": "6-Minute Jammy Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "eggs", "position": 4, "icon": "egg", "iconColor": "#E5A124" },
+      { "id": "a-5", "displayName": "Microgreens & Chili Flakes", "authoredQuantity": "pinch", "position": 5, "icon": "leaf", "iconColor": "#D94B34" }
+    ],
+    "steps": [
+      {
+        "id": "as-1",
+        "position": 1,
+        "actionKey": "Bake",
+        "iconKey": "flame",
+        "instructionShort": "Toast brioche in a buttered pan until golden and crispy on both sides.",
+        "instructionDetail": "Keep heat medium to develop uniform golden browning.",
+        "timers": [{ "id": "at-1", "label": "Brioche Toast", "durationSeconds": 180, "position": 1 }]
+      },
+      {
+        "id": "as-2",
+        "position": 2,
+        "actionKey": "Fold",
+        "iconKey": "utensils",
+        "instructionShort": "Coarsely mash avocado with lemon juice, flaky salt, and olive oil.",
+        "instructionDetail": "Keep texture chunky rather than fully pureed."
+      },
+      {
+        "id": "as-3",
+        "position": 3,
+        "actionKey": "Slice",
+        "iconKey": "scissors",
+        "instructionShort": "Spread generously over toast, crown with halved jammy egg and microgreens.",
+        "instructionDetail": "Finish with flaky Maldon sea salt and cracked black pepper."
+      }
+    ]
+  },
+  {
+    "id": "tokyo-ramen",
+    "profileId": "system",
+    "title": "Tokyo Shoyu Craft Ramen with Ajitsuke Egg",
+    "slug": "tokyo-ramen",
+    "summary": "Silky fragrant chicken-dashi broth served over springy noodles, soft-boiled ajitsuke egg, nori crisp, and toasted sesame oil.",
+    "status": "ready",
+    "baseServingsNum": 2,
+    "baseServingsDen": 1,
+    "difficulty": "medium",
+    "totalMinutes": 30,
+    "visualTemplate": "ingredient_forward",
+    "visualStyleVersion": "v1",
+    "isCurated": true,
+    "origin": "curated",
+    "isFavorite": false,
+    "coverImage": "assets/illustrations/sketchbook_ramen.jpg",
+    "polaroidCaption": "Tokyo Shoyu Ramen",
+    "theme": "matcha-sage",
+    "moodStamps": ["Tokyo Craft", "Slow Simmered", "Umami Rich"],
+    "chefTip": "Boil noodles for exactly 90 seconds for that perfect bouncy springiness.",
+    "chefTipIcon": "chefHat",
+    "chefTipIconColor": "#8C7355",
+    "stickers": [],
+    "washiTapes": [],
+    "ingredients": [
+      { "id": "r-1", "displayName": "Fresh Ramen Noodles", "quantityNum": 2, "quantityDen": 1, "unitCode": "portions", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
+      { "id": "r-2", "displayName": "Chicken Dashi Broth", "quantityNum": 600, "quantityDen": 1, "unitCode": "ml", "position": 2, "icon": "soup", "iconColor": "#D9822B" },
+      { "id": "r-3", "displayName": "Ajitsuke Soft-Boiled Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "halved", "position": 3, "icon": "egg", "iconColor": "#E5A124" },
+      { "id": "r-4", "displayName": "Toasted Sesame Oil", "quantityNum": 1, "quantityDen": 1, "unitCode": "tbsp", "position": 4, "icon": "droplets", "iconColor": "#8C7355" },
+      { "id": "r-5", "displayName": "Scallions & Nori Sheets", "quantityNum": 2, "quantityDen": 1, "unitCode": "stalks", "position": 5, "icon": "leaf", "iconColor": "#4A6B53" }
+    ],
+    "steps": [
+      {
+        "id": "rs-1",
+        "position": 1,
+        "actionKey": "Simmer",
+        "iconKey": "cookingPot",
+        "instructionShort": "Simmer broth gently with ginger and garlic to release soothing aromas.",
+        "instructionDetail": "Keep at gentle bare simmer to maintain clarity.",
+        "timers": [{ "id": "rt-1", "label": "Broth Simmer", "durationSeconds": 600, "position": 1 }]
+      },
+      {
+        "id": "rs-2",
+        "position": 2,
+        "actionKey": "Simmer",
+        "iconKey": "flame",
+        "instructionShort": "Boil ramen noodles for 90 seconds, then drain thoroughly.",
+        "instructionDetail": "Shake off excess water vigorously before placing into bowls.",
+        "timers": [{ "id": "rt-2", "label": "Noodle Boil", "durationSeconds": 90, "position": 1 }]
+      },
+      {
+        "id": "rs-3",
+        "position": 3,
+        "actionKey": "Fold",
+        "iconKey": "utensils",
+        "instructionShort": "Pour broth over noodles, arrange jammy egg, scallions, and nori with care.",
+        "instructionDetail": "Drizzle with aromatic toasted sesame oil right before serving."
+      }
+    ]
+  },
+  {
+    "id": "rustic-sourdough",
+    "profileId": "system",
+    "title": "Rustic Country Sourdough Boule",
+    "slug": "rustic-sourdough",
+    "summary": "A golden crackling blistered crust with an airy open crumb, wild yeast fermentation, and rich roasted grain depth.",
+    "status": "ready",
+    "baseServingsNum": 4,
+    "baseServingsDen": 1,
+    "difficulty": "hard",
+    "totalMinutes": 180,
+    "visualTemplate": "ingredient_forward",
+    "visualStyleVersion": "v1",
+    "isCurated": true,
+    "origin": "curated",
+    "isFavorite": true,
+    "coverImage": "assets/illustrations/sketchbook_sourdough.jpg",
+    "polaroidCaption": "Artisan Sourdough Boule",
+    "theme": "artisan-kraft",
+    "moodStamps": ["Wild Ferment", "Golden Crust", "Artisanal Craft"],
+    "chefTip": "Bake with the Dutch oven lid closed for 20 minutes to trap steam and create explosive oven spring blisters.",
+    "chefTipIcon": "chefHat",
+    "chefTipIconColor": "#8C7355",
+    "stickers": [],
+    "washiTapes": [],
+    "ingredients": [
+      { "id": "s-1", "displayName": "Unbleached Bread Flour", "quantityNum": 450, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
+      { "id": "s-2", "displayName": "Whole Wheat Flour", "quantityNum": 50, "quantityDen": 1, "unitCode": "g", "position": 2, "icon": "wheat", "iconColor": "#8C7355" },
+      { "id": "s-3", "displayName": "Warm Water (26°C)", "quantityNum": 375, "quantityDen": 1, "unitCode": "ml", "position": 3, "icon": "droplets", "iconColor": "#4A6B53" },
+      { "id": "s-4", "displayName": "Active Sourdough Starter", "quantityNum": 100, "quantityDen": 1, "unitCode": "g", "position": 4, "icon": "wheat", "iconColor": "#D9822B" },
+      { "id": "s-5", "displayName": "Fine Sea Salt", "quantityNum": 10, "quantityDen": 1, "unitCode": "g", "position": 5, "icon": "scale", "iconColor": "#8C7355" }
+    ],
+    "steps": [
+      {
+        "id": "ss-1",
+        "position": 1,
+        "actionKey": "Whisk",
+        "iconKey": "utensils",
+        "instructionShort": "Dissolve starter in warm water, mix with flours, and autolyse 45 mins.",
+        "instructionDetail": "Allow flour to fully hydrate before incorporating salt.",
+        "timers": [{ "id": "st-1", "label": "Autolyse Rest", "durationSeconds": 2700, "position": 1 }]
+      },
+      {
+        "id": "ss-2",
+        "position": 2,
+        "actionKey": "Fold",
+        "iconKey": "layers",
+        "instructionShort": "Fold in salt and perform 4 sets of stretch-and-folds every 30 minutes.",
+        "instructionDetail": "Pull dough gently upwards and fold over the center.",
+        "timers": [{ "id": "st-2", "label": "Stretch & Fold", "durationSeconds": 1800, "position": 1 }]
+      },
+      {
+        "id": "ss-3",
+        "position": 3,
+        "actionKey": "Bake",
+        "iconKey": "flame",
+        "instructionShort": "Score with razor blade and bake in hot Dutch oven at 230°C for 40 mins.",
+        "instructionDetail": "Bake 20 mins lid on, then 20 mins lid off for deep caramelization.",
+        "timers": [{ "id": "st-3", "label": "Dutch Oven Bake", "durationSeconds": 2400, "position": 1 }]
+      }
+    ]
+  }
+]

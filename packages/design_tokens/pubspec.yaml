@@ -1,0 +1,21 @@
+name: design_tokens
+description: Design tokens, semantic themes, and cookbook component primitives for Chef's Kiss.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.15.0
+  flutter_svg: ^2.0.17
+  recipe_domain:
+    path: ../recipe_domain
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

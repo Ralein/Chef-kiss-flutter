@@ -1,0 +1,14 @@
+export 'src/failures.dart';
+export 'src/result.dart';
+export 'src/logging/app_logger.dart';
+export 'src/environment/app_environment.dart';
+export 'src/capabilities/platform_capabilities.dart';
+export 'src/repositories/recipe_repository.dart';
+export 'src/repositories/cooking_session_repository.dart';
+export 'src/repositories/collection_repository.dart';
+export 'src/repositories/settings_repository.dart';
+export 'src/repositories/import_repository.dart';
+export 'src/repositories/backup_repository.dart';
+export 'src/repositories/sync_contracts.dart';
+export 'src/services/ai_broker_service.dart';
+export 'src/services/source_capture_service.dart';
