@@ -1,148 +1,193 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:drift/drift.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:app_contracts/app_contracts.dart';
 import 'package:uuid/uuid.dart';
+
 import '../db/app_database.dart';
 
+/// Drift-backed recipe aggregate repository.
+///
+/// A [Recipe] is an aggregate spread across ~8 tables (ingredients, steps,
+/// timers, tools, labels, favorites, ...). This repository guarantees:
+///
+/// * **Atomic saves** – the whole aggregate is replaced inside one transaction.
+/// * **Child-id safety** – child rows whose ids collide with rows owned by a
+///   *different* recipe (or with each other) are transparently re-keyed, so a
+///   save can never fail on a primary-key conflict.
+/// * **Reactive reads** – watch streams re-emit when *any* table that feeds the
+///   aggregate changes (not only `recipes_table`), so toggling a favorite or
+///   editing a step is reflected immediately.
+/// * **Batched loading** – relations for N recipes are fetched with a constant
+///   number of queries instead of O(N × relations).
 class DriftRecipeRepository implements RecipeRepository {
-  final AppDatabase db;
-  final Uuid _uuid = const Uuid();
+  /// Number of version snapshots kept per recipe. Older snapshots are pruned
+  /// on save so frequent small edits (e.g. dragging stickers) cannot grow the
+  /// database without bound.
+  static const int maxStoredVersions = 25;
 
-  DriftRecipeRepository(this.db);
+  /// SQLite host-parameter limits are generous on modern builds, but chunking
+  /// keeps `IN (...)` queries portable across every platform's SQLite.
+  static const int _inClauseChunk = 500;
+
+  final AppDatabase db;
+  final Uuid _uuid;
+
+  DriftRecipeRepository(this.db, {Uuid uuid = const Uuid()}) : _uuid = uuid;
+
+  Set<ResultSetImplementation<dynamic, dynamic>> get _aggregateTables => {
+        db.recipesTable,
+        db.recipeIngredientsTable,
+        db.recipeStepsTable,
+        db.stepTimersTable,
+        db.recipeToolsTable,
+        db.recipeLabelsTable,
+        db.labelsTable,
+        db.favoritesTable,
+        db.collectionRecipesTable,
+      };
+
+  // ---------------------------------------------------------------------------
+  // Queries
+  // ---------------------------------------------------------------------------
 
   @override
   Stream<List<Recipe>> watchRecipes({RecipeFilter filter = const RecipeFilter()}) {
-    final query = db.select(db.recipesTable)
-      ..where((r) {
-        Expression<bool> predicate = const Constant(true);
-
-        if (!filter.includeArchived) {
-          predicate = predicate & r.deletedAt.isNull();
-        }
-
-        if (filter.cuisine != null) {
-          // Join or check labels if needed
-        }
-
-        if (filter.difficulty != null) {
-          predicate = predicate & r.difficulty.equals(filter.difficulty!.name);
-        }
-
-        if (filter.maxTotalMinutes != null) {
-          predicate = predicate & r.totalMinutes.isSmallerOrEqualValue(filter.maxTotalMinutes!);
-        }
-
-        return predicate;
-      })
-      ..orderBy([(r) => OrderingTerm.desc(r.updatedAt)]);
-
-    return query.watch().asyncMap((rows) async {
-      final recipes = <Recipe>[];
-      for (final row in rows) {
-        // Check favorite
-        final fav = await (db.select(db.favoritesTable)
-              ..where((f) => f.recipeId.equals(row.id)))
-            .getSingleOrNull();
-
-        if (filter.onlyFavorites && fav == null) {
-          continue;
-        }
-
-        // Apply text query filter if given
-        if (filter.query != null && filter.query!.trim().isNotEmpty) {
-          final q = filter.query!.trim().toLowerCase();
-          final matchesTitle = row.title.toLowerCase().contains(q);
-          final matchesSummary = row.summary?.toLowerCase().contains(q) ?? false;
-          if (!matchesTitle && !matchesSummary) {
-            // Check ingredients
-            final matchingIng = await (db.select(db.recipeIngredientsTable)
-                  ..where((i) => i.recipeId.equals(row.id) & i.displayName.lower().like('%$q%')))
-                .get();
-            if (matchingIng.isEmpty) {
-              continue;
-            }
-          }
-        }
-
-        // Check collection filter
-        if (filter.collectionId != null) {
-          final inCollection = await (db.select(db.collectionRecipesTable)
-                ..where((c) => c.collectionId.equals(filter.collectionId!) & c.recipeId.equals(row.id)))
-              .getSingleOrNull();
-          if (inCollection == null) {
-            continue;
-          }
-        }
-
-        recipes.add(await _loadFullRecipe(row));
-      }
-      return recipes;
-    });
+    return _watchAggregate(() => _queryRecipes(filter));
   }
 
   @override
   Future<Result<List<Recipe>, AppFailure>> getRecipes({RecipeFilter filter = const RecipeFilter()}) async {
     try {
-      final list = await watchRecipes(filter: filter).first;
-      return Result.ok(list);
+      return Result.ok(await _queryRecipes(filter));
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to fetch recipes: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to fetch recipes.', cause: e));
     }
   }
 
   @override
   Future<Result<Recipe, AppFailure>> getRecipeById(String id) async {
     try {
-      final row = await (db.select(db.recipesTable)..where((r) => r.id.equals(id))).getSingleOrNull();
-      if (row == null) {
+      final recipe = await _loadById(id);
+      if (recipe == null) {
         return Result.err(NotFoundFailure(resourceType: 'Recipe', resourceId: id));
       }
-
-      final recipe = await _loadFullRecipe(row);
       return Result.ok(recipe);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to load recipe: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to load recipe.', cause: e));
     }
   }
 
   @override
-  Stream<Recipe?> watchRecipeById(String id) {
-    return (db.select(db.recipesTable)..where((r) => r.id.equals(id)))
-        .watchSingleOrNull()
-        .asyncMap((row) async {
-      if (row == null) return null;
-      return await _loadFullRecipe(row);
-    });
+  Stream<Recipe?> watchRecipeById(String id) => _watchAggregate(() => _loadById(id));
+
+  @override
+  Future<Result<List<Recipe>, AppFailure>> searchRecipes(String query) async {
+    try {
+      return Result.ok(await _queryRecipes(RecipeFilter(query: query)));
+    } catch (e) {
+      return Result.err(StorageFailure(message: 'Search failed.', cause: e));
+    }
   }
+
+  @override
+  Stream<List<Recipe>> watchDeletedRecipes() {
+    return (db.select(db.recipesTable)
+          ..where((r) => r.deletedAt.isNotNull())
+          ..orderBy([(r) => OrderingTerm.desc(r.deletedAt)]))
+        .watch()
+        .map((rows) => rows.map((r) => _mapRow(r, const _Relations.empty())).toList());
+  }
+
+  Future<Recipe?> _loadById(String id) async {
+    final row = await (db.select(db.recipesTable)..where((r) => r.id.equals(id))).getSingleOrNull();
+    if (row == null) return null;
+    final loaded = await _loadAggregates([row]);
+    return loaded.single;
+  }
+
+  Future<List<Recipe>> _queryRecipes(RecipeFilter filter) async {
+    final query = db.select(db.recipesTable)
+      ..where((r) {
+        Expression<bool> predicate = const Constant(true);
+        if (!filter.includeArchived) {
+          predicate = predicate & r.deletedAt.isNull();
+        }
+        if (filter.difficulty != null) {
+          predicate = predicate & r.difficulty.equals(filter.difficulty!.name);
+        }
+        if (filter.maxTotalMinutes != null) {
+          predicate = predicate & r.totalMinutes.isSmallerOrEqualValue(filter.maxTotalMinutes!);
+        }
+        return predicate;
+      })
+      ..orderBy([(r) => OrderingTerm.desc(r.updatedAt)]);
+
+    var rows = await query.get();
+
+    if (filter.collectionId != null) {
+      final members = await (db.select(db.collectionRecipesTable)
+            ..where((c) => c.collectionId.equals(filter.collectionId!)))
+          .map((c) => c.recipeId)
+          .get();
+      final memberSet = members.toSet();
+      rows = rows.where((r) => memberSet.contains(r.id)).toList();
+    }
+
+    var recipes = await _loadAggregates(rows);
+
+    if (filter.onlyFavorites) {
+      recipes = recipes.where((r) => r.isFavorite).toList();
+    }
+    if (filter.cuisine != null) {
+      recipes = recipes.where((r) => _hasLabel(r, 'cuisine', filter.cuisine!)).toList();
+    }
+    if (filter.dietary != null) {
+      recipes = recipes.where((r) => _hasLabel(r, 'dietary', filter.dietary!)).toList();
+    }
+    final q = filter.query?.trim().toLowerCase();
+    if (q != null && q.isNotEmpty) {
+      recipes = recipes.where((r) => _matchesQuery(r, q)).toList();
+    }
+    return recipes;
+  }
+
+  static bool _hasLabel(Recipe r, String kind, String key) {
+    final k = key.toLowerCase();
+    return r.labels.any((l) => l.kind == kind && (l.canonicalKey.toLowerCase() == k || l.displayName.toLowerCase() == k));
+  }
+
+  static bool _matchesQuery(Recipe r, String q) {
+    return r.title.toLowerCase().contains(q) ||
+        (r.summary?.toLowerCase().contains(q) ?? false) ||
+        r.ingredients.any((i) => i.displayName.toLowerCase().contains(q)) ||
+        r.labels.any((l) => l.displayName.toLowerCase().contains(q)) ||
+        r.moodStamps.any((m) => m.toLowerCase().contains(q));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Commands
+  // ---------------------------------------------------------------------------
 
   @override
   Future<Result<Recipe, AppFailure>> saveRecipe(Recipe recipe) async {
     try {
       final now = DateTime.now().toUtc().millisecondsSinceEpoch;
       final recipeId = recipe.id.isEmpty ? _uuid.v4() : recipe.id;
+      final profileId = recipe.profileId.isEmpty ? 'default' : recipe.profileId;
 
       await db.transaction(() async {
-        // 1. Upsert recipes table
-        final provenanceMap = {
-          'theme': recipe.theme.toKey(),
-          'moodStamps': recipe.moodStamps,
-          'stickers': recipe.stickers.map((s) => s.toJson()).toList(),
-          'washiTapes': recipe.washiTapes.map((w) => w.toJson()).toList(),
-          'coverImage': recipe.coverImage,
-          'polaroidCaption': recipe.polaroidCaption,
-          'polaroidRotation': recipe.polaroidRotation,
-          'polaroidX': recipe.polaroidX,
-          'polaroidY': recipe.polaroidY,
-          'chefTip': recipe.chefTip,
-          'chefTipIcon': recipe.chefTipIcon,
-          'chefTipIconColor': recipe.chefTipIconColor,
-        };
+        final existing =
+            await (db.select(db.recipesTable)..where((r) => r.id.equals(recipeId))).getSingleOrNull();
+        // createdAt is immutable once a recipe exists.
+        final createdAt = existing?.createdAt ?? (recipe.createdAt == 0 ? now : recipe.createdAt);
 
         await db.into(db.recipesTable).insertOnConflictUpdate(
               RecipesTableCompanion(
                 id: Value(recipeId),
-                profileId: Value(recipe.profileId.isEmpty ? 'default' : recipe.profileId),
+                profileId: Value(profileId),
                 title: Value(recipe.title),
                 slug: Value(recipe.slug),
                 summary: Value(recipe.summary),
@@ -155,28 +200,56 @@ class DriftRecipeRepository implements RecipeRepository {
                 visualTemplate: Value(recipe.visualTemplate),
                 visualStyleVersion: Value(recipe.visualStyleVersion),
                 isCurated: Value(recipe.isCurated),
-                createdAt: Value(recipe.createdAt == 0 ? now : recipe.createdAt),
+                createdAt: Value(createdAt),
                 updatedAt: Value(now),
                 deletedAt: Value(recipe.deletedAt),
                 version: Value(recipe.version + 1),
                 origin: Value(recipe.origin.toDbString()),
-                provenanceJson: Value(jsonEncode(provenanceMap)),
+                provenanceJson: Value(jsonEncode(_encodeProvenance(recipe))),
               ),
             );
 
-        // 2. Replace Ingredients
+        // Remove this recipe's previous children. Timers hang off steps, so
+        // they must be collected *before* the steps are deleted.
+        final oldStepIds = await (db.select(db.recipeStepsTable)..where((s) => s.recipeId.equals(recipeId)))
+            .map((s) => s.id)
+            .get();
+        for (final chunk in _chunks(oldStepIds)) {
+          await (db.delete(db.stepTimersTable)..where((t) => t.recipeStepId.isIn(chunk))).go();
+        }
+        await (db.delete(db.recipeStepsTable)..where((s) => s.recipeId.equals(recipeId))).go();
         await (db.delete(db.recipeIngredientsTable)..where((i) => i.recipeId.equals(recipeId))).go();
+        await (db.delete(db.recipeToolsTable)..where((t) => t.recipeId.equals(recipeId))).go();
+        await (db.delete(db.recipeLabelsTable)..where((l) => l.recipeId.equals(recipeId))).go();
+
+        // Any incoming id still present now belongs to another recipe.
+        final takenIngredientIds = await _existingIds(
+          recipe.ingredients.map((i) => i.id),
+          (chunk) => (db.select(db.recipeIngredientsTable)..where((i) => i.id.isIn(chunk))).map((i) => i.id).get(),
+        );
+        final takenStepIds = await _existingIds(
+          recipe.steps.map((s) => s.id),
+          (chunk) => (db.select(db.recipeStepsTable)..where((s) => s.id.isIn(chunk))).map((s) => s.id).get(),
+        );
+        final takenTimerIds = await _existingIds(
+          recipe.steps.expand((s) => s.timers).map((t) => t.id),
+          (chunk) => (db.select(db.stepTimersTable)..where((t) => t.id.isIn(chunk))).map((t) => t.id).get(),
+        );
+        final takenToolIds = await _existingIds(
+          recipe.tools.map((t) => t.id),
+          (chunk) => (db.select(db.recipeToolsTable)..where((t) => t.id.isIn(chunk))).map((t) => t.id).get(),
+        );
+        final takenLabelLinkIds = await _existingIds(
+          recipe.labels.map((l) => l.id),
+          (chunk) => (db.select(db.recipeLabelsTable)..where((l) => l.id.isIn(chunk))).map((l) => l.id).get(),
+        );
+
+        final ingredientKeys = _IdAllocator(takenIngredientIds, _uuid);
         for (var idx = 0; idx < recipe.ingredients.length; idx++) {
           final ing = recipe.ingredients[idx];
-          final ingMeta = {
-            'icon': ing.icon,
-            'iconColor': ing.iconColor,
-            'x': ing.x,
-            'y': ing.y,
-          };
           await db.into(db.recipeIngredientsTable).insert(
                 RecipeIngredientsTableCompanion(
-                  id: Value(ing.id.isEmpty ? _uuid.v4() : ing.id),
+                  id: Value(ingredientKeys.claim(ing.id)),
                   recipeId: Value(recipeId),
                   catalogIngredientId: Value(ing.catalogIngredientId),
                   displayName: Value(ing.displayName),
@@ -189,24 +262,22 @@ class DriftRecipeRepository implements RecipeRepository {
                   isOptional: Value(ing.isOptional),
                   position: Value(idx + 1),
                   groupKey: Value(ing.groupKey),
-                  allergenOverrideJson: Value(jsonEncode(ingMeta)),
+                  allergenOverrideJson: Value(jsonEncode({
+                    'icon': ing.icon,
+                    'iconColor': ing.iconColor,
+                    'x': ing.x,
+                    'y': ing.y,
+                  })),
                   illustrationKey: Value(ing.illustrationKey),
                 ),
               );
         }
 
-        // 3. Replace Steps & Timers
-        await (db.delete(db.recipeStepsTable)..where((s) => s.recipeId.equals(recipeId))).go();
+        final stepKeys = _IdAllocator(takenStepIds, _uuid);
+        final timerKeys = _IdAllocator(takenTimerIds, _uuid);
         for (var sIdx = 0; sIdx < recipe.steps.length; sIdx++) {
           final step = recipe.steps[sIdx];
-          final stepId = step.id.isEmpty ? _uuid.v4() : step.id;
-          final stepMeta = {
-            'iconKey': step.iconKey,
-            'iconColor': step.iconColor,
-            'cookwareKey': step.cookwareKey,
-            'x': step.x,
-            'y': step.y,
-          };
+          final stepId = stepKeys.claim(step.id);
           await db.into(db.recipeStepsTable).insert(
                 RecipeStepsTableCompanion(
                   id: Value(stepId),
@@ -220,16 +291,21 @@ class DriftRecipeRepository implements RecipeRepository {
                   temperatureC: Value(step.temperatureC),
                   temperatureF: Value(step.temperatureF),
                   layoutHint: Value(step.layoutHint),
-                  safetyJson: Value(jsonEncode(stepMeta)),
+                  safetyJson: Value(jsonEncode({
+                    'iconKey': step.iconKey,
+                    'iconColor': step.iconColor,
+                    'cookwareKey': step.cookwareKey,
+                    'x': step.x,
+                    'y': step.y,
+                  })),
                 ),
               );
 
-          // Insert Step Timers
           for (var tIdx = 0; tIdx < step.timers.length; tIdx++) {
             final timer = step.timers[tIdx];
             await db.into(db.stepTimersTable).insert(
                   StepTimersTableCompanion(
-                    id: Value(timer.id.isEmpty ? _uuid.v4() : timer.id),
+                    id: Value(timerKeys.claim(timer.id)),
                     recipeStepId: Value(stepId),
                     label: Value(timer.label),
                     durationSeconds: Value(timer.durationSeconds),
@@ -240,13 +316,12 @@ class DriftRecipeRepository implements RecipeRepository {
           }
         }
 
-        // 4. Replace Tools
-        await (db.delete(db.recipeToolsTable)..where((t) => t.recipeId.equals(recipeId))).go();
+        final toolKeys = _IdAllocator(takenToolIds, _uuid);
         for (var idx = 0; idx < recipe.tools.length; idx++) {
           final tool = recipe.tools[idx];
           await db.into(db.recipeToolsTable).insert(
                 RecipeToolsTableCompanion(
-                  id: Value(tool.id.isEmpty ? _uuid.v4() : tool.id),
+                  id: Value(toolKeys.claim(tool.id)),
                   recipeId: Value(recipeId),
                   toolId: Value(tool.toolId),
                   displayName: Value(tool.displayName),
@@ -257,10 +332,8 @@ class DriftRecipeRepository implements RecipeRepository {
               );
         }
 
-        // 5. Replace Labels
-        await (db.delete(db.recipeLabelsTable)..where((l) => l.recipeId.equals(recipeId))).go();
+        final labelKeys = _IdAllocator(takenLabelLinkIds, _uuid);
         for (final label in recipe.labels) {
-          // Ensure label exists in labelsTable
           await db.into(db.labelsTable).insertOnConflictUpdate(
                 LabelsTableCompanion(
                   id: Value(label.labelId),
@@ -271,7 +344,7 @@ class DriftRecipeRepository implements RecipeRepository {
               );
           await db.into(db.recipeLabelsTable).insert(
                 RecipeLabelsTableCompanion(
-                  id: Value(label.id.isEmpty ? _uuid.v4() : label.id),
+                  id: Value(labelKeys.claim(label.id)),
                   recipeId: Value(recipeId),
                   labelId: Value(label.labelId),
                   sourceConfidence: Value(label.sourceConfidence),
@@ -280,24 +353,25 @@ class DriftRecipeRepository implements RecipeRepository {
               );
         }
 
-        // 6. Record Version Snapshot
+        await _syncFavorite(recipeId, profileId, recipe.isFavorite, now);
+
         await db.into(db.recipeVersionsTable).insert(
               RecipeVersionsTableCompanion(
                 id: Value(_uuid.v4()),
                 recipeId: Value(recipeId),
                 sequence: Value(recipe.version + 1),
                 snapshotJson: Value(jsonEncode(_serializeRecipeSnapshot(recipe))),
-                changeSummary: Value('Saved recipe draft/update'),
+                changeSummary: const Value('Saved recipe draft/update'),
                 authorKind: Value(recipe.origin.toDbString()),
                 createdAt: Value(now),
               ),
             );
+        await _pruneVersions(recipeId);
 
-        // 7. Append Change Operation
         await db.into(db.changeOperationsTable).insert(
               ChangeOperationsTableCompanion(
                 operationId: Value(_uuid.v4()),
-                profileId: Value(recipe.profileId.isEmpty ? 'default' : recipe.profileId),
+                profileId: Value(profileId),
                 entityType: const Value('recipe'),
                 entityId: Value(recipeId),
                 opType: const Value('upsert'),
@@ -309,36 +383,31 @@ class DriftRecipeRepository implements RecipeRepository {
             );
       });
 
-      final saved = await getRecipeById(recipeId);
-      return saved;
+      return getRecipeById(recipeId);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to save recipe: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to save recipe.', cause: e));
     }
   }
 
   @override
   Future<Result<bool, AppFailure>> toggleFavorite(String recipeId) async {
     try {
-      final existing = await (db.select(db.favoritesTable)
-            ..where((f) => f.recipeId.equals(recipeId)))
-          .getSingleOrNull();
-
-      if (existing != null) {
+      final existing = await (db.select(db.favoritesTable)..where((f) => f.recipeId.equals(recipeId))).get();
+      if (existing.isNotEmpty) {
         await (db.delete(db.favoritesTable)..where((f) => f.recipeId.equals(recipeId))).go();
         return Result.ok(false);
-      } else {
-        await db.into(db.favoritesTable).insert(
-              FavoritesTableCompanion(
-                id: Value(_uuid.v4()),
-                profileId: const Value('default'),
-                recipeId: Value(recipeId),
-                favoritedAt: Value(DateTime.now().toUtc().millisecondsSinceEpoch),
-              ),
-            );
-        return Result.ok(true);
       }
+      await db.into(db.favoritesTable).insert(
+            FavoritesTableCompanion(
+              id: Value(_uuid.v4()),
+              profileId: const Value('default'),
+              recipeId: Value(recipeId),
+              favoritedAt: Value(DateTime.now().toUtc().millisecondsSinceEpoch),
+            ),
+          );
+      return Result.ok(true);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to toggle favorite: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to update favorite.', cause: e));
     }
   }
 
@@ -347,14 +416,11 @@ class DriftRecipeRepository implements RecipeRepository {
     try {
       final now = DateTime.now().toUtc().millisecondsSinceEpoch;
       await (db.update(db.recipesTable)..where((r) => r.id.equals(recipeId))).write(
-        RecipesTableCompanion(
-          deletedAt: Value(now),
-          updatedAt: Value(now),
-        ),
+        RecipesTableCompanion(deletedAt: Value(now), updatedAt: Value(now)),
       );
       return Result.ok(null);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to delete recipe: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to delete recipe.', cause: e));
     }
   }
 
@@ -363,14 +429,11 @@ class DriftRecipeRepository implements RecipeRepository {
     try {
       final now = DateTime.now().toUtc().millisecondsSinceEpoch;
       await (db.update(db.recipesTable)..where((r) => r.id.equals(recipeId))).write(
-        RecipesTableCompanion(
-          deletedAt: const Value(null),
-          updatedAt: Value(now),
-        ),
+        RecipesTableCompanion(deletedAt: const Value(null), updatedAt: Value(now)),
       );
       return Result.ok(null);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to restore recipe: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to restore recipe.', cause: e));
     }
   }
 
@@ -378,54 +441,34 @@ class DriftRecipeRepository implements RecipeRepository {
   Future<Result<void, AppFailure>> purgeRecipe(String id) async {
     try {
       await db.transaction(() async {
-        await (db.delete(db.recipeIngredientsTable)..where((i) => i.recipeId.equals(id))).go();
+        final stepIds = await (db.select(db.recipeStepsTable)..where((s) => s.recipeId.equals(id)))
+            .map((s) => s.id)
+            .get();
+        for (final chunk in _chunks(stepIds)) {
+          await (db.delete(db.stepTimersTable)..where((t) => t.recipeStepId.isIn(chunk))).go();
+        }
+        final sessionIds = await (db.select(db.cookingSessionsTable)..where((s) => s.recipeId.equals(id)))
+            .map((s) => s.id)
+            .get();
+        for (final chunk in _chunks(sessionIds)) {
+          await (db.delete(db.sessionIngredientChecksTable)..where((c) => c.sessionId.isIn(chunk))).go();
+          await (db.delete(db.sessionTimersTable)..where((t) => t.sessionId.isIn(chunk))).go();
+        }
+        await (db.delete(db.cookingSessionsTable)..where((s) => s.recipeId.equals(id))).go();
         await (db.delete(db.recipeStepsTable)..where((s) => s.recipeId.equals(id))).go();
+        await (db.delete(db.recipeIngredientsTable)..where((i) => i.recipeId.equals(id))).go();
+        await (db.delete(db.recipeToolsTable)..where((t) => t.recipeId.equals(id))).go();
+        await (db.delete(db.recipeLabelsTable)..where((l) => l.recipeId.equals(id))).go();
+        await (db.delete(db.recipeNotesTable)..where((n) => n.recipeId.equals(id))).go();
+        await (db.delete(db.recipeMediaTable)..where((m) => m.recipeId.equals(id))).go();
+        await (db.delete(db.recipeVersionsTable)..where((v) => v.recipeId.equals(id))).go();
         await (db.delete(db.collectionRecipesTable)..where((c) => c.recipeId.equals(id))).go();
         await (db.delete(db.favoritesTable)..where((f) => f.recipeId.equals(id))).go();
         await (db.delete(db.recipesTable)..where((r) => r.id.equals(id))).go();
       });
       return const Result.ok(null);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Failed to purge recipe: $e', cause: e));
-    }
-  }
-
-  @override
-  Stream<List<Recipe>> watchDeletedRecipes() {
-    return (db.select(db.recipesTable)
-          ..where((r) => r.deletedAt.isNotNull())
-          ..orderBy([(r) => OrderingTerm.desc(r.deletedAt)]))
-        .watch()
-        .map((rows) => rows.map((r) => _mapRowToRecipe(r, isFavorite: false)).toList());
-  }
-
-  @override
-  Future<Result<List<Recipe>, AppFailure>> searchRecipes(String query) async {
-    try {
-      final q = query.trim().toLowerCase();
-      if (q.isEmpty) {
-        final all = await (db.select(db.recipesTable)
-              ..where((r) => r.deletedAt.isNull())
-              ..orderBy([(r) => OrderingTerm.desc(r.updatedAt)]))
-            .get();
-        final mapped = all.map((r) => _mapRowToRecipe(r)).toList();
-        return Result.ok(mapped);
-      }
-
-      final rows = await (db.select(db.recipesTable)
-            ..where((r) =>
-                r.deletedAt.isNull() &
-                (r.title.lower().like('%$q%') | r.summary.lower().like('%$q%'))))
-          .get();
-
-      final list = <Recipe>[];
-      for (final r in rows) {
-        final full = await _loadFullRecipe(r);
-        list.add(full);
-      }
-      return Result.ok(list);
-    } catch (e) {
-      return Result.err(StorageFailure(message: 'Search failed: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Failed to permanently delete recipe.', cause: e));
     }
   }
 
@@ -434,173 +477,255 @@ class DriftRecipeRepository implements RecipeRepository {
     try {
       var count = 0;
       for (final starter in starterRecipes) {
-        final existing = await (db.select(db.recipesTable)..where((r) => r.id.equals(starter.id))).getSingleOrNull();
-        if (existing == null) {
-          await saveRecipe(starter);
-          count++;
-        }
+        final existing =
+            await (db.select(db.recipesTable)..where((r) => r.id.equals(starter.id))).getSingleOrNull();
+        if (existing != null) continue;
+        final saved = await saveRecipe(starter);
+        if (saved.isSuccess) count++;
       }
       return Result.ok(count);
     } catch (e) {
-      return Result.err(StorageFailure(message: 'Seeding starter recipes failed: $e', cause: e));
+      return Result.err(StorageFailure(message: 'Seeding starter recipes failed.', cause: e));
     }
   }
 
-  Future<Recipe> _loadFullRecipe(RecipesTableData row) async {
-    // Parse scrapbook provenance metadata
-    Map<String, dynamic> provenance = {};
-    try {
-      if (row.provenanceJson.isNotEmpty) {
-        provenance = jsonDecode(row.provenanceJson) as Map<String, dynamic>;
+  // ---------------------------------------------------------------------------
+  // Internals
+  // ---------------------------------------------------------------------------
+
+  /// Emits [load]'s result immediately and again whenever an aggregate table
+  /// changes. Bursts of updates that arrive while a load is in flight are
+  /// coalesced into a single follow-up load.
+  Stream<T> _watchAggregate<T>(Future<T> Function() load) {
+    late final StreamController<T> controller;
+    StreamSubscription<Set<TableUpdate>>? trigger;
+    var running = false;
+    var dirty = false;
+
+    Future<void> run() async {
+      if (running) {
+        dirty = true;
+        return;
       }
-    } catch (_) {}
-
-    final theme = ScrapbookTheme.fromKey(provenance['theme'] as String?);
-    final moodStamps = (provenance['moodStamps'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-    final stickers = (provenance['stickers'] as List<dynamic>?)
-            ?.map((e) => ScrapbookSticker.fromJson(e as Map<String, dynamic>))
-            .toList() ??
-        [];
-    final washiTapes = (provenance['washiTapes'] as List<dynamic>?)
-            ?.map((e) => WashiTapeDecoration.fromJson(e as Map<String, dynamic>))
-            .toList() ??
-        [];
-    final coverImage = provenance['coverImage'] as String?;
-    final polaroidCaption = provenance['polaroidCaption'] as String?;
-    final polaroidRotation = (provenance['polaroidRotation'] as num?)?.toDouble();
-    final polaroidX = (provenance['polaroidX'] as num?)?.toDouble();
-    final polaroidY = (provenance['polaroidY'] as num?)?.toDouble();
-    final chefTip = provenance['chefTip'] as String?;
-    final chefTipIcon = provenance['chefTipIcon'] as String?;
-    final chefTipIconColor = provenance['chefTipIconColor'] as String?;
-
-    // Ingredients
-    final ingRows = await (db.select(db.recipeIngredientsTable)
-          ..where((i) => i.recipeId.equals(row.id))
-          ..orderBy([(i) => OrderingTerm.asc(i.position)]))
-        .get();
-    final ingredients = ingRows.map((i) {
-      Map<String, dynamic> ingMeta = {};
+      running = true;
       try {
-        if (i.allergenOverrideJson != null && i.allergenOverrideJson!.isNotEmpty) {
-          ingMeta = jsonDecode(i.allergenOverrideJson!) as Map<String, dynamic>;
-        }
-      } catch (_) {}
+        do {
+          dirty = false;
+          final value = await load();
+          if (controller.isClosed) return;
+          controller.add(value);
+        } while (dirty);
+      } catch (e, st) {
+        if (!controller.isClosed) controller.addError(e, st);
+      } finally {
+        running = false;
+      }
+    }
 
-      return RecipeIngredient(
-        id: i.id,
-        recipeId: i.recipeId,
-        catalogIngredientId: i.catalogIngredientId,
-        displayName: i.displayName,
-        quantity: i.quantityNum != null
-            ? Rational(i.quantityNum!, i.quantityDen ?? 1)
-            : null,
-        unitCode: i.unitCode,
-        authoredQuantity: i.authoredQuantity,
-        scalingPolicy: ScalingPolicy.fromString(i.scalingPolicy),
-        prepText: i.prepText,
-        isOptional: i.isOptional,
-        position: i.position,
-        groupKey: i.groupKey,
-        allergenOverrideJson: i.allergenOverrideJson,
-        illustrationKey: i.illustrationKey,
-        icon: ingMeta['icon'] as String?,
-        iconColor: ingMeta['iconColor'] as String?,
-        x: (ingMeta['x'] as num?)?.toDouble(),
-        y: (ingMeta['y'] as num?)?.toDouble(),
-      );
-    }).toList();
+    controller = StreamController<T>(
+      onListen: () {
+        trigger = db.tableUpdates(TableUpdateQuery.onAllTables(_aggregateTables)).listen((_) => run());
+        run();
+      },
+      onCancel: () => trigger?.cancel(),
+    );
+    return controller.stream;
+  }
 
-    // Steps & Timers
-    final stepRows = await (db.select(db.recipeStepsTable)
-          ..where((s) => s.recipeId.equals(row.id))
-          ..orderBy([(s) => OrderingTerm.asc(s.position)]))
+  Future<void> _syncFavorite(String recipeId, String profileId, bool isFavorite, int now) async {
+    final rows = await (db.select(db.favoritesTable)..where((f) => f.recipeId.equals(recipeId))).get();
+    if (isFavorite && rows.isEmpty) {
+      await db.into(db.favoritesTable).insert(
+            FavoritesTableCompanion(
+              id: Value(_uuid.v4()),
+              profileId: Value(profileId),
+              recipeId: Value(recipeId),
+              favoritedAt: Value(now),
+            ),
+          );
+    } else if (!isFavorite && rows.isNotEmpty) {
+      await (db.delete(db.favoritesTable)..where((f) => f.recipeId.equals(recipeId))).go();
+    }
+  }
+
+  Future<void> _pruneVersions(String recipeId) async {
+    final keep = await (db.select(db.recipeVersionsTable)
+          ..where((v) => v.recipeId.equals(recipeId))
+          ..orderBy([(v) => OrderingTerm.desc(v.createdAt), (v) => OrderingTerm.desc(v.sequence)])
+          ..limit(maxStoredVersions))
+        .map((v) => v.id)
         .get();
-    final steps = <RecipeStep>[];
-    for (final s in stepRows) {
-      final timerRows = await (db.select(db.stepTimersTable)
-            ..where((t) => t.recipeStepId.equals(s.id))
+    await (db.delete(db.recipeVersionsTable)..where((v) => v.recipeId.equals(recipeId) & v.id.isNotIn(keep))).go();
+  }
+
+  Future<Set<String>> _existingIds(
+    Iterable<String> candidates,
+    Future<List<String>> Function(List<String> chunk) lookup,
+  ) async {
+    final ids = candidates.where((id) => id.isNotEmpty).toSet().toList();
+    final taken = <String>{};
+    for (final chunk in _chunks(ids)) {
+      taken.addAll(await lookup(chunk));
+    }
+    return taken;
+  }
+
+  Iterable<List<String>> _chunks(List<String> ids) sync* {
+    for (var i = 0; i < ids.length; i += _inClauseChunk) {
+      yield ids.sublist(i, i + _inClauseChunk > ids.length ? ids.length : i + _inClauseChunk);
+    }
+  }
+
+  Future<List<Recipe>> _loadAggregates(List<RecipesTableData> rows) async {
+    if (rows.isEmpty) return const [];
+    final ids = rows.map((r) => r.id).toList();
+
+    final ingredients = <RecipeIngredientsTableData>[];
+    final steps = <RecipeStepsTableData>[];
+    final tools = <RecipeToolsTableData>[];
+    final labelLinks = <TypedResult>[];
+    final favorites = <String>{};
+
+    for (final chunk in _chunks(ids)) {
+      ingredients.addAll(await (db.select(db.recipeIngredientsTable)
+            ..where((i) => i.recipeId.isIn(chunk))
+            ..orderBy([(i) => OrderingTerm.asc(i.position)]))
+          .get());
+      steps.addAll(await (db.select(db.recipeStepsTable)
+            ..where((s) => s.recipeId.isIn(chunk))
+            ..orderBy([(s) => OrderingTerm.asc(s.position)]))
+          .get());
+      tools.addAll(await (db.select(db.recipeToolsTable)
+            ..where((t) => t.recipeId.isIn(chunk))
             ..orderBy([(t) => OrderingTerm.asc(t.position)]))
-          .get();
-      final timers = timerRows
-          .map((t) => StepTimer(
-                id: t.id,
-                recipeStepId: t.recipeStepId,
-                label: t.label,
-                durationSeconds: t.durationSeconds,
-                autoStart: t.autoStart,
-                position: t.position,
-              ))
-          .toList();
-
-      Map<String, dynamic> stepMeta = {};
-      try {
-        if (s.safetyJson != null && s.safetyJson!.isNotEmpty) {
-          stepMeta = jsonDecode(s.safetyJson!) as Map<String, dynamic>;
-        }
-      } catch (_) {}
-
-      steps.add(RecipeStep(
-        id: s.id,
-        recipeId: s.recipeId,
-        position: s.position,
-        instructionShort: s.instructionShort,
-        instructionDetail: s.instructionDetail,
-        spokenInstruction: s.spokenInstruction,
-        actionKey: s.actionKey,
-        iconKey: stepMeta['iconKey'] as String?,
-        iconColor: stepMeta['iconColor'] as String?,
-        cookwareKey: stepMeta['cookwareKey'] as String?,
-        durationSeconds: s.durationSeconds,
-        temperatureC: s.temperatureC,
-        temperatureF: s.temperatureF,
-        layoutHint: s.layoutHint,
-        safetyJson: s.safetyJson,
-        x: (stepMeta['x'] as num?)?.toDouble(),
-        y: (stepMeta['y'] as num?)?.toDouble(),
-        timers: timers,
-      ));
+          .get());
+      labelLinks.addAll(await (db.select(db.recipeLabelsTable).join([
+        innerJoin(db.labelsTable, db.labelsTable.id.equalsExp(db.recipeLabelsTable.labelId)),
+      ])
+            ..where(db.recipeLabelsTable.recipeId.isIn(chunk)))
+          .get());
+      favorites.addAll(
+        await (db.select(db.favoritesTable)..where((f) => f.recipeId.isIn(chunk))).map((f) => f.recipeId).get(),
+      );
     }
 
-    // Tools
-    final toolRows = await (db.select(db.recipeToolsTable)
-          ..where((t) => t.recipeId.equals(row.id))
-          ..orderBy([(t) => OrderingTerm.asc(t.position)]))
-        .get();
-    final tools = toolRows
-        .map((t) => RecipeTool(
-              id: t.id,
-              recipeId: t.recipeId,
-              toolId: t.toolId,
-              displayName: t.displayName,
-              quantity: t.quantity,
-              isRequired: t.isRequired,
-              position: t.position,
+    final timers = <StepTimersTableData>[];
+    for (final chunk in _chunks(steps.map((s) => s.id).toList())) {
+      timers.addAll(await (db.select(db.stepTimersTable)
+            ..where((t) => t.recipeStepId.isIn(chunk))
+            ..orderBy([(t) => OrderingTerm.asc(t.position)]))
+          .get());
+    }
+
+    final timersByStep = <String, List<StepTimer>>{};
+    for (final t in timers) {
+      timersByStep.putIfAbsent(t.recipeStepId, () => []).add(StepTimer(
+            id: t.id,
+            recipeStepId: t.recipeStepId,
+            label: t.label,
+            durationSeconds: t.durationSeconds,
+            autoStart: t.autoStart,
+            position: t.position,
+          ));
+    }
+
+    final ingredientsByRecipe = <String, List<RecipeIngredient>>{};
+    for (final i in ingredients) {
+      final meta = _decodeObject(i.allergenOverrideJson);
+      ingredientsByRecipe.putIfAbsent(i.recipeId, () => []).add(RecipeIngredient(
+            id: i.id,
+            recipeId: i.recipeId,
+            catalogIngredientId: i.catalogIngredientId,
+            displayName: i.displayName,
+            quantity: i.quantityNum != null && (i.quantityDen ?? 1) != 0
+                ? Rational(i.quantityNum!, i.quantityDen ?? 1)
+                : null,
+            unitCode: i.unitCode,
+            authoredQuantity: i.authoredQuantity,
+            scalingPolicy: ScalingPolicy.fromString(i.scalingPolicy),
+            prepText: i.prepText,
+            isOptional: i.isOptional,
+            position: i.position,
+            groupKey: i.groupKey,
+            allergenOverrideJson: i.allergenOverrideJson,
+            illustrationKey: i.illustrationKey,
+            icon: meta['icon'] as String?,
+            iconColor: meta['iconColor'] as String?,
+            x: (meta['x'] as num?)?.toDouble(),
+            y: (meta['y'] as num?)?.toDouble(),
+          ));
+    }
+
+    final stepsByRecipe = <String, List<RecipeStep>>{};
+    for (final s in steps) {
+      final meta = _decodeObject(s.safetyJson);
+      stepsByRecipe.putIfAbsent(s.recipeId, () => []).add(RecipeStep(
+            id: s.id,
+            recipeId: s.recipeId,
+            position: s.position,
+            instructionShort: s.instructionShort,
+            instructionDetail: s.instructionDetail,
+            spokenInstruction: s.spokenInstruction,
+            actionKey: s.actionKey,
+            iconKey: meta['iconKey'] as String?,
+            iconColor: meta['iconColor'] as String?,
+            cookwareKey: meta['cookwareKey'] as String?,
+            durationSeconds: s.durationSeconds,
+            temperatureC: s.temperatureC,
+            temperatureF: s.temperatureF,
+            layoutHint: s.layoutHint,
+            safetyJson: s.safetyJson,
+            x: (meta['x'] as num?)?.toDouble(),
+            y: (meta['y'] as num?)?.toDouble(),
+            timers: timersByStep[s.id] ?? const [],
+          ));
+    }
+
+    final toolsByRecipe = <String, List<RecipeTool>>{};
+    for (final t in tools) {
+      toolsByRecipe.putIfAbsent(t.recipeId, () => []).add(RecipeTool(
+            id: t.id,
+            recipeId: t.recipeId,
+            toolId: t.toolId,
+            displayName: t.displayName,
+            quantity: t.quantity,
+            isRequired: t.isRequired,
+            position: t.position,
+          ));
+    }
+
+    final labelsByRecipe = <String, List<RecipeLabel>>{};
+    for (final row in labelLinks) {
+      final link = row.readTable(db.recipeLabelsTable);
+      final label = row.readTable(db.labelsTable);
+      labelsByRecipe.putIfAbsent(link.recipeId, () => []).add(RecipeLabel(
+            id: link.id,
+            recipeId: link.recipeId,
+            labelId: link.labelId,
+            kind: label.kind,
+            canonicalKey: label.canonicalKey,
+            displayName: label.displayName,
+            sourceConfidence: link.sourceConfidence,
+            isUserConfirmed: link.isUserConfirmed,
+          ));
+    }
+
+    return rows
+        .map((row) => _mapRow(
+              row,
+              _Relations(
+                ingredients: ingredientsByRecipe[row.id] ?? const [],
+                steps: stepsByRecipe[row.id] ?? const [],
+                tools: toolsByRecipe[row.id] ?? const [],
+                labels: labelsByRecipe[row.id] ?? const [],
+                isFavorite: favorites.contains(row.id),
+              ),
             ))
-        .toList();
+        .toList(growable: false);
+  }
 
-    // Labels
-    final labelRows = await (db.select(db.recipeLabelsTable)..where((l) => l.recipeId.equals(row.id))).get();
-    final labels = <RecipeLabel>[];
-    for (final rl in labelRows) {
-      final lData = await (db.select(db.labelsTable)..where((l) => l.id.equals(rl.labelId))).getSingleOrNull();
-      if (lData != null) {
-        labels.add(RecipeLabel(
-          id: rl.id,
-          recipeId: rl.recipeId,
-          labelId: rl.labelId,
-          kind: lData.kind,
-          canonicalKey: lData.canonicalKey,
-          displayName: lData.displayName,
-          sourceConfidence: rl.sourceConfidence,
-          isUserConfirmed: rl.isUserConfirmed,
-        ));
-      }
-    }
-
-    // Favorite status
-    final fav = await (db.select(db.favoritesTable)..where((f) => f.recipeId.equals(row.id))).getSingleOrNull();
-
+  Recipe _mapRow(RecipesTableData row, _Relations rel) {
+    final provenance = _decodeObject(row.provenanceJson);
     return Recipe(
       id: row.id,
       profileId: row.profileId,
@@ -608,58 +733,10 @@ class DriftRecipeRepository implements RecipeRepository {
       slug: row.slug,
       summary: row.summary,
       status: RecipeStatus.fromString(row.status),
-      baseServings: Rational(row.baseServingsNum, row.baseServingsDen),
+      baseServings: row.baseServingsDen == 0 ? Rational(2) : Rational(row.baseServingsNum, row.baseServingsDen),
       difficulty: RecipeDifficulty.fromString(row.difficulty),
       totalMinutes: row.totalMinutes,
       coverMediaId: row.coverMediaId,
-      coverImage: coverImage,
-      polaroidCaption: polaroidCaption,
-      polaroidRotation: polaroidRotation,
-      polaroidX: polaroidX,
-      polaroidY: polaroidY,
-      chefTip: chefTip,
-      chefTipIcon: chefTipIcon,
-      chefTipIconColor: chefTipIconColor,
-      theme: theme,
-      moodStamps: moodStamps,
-      stickers: stickers,
-      washiTapes: washiTapes,
-      visualTemplate: row.visualTemplate,
-      visualStyleVersion: row.visualStyleVersion,
-      isCurated: row.isCurated,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      deletedAt: row.deletedAt,
-      version: row.version,
-      origin: Origin.fromString(row.origin),
-      currentVersionId: row.currentVersionId,
-      ingredients: ingredients,
-      steps: steps,
-      tools: tools,
-      labels: labels,
-      isFavorite: fav != null,
-    );
-  }
-
-  Recipe _mapRowToRecipe(RecipesTableData r, {bool isFavorite = false}) {
-    Map<String, dynamic> provenance = {};
-    try {
-      if (r.provenanceJson.isNotEmpty) {
-        provenance = jsonDecode(r.provenanceJson) as Map<String, dynamic>;
-      }
-    } catch (_) {}
-
-    return Recipe(
-      id: r.id,
-      profileId: r.profileId,
-      title: r.title,
-      slug: r.slug,
-      summary: r.summary,
-      status: RecipeStatus.fromString(r.status),
-      baseServings: Rational(r.baseServingsNum, r.baseServingsDen),
-      difficulty: RecipeDifficulty.fromString(r.difficulty),
-      totalMinutes: r.totalMinutes,
-      coverMediaId: r.coverMediaId,
       coverImage: provenance['coverImage'] as String?,
       polaroidCaption: provenance['polaroidCaption'] as String?,
       polaroidRotation: (provenance['polaroidRotation'] as num?)?.toDouble(),
@@ -669,26 +746,67 @@ class DriftRecipeRepository implements RecipeRepository {
       chefTipIcon: provenance['chefTipIcon'] as String?,
       chefTipIconColor: provenance['chefTipIconColor'] as String?,
       theme: ScrapbookTheme.fromKey(provenance['theme'] as String?),
-      moodStamps: (provenance['moodStamps'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
-      stickers: (provenance['stickers'] as List<dynamic>?)
-              ?.map((e) => ScrapbookSticker.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      washiTapes: (provenance['washiTapes'] as List<dynamic>?)
-              ?.map((e) => WashiTapeDecoration.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [],
-      visualTemplate: r.visualTemplate,
-      visualStyleVersion: r.visualStyleVersion,
-      isCurated: r.isCurated,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-      deletedAt: r.deletedAt,
-      version: r.version,
-      origin: Origin.fromString(r.origin),
-      currentVersionId: r.currentVersionId,
-      isFavorite: isFavorite,
+      moodStamps: (provenance['moodStamps'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      stickers: _decodeList(provenance['stickers'], ScrapbookSticker.fromJson),
+      washiTapes: _decodeList(provenance['washiTapes'], WashiTapeDecoration.fromJson),
+      nutritionOverrides: NutritionFacts.decodeOverrides(provenance['nutritionOverrides']),
+      visualTemplate: row.visualTemplate,
+      visualStyleVersion: row.visualStyleVersion,
+      isCurated: row.isCurated,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      deletedAt: row.deletedAt,
+      version: row.version,
+      origin: Origin.fromString(row.origin),
+      currentVersionId: row.currentVersionId,
+      ingredients: rel.ingredients,
+      steps: rel.steps,
+      tools: rel.tools,
+      labels: rel.labels,
+      isFavorite: rel.isFavorite,
     );
+  }
+
+  Map<String, Object?> _encodeProvenance(Recipe recipe) => {
+        'theme': recipe.theme.toKey(),
+        'moodStamps': recipe.moodStamps,
+        'stickers': recipe.stickers.map((s) => s.toJson()).toList(),
+        'washiTapes': recipe.washiTapes.map((w) => w.toJson()).toList(),
+        'coverImage': recipe.coverImage,
+        'polaroidCaption': recipe.polaroidCaption,
+        'polaroidRotation': recipe.polaroidRotation,
+        'polaroidX': recipe.polaroidX,
+        'polaroidY': recipe.polaroidY,
+        'chefTip': recipe.chefTip,
+        'chefTipIcon': recipe.chefTipIcon,
+        'chefTipIconColor': recipe.chefTipIconColor,
+        if (recipe.nutritionOverrides.isNotEmpty)
+          'nutritionOverrides': NutritionFacts.encodeOverrides(recipe.nutritionOverrides),
+      };
+
+  static Map<String, dynamic> _decodeObject(String? json) {
+    if (json == null || json.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(json);
+      return decoded is Map<String, dynamic> ? decoded : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static List<T> _decodeList<T>(Object? raw, T Function(Map<String, dynamic>) fromJson) {
+    if (raw is! List) return const [];
+    final out = <T>[];
+    for (final item in raw) {
+      if (item is Map<String, dynamic>) {
+        try {
+          out.add(fromJson(item));
+        } catch (_) {
+          // Skip a single corrupt decoration rather than failing the recipe.
+        }
+      }
+    }
+    return out;
   }
 
   Map<String, dynamic> _serializeRecipeSnapshot(Recipe recipe) {
@@ -715,5 +833,43 @@ class DriftRecipeRepository implements RecipeRepository {
               })
           .toList(),
     };
+  }
+}
+
+class _Relations {
+  final List<RecipeIngredient> ingredients;
+  final List<RecipeStep> steps;
+  final List<RecipeTool> tools;
+  final List<RecipeLabel> labels;
+  final bool isFavorite;
+
+  const _Relations({
+    required this.ingredients,
+    required this.steps,
+    required this.tools,
+    required this.labels,
+    required this.isFavorite,
+  });
+
+  const _Relations.empty()
+      : ingredients = const [],
+        steps = const [],
+        tools = const [],
+        labels = const [],
+        isFavorite = false;
+}
+
+/// Hands out child-row primary keys, replacing ids that are empty, already
+/// owned by another recipe, or duplicated within the same save.
+class _IdAllocator {
+  final Set<String> _taken;
+  final Uuid _uuid;
+
+  _IdAllocator(Set<String> takenByOthers, this._uuid) : _taken = {...takenByOthers};
+
+  String claim(String requested) {
+    final id = (requested.isEmpty || _taken.contains(requested)) ? _uuid.v4() : requested;
+    _taken.add(id);
+    return id;
   }
 }
