@@ -136,3 +136,25 @@ class UnexpectedFailure extends AppFailure {
     super.recoveryAction = 'An unexpected error occurred. Please try again.',
   }) : super(code: 'UNEXPECTED');
 }
+
+/// Credentials were rejected (e.g. an invalid or revoked API key).
+class AuthenticationFailure extends AppFailure {
+  final int? statusCode;
+
+  const AuthenticationFailure({
+    super.message = 'The AI service rejected the configured credentials.',
+    this.statusCode,
+    super.recoveryAction = 'Check the API key in Settings → AI & Scanning.',
+  }) : super(code: 'AUTHENTICATION');
+}
+
+/// The model declined to process the request (safety refusal).
+class ContentRefusedFailure extends AppFailure {
+  final String? category;
+
+  const ContentRefusedFailure({
+    super.message = 'The AI declined to analyze this content.',
+    this.category,
+    super.recoveryAction = 'Try a different photo or describe the food in text instead.',
+  }) : super(code: 'CONTENT_REFUSED');
+}

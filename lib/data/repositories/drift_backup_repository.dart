@@ -122,6 +122,16 @@ class DriftBackupRepository implements BackupRepository {
       final existingMap = {for (var r in existingRecipes) r.title.toLowerCase(): r};
 
       int restoredCount = 0;
+      final failedTitles = <String>[];
+
+      Future<void> save(Recipe candidate) async {
+        final res = await _recipeRepo.saveRecipe(candidate);
+        if (res.isSuccess) {
+          restoredCount++;
+        } else {
+          failedTitles.add(candidate.title);
+        }
+      }
 
       await _db.transaction(() async {
         for (final recipe in pkg.recipes) {
@@ -132,28 +142,30 @@ class DriftBackupRepository implements BackupRepository {
               case DuplicatePolicy.skip:
                 continue;
               case DuplicatePolicy.replace:
-                await _recipeRepo.saveRecipe(recipe.copyWith(
+                await save(recipe.copyWith(
                   id: existing.id,
                   profileId: profileId,
                   updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
                 ));
-                restoredCount++;
                 break;
               case DuplicatePolicy.keepBoth:
-                final newId = _uuid.v4();
-                await _recipeRepo.saveRecipe(recipe.copyWith(
-                  id: newId,
+                // The repository re-keys any child rows that collide with the
+                // original recipe, so the copy is fully independent.
+                await save(recipe.copyWith(
+                  id: _uuid.v4(),
                   profileId: profileId,
                   title: '${recipe.title} (Restored)',
                   updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
                 ));
-                restoredCount++;
                 break;
             }
           } else {
-            await _recipeRepo.saveRecipe(recipe.copyWith(profileId: profileId));
-            restoredCount++;
+            await save(recipe.copyWith(profileId: profileId));
           }
+        }
+        if (failedTitles.isNotEmpty) {
+          // Abort the whole restore: a partial restore is worse than none.
+          throw StateError('Could not restore: ${failedTitles.join(', ')}');
         }
 
         // Restore collections
@@ -177,14 +189,29 @@ class DriftBackupRepository implements BackupRepository {
   Future<Result<void, AppFailure>> resetAllData({required String profileId}) async {
     try {
       await _db.transaction(() async {
-        await _db.recipesTable.delete().go();
-        await _db.recipeIngredientsTable.delete().go();
-        await _db.recipeStepsTable.delete().go();
-        await _db.stepTimersTable.delete().go();
-        await _db.collectionsTable.delete().go();
-        await _db.collectionRecipesTable.delete().go();
-        await _db.cookingSessionsTable.delete().go();
-        await _db.sessionTimersTable.delete().go();
+        // Every table that holds user content. Catalog/settings tables are
+        // intentionally kept so preferences survive a content reset.
+        for (final table in <TableInfo<Table, dynamic>>[
+          _db.recipesTable,
+          _db.recipeIngredientsTable,
+          _db.recipeStepsTable,
+          _db.stepTimersTable,
+          _db.recipeToolsTable,
+          _db.recipeLabelsTable,
+          _db.recipeNotesTable,
+          _db.recipeMediaTable,
+          _db.recipeVersionsTable,
+          _db.favoritesTable,
+          _db.collectionsTable,
+          _db.collectionRecipesTable,
+          _db.cookingSessionsTable,
+          _db.sessionIngredientChecksTable,
+          _db.sessionTimersTable,
+          _db.changeOperationsTable,
+          _db.foodLogEntriesTable,
+        ]) {
+          await _db.delete(table).go();
+        }
       });
       return const Result.ok(null);
     } catch (e) {

@@ -383,7 +383,7 @@ class DriftRecipeRepository implements RecipeRepository {
             );
       });
 
-      return getRecipeById(recipeId);
+      return await getRecipeById(recipeId);
     } catch (e) {
       return Result.err(StorageFailure(message: 'Failed to save recipe.', cause: e));
     }

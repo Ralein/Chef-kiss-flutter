@@ -13,3 +13,9 @@ DatabaseConnection openDefaultConnection() {
     }),
   );
 }
+
+DatabaseConnection openInMemoryConnection() {
+  // In-memory databases are only used by tests and previews, which run on the
+  // VM. Fail loudly rather than silently persisting to IndexedDB.
+  throw UnsupportedError('In-memory databases are not supported on the web build.');
+}

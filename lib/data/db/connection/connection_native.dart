@@ -24,3 +24,5 @@ DatabaseConnection openDefaultConnection() {
     }),
   );
 }
+
+DatabaseConnection openInMemoryConnection() => DatabaseConnection(NativeDatabase.memory());

@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'rational.dart';
 import 'scaling_policy.dart';
+import '../nutrition/nutrition_facts.dart';
 
 enum RecipeStatus {
   draft,
@@ -625,6 +626,11 @@ class Recipe {
   final List<String> moodStamps;
   final List<ScrapbookSticker> stickers;
   final List<WashiTapeDecoration> washiTapes;
+
+  /// Per-ingredient nutrition estimates (e.g. from AI) keyed by
+  /// `RecipeNutritionAnalyzer.fingerprint`, used for lines the offline
+  /// catalog cannot resolve.
+  final Map<String, NutritionFacts> nutritionOverrides;
   final String? visualTemplate;
   final String visualStyleVersion;
   final bool isCurated;
@@ -664,6 +670,7 @@ class Recipe {
     this.moodStamps = const [],
     this.stickers = const [],
     this.washiTapes = const [],
+    this.nutritionOverrides = const {},
     this.visualTemplate,
     this.visualStyleVersion = 'v1',
     this.isCurated = false,
@@ -706,6 +713,7 @@ class Recipe {
     List<String>? moodStamps,
     List<ScrapbookSticker>? stickers,
     List<WashiTapeDecoration>? washiTapes,
+    Map<String, NutritionFacts>? nutritionOverrides,
     String? visualTemplate,
     String? visualStyleVersion,
     bool? isCurated,
@@ -745,6 +753,7 @@ class Recipe {
       moodStamps: moodStamps ?? this.moodStamps,
       stickers: stickers ?? this.stickers,
       washiTapes: washiTapes ?? this.washiTapes,
+      nutritionOverrides: nutritionOverrides ?? this.nutritionOverrides,
       visualTemplate: visualTemplate ?? this.visualTemplate,
       visualStyleVersion: visualStyleVersion ?? this.visualStyleVersion,
       isCurated: isCurated ?? this.isCurated,

@@ -345,3 +345,37 @@ class SyncCursorsTable extends Table {
   Set<Column> get primaryKey => {profileId, scope};
 }
 
+
+// --- Nutrition / Food Log (schema v2) ---
+
+/// One eaten meal or snack. Nutrient columns hold what was actually eaten
+/// (base estimate × [portionMultiplier]) so daily totals are a plain SUM.
+@TableIndex(name: 'food_log_by_day', columns: {#profileId, #dayKey})
+class FoodLogEntriesTable extends Table {
+  TextColumn get id => text()();
+  TextColumn get profileId => text().withDefault(const Constant('default'))();
+
+  /// Local calendar day the food was eaten, `YYYY-MM-DD`.
+  TextColumn get dayKey => text()();
+  TextColumn get mealSlot => text().withDefault(const Constant('snack'))(); // breakfast|lunch|dinner|snack
+  TextColumn get title => text()();
+  TextColumn get source => text().withDefault(const Constant('scan'))(); // scan|recipe|manual
+  TextColumn get recipeId => text().nullable()();
+  TextColumn get imagePath => text().nullable()();
+  RealColumn get portionMultiplier => real().withDefault(const Constant(1.0))();
+  RealColumn get calories => real().withDefault(const Constant(0.0))();
+  RealColumn get proteinG => real().withDefault(const Constant(0.0))();
+  RealColumn get carbsG => real().withDefault(const Constant(0.0))();
+  RealColumn get fatG => real().withDefault(const Constant(0.0))();
+  RealColumn get fiberG => real().withDefault(const Constant(0.0))();
+  RealColumn get sugarG => real().withDefault(const Constant(0.0))();
+  RealColumn get sodiumMg => real().withDefault(const Constant(0.0))();
+
+  /// Snapshot of the analysis the entry was created from (FoodAnalysis JSON).
+  TextColumn get analysisJson => text().withDefault(const Constant('{}'))();
+  IntColumn get loggedAt => integer()();
+  IntColumn get createdAt => integer()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}

@@ -10,5 +10,6 @@ export 'src/repositories/settings_repository.dart';
 export 'src/repositories/import_repository.dart';
 export 'src/repositories/backup_repository.dart';
 export 'src/repositories/sync_contracts.dart';
+export 'src/repositories/food_log_repository.dart';
 export 'src/services/ai_broker_service.dart';
 export 'src/services/source_capture_service.dart';
