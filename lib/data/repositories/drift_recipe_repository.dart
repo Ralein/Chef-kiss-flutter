@@ -45,6 +45,7 @@ class DriftRecipeRepository implements RecipeRepository {
         db.recipeToolsTable,
         db.recipeLabelsTable,
         db.labelsTable,
+        db.recipeNotesTable,
         db.favoritesTable,
         db.collectionRecipesTable,
       };
@@ -221,6 +222,7 @@ class DriftRecipeRepository implements RecipeRepository {
         await (db.delete(db.recipeIngredientsTable)..where((i) => i.recipeId.equals(recipeId))).go();
         await (db.delete(db.recipeToolsTable)..where((t) => t.recipeId.equals(recipeId))).go();
         await (db.delete(db.recipeLabelsTable)..where((l) => l.recipeId.equals(recipeId))).go();
+        await (db.delete(db.recipeNotesTable)..where((n) => n.recipeId.equals(recipeId))).go();
 
         // Any incoming id still present now belongs to another recipe.
         final takenIngredientIds = await _existingIds(
@@ -238,6 +240,10 @@ class DriftRecipeRepository implements RecipeRepository {
         final takenToolIds = await _existingIds(
           recipe.tools.map((t) => t.id),
           (chunk) => (db.select(db.recipeToolsTable)..where((t) => t.id.isIn(chunk))).map((t) => t.id).get(),
+        );
+        final takenNoteIds = await _existingIds(
+          recipe.notes.map((n) => n.id),
+          (chunk) => (db.select(db.recipeNotesTable)..where((n) => n.id.isIn(chunk))).map((n) => n.id).get(),
         );
         final takenLabelLinkIds = await _existingIds(
           recipe.labels.map((l) => l.id),
@@ -349,6 +355,21 @@ class DriftRecipeRepository implements RecipeRepository {
                   labelId: Value(label.labelId),
                   sourceConfidence: Value(label.sourceConfidence),
                   isUserConfirmed: Value(label.isUserConfirmed),
+                ),
+              );
+        }
+
+        final noteKeys = _IdAllocator(takenNoteIds, _uuid);
+        for (var idx = 0; idx < recipe.notes.length; idx++) {
+          final note = recipe.notes[idx];
+          await db.into(db.recipeNotesTable).insert(
+                RecipeNotesTableCompanion(
+                  id: Value(noteKeys.claim(note.id)),
+                  recipeId: Value(recipeId),
+                  body: Value(note.body),
+                  noteType: Value(note.noteType),
+                  position: Value(idx + 1),
+                  createdAt: Value(now),
                 ),
               );
         }
@@ -584,6 +605,7 @@ class DriftRecipeRepository implements RecipeRepository {
     final steps = <RecipeStepsTableData>[];
     final tools = <RecipeToolsTableData>[];
     final labelLinks = <TypedResult>[];
+    final notes = <RecipeNotesTableData>[];
     final favorites = <String>{};
 
     for (final chunk in _chunks(ids)) {
@@ -603,6 +625,10 @@ class DriftRecipeRepository implements RecipeRepository {
         innerJoin(db.labelsTable, db.labelsTable.id.equalsExp(db.recipeLabelsTable.labelId)),
       ])
             ..where(db.recipeLabelsTable.recipeId.isIn(chunk)))
+          .get());
+      notes.addAll(await (db.select(db.recipeNotesTable)
+            ..where((n) => n.recipeId.isIn(chunk))
+            ..orderBy([(n) => OrderingTerm.asc(n.position)]))
           .get());
       favorites.addAll(
         await (db.select(db.favoritesTable)..where((f) => f.recipeId.isIn(chunk))).map((f) => f.recipeId).get(),
@@ -710,6 +736,17 @@ class DriftRecipeRepository implements RecipeRepository {
           ));
     }
 
+    final notesByRecipe = <String, List<RecipeNote>>{};
+    for (final n in notes) {
+      notesByRecipe.putIfAbsent(n.recipeId, () => []).add(RecipeNote(
+            id: n.id,
+            recipeId: n.recipeId,
+            body: n.body,
+            noteType: n.noteType,
+            position: n.position,
+          ));
+    }
+
     return rows
         .map((row) => _mapRow(
               row,
@@ -718,6 +755,7 @@ class DriftRecipeRepository implements RecipeRepository {
                 steps: stepsByRecipe[row.id] ?? const [],
                 tools: toolsByRecipe[row.id] ?? const [],
                 labels: labelsByRecipe[row.id] ?? const [],
+                notes: notesByRecipe[row.id] ?? const [],
                 isFavorite: favorites.contains(row.id),
               ),
             ))
@@ -763,6 +801,7 @@ class DriftRecipeRepository implements RecipeRepository {
       steps: rel.steps,
       tools: rel.tools,
       labels: rel.labels,
+      notes: rel.notes,
       isFavorite: rel.isFavorite,
     );
   }
@@ -841,6 +880,7 @@ class _Relations {
   final List<RecipeStep> steps;
   final List<RecipeTool> tools;
   final List<RecipeLabel> labels;
+  final List<RecipeNote> notes;
   final bool isFavorite;
 
   const _Relations({
@@ -848,6 +888,7 @@ class _Relations {
     required this.steps,
     required this.tools,
     required this.labels,
+    required this.notes,
     required this.isFavorite,
   });
 
@@ -856,6 +897,7 @@ class _Relations {
         steps = const [],
         tools = const [],
         labels = const [],
+        notes = const [],
         isFavorite = false;
 }
 

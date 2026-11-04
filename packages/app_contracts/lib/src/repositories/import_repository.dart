@@ -15,6 +15,10 @@ abstract interface class ImportRepository {
   /// Watch all active/recent import jobs
   Stream<List<ImportJob>> watchImportJobs({required String profileId});
 
+  /// Emits the job's current state immediately, then every change. Emits
+  /// null if the job does not exist or is cancelled.
+  Stream<ImportJob?> watchJob(String jobId);
+
   /// Update the status or extracted draft of an import job
   Future<Result<ImportJob, AppFailure>> updateJob(ImportJob job);
 

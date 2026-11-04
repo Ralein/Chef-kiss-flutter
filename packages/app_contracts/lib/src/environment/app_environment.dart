@@ -17,12 +17,21 @@ class FeatureFlags {
   final bool exportImportEnabled;
   final bool telemetryOptInDefault;
 
+  /// The cloud sync/vault UI is backed by an in-memory demo server. It must
+  /// never be shown to production users, who would believe data is backed up.
+  final bool cloudSyncPreviewEnabled;
+
+  /// Internal artwork moderation tooling.
+  final bool illustrationGovernanceEnabled;
+
   const FeatureFlags({
     this.aiImportEnabled = false,
     this.generatedIllustrationsEnabled = false,
     this.voiceCommandsEnabled = true,
     this.exportImportEnabled = true,
     this.telemetryOptInDefault = false,
+    this.cloudSyncPreviewEnabled = false,
+    this.illustrationGovernanceEnabled = false,
   });
 
   FeatureFlags copyWith({
@@ -31,6 +40,8 @@ class FeatureFlags {
     bool? voiceCommandsEnabled,
     bool? exportImportEnabled,
     bool? telemetryOptInDefault,
+    bool? cloudSyncPreviewEnabled,
+    bool? illustrationGovernanceEnabled,
   }) {
     return FeatureFlags(
       aiImportEnabled: aiImportEnabled ?? this.aiImportEnabled,
@@ -39,6 +50,8 @@ class FeatureFlags {
       voiceCommandsEnabled: voiceCommandsEnabled ?? this.voiceCommandsEnabled,
       exportImportEnabled: exportImportEnabled ?? this.exportImportEnabled,
       telemetryOptInDefault: telemetryOptInDefault ?? this.telemetryOptInDefault,
+      cloudSyncPreviewEnabled: cloudSyncPreviewEnabled ?? this.cloudSyncPreviewEnabled,
+      illustrationGovernanceEnabled: illustrationGovernanceEnabled ?? this.illustrationGovernanceEnabled,
     );
   }
 }
@@ -66,6 +79,8 @@ class AppEnvironment {
       aiImportEnabled: true,
       voiceCommandsEnabled: true,
       exportImportEnabled: true,
+      cloudSyncPreviewEnabled: true,
+      illustrationGovernanceEnabled: true,
     ),
   );
 
@@ -83,9 +98,25 @@ class AppEnvironment {
     flavor: AppFlavor.production,
     version: '1.0.0',
     flags: FeatureFlags(
-      aiImportEnabled: false,
+      aiImportEnabled: true,
       voiceCommandsEnabled: true,
       exportImportEnabled: true,
     ),
   );
+
+  /// Resolved from `--dart-define=APP_FLAVOR=dev|staging|production`.
+  /// Release builds default to production so demo features can never leak.
+  static AppEnvironment resolve({required bool isRelease}) {
+    const flavor = String.fromEnvironment('APP_FLAVOR');
+    switch (flavor) {
+      case 'dev':
+        return dev;
+      case 'staging':
+        return staging;
+      case 'production':
+        return production;
+      default:
+        return isRelease ? production : dev;
+    }
+  }
 }

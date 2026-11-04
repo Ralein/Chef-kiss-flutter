@@ -22,7 +22,7 @@ http.Response okMessage(Map<String, dynamic> json, {String stop = 'end_turn'}) =
         'usage': {'input_tokens': 1200, 'output_tokens': 300},
       }),
       200,
-      headers: {'request-id': 'req_123', 'content-type': 'application/json'},
+      headers: {'request-id': 'req_123', 'content-type': 'application/json; charset=utf-8'},
     );
 
 http.Response apiError(int status, String type, {Map<String, String> headers = const {}}) => http.Response(

@@ -1,8 +1,13 @@
 import 'dart:async';
-import 'package:recipe_domain/recipe_domain.dart';
+
 import 'package:app_contracts/app_contracts.dart';
+import 'package:recipe_domain/recipe_domain.dart';
 import 'package:uuid/uuid.dart';
 
+/// In-memory import job pipeline: capture → extract → review → accept.
+///
+/// Jobs are short-lived (they exist only while the user reviews a draft), so
+/// they are intentionally not persisted.
 class LocalImportRepository implements ImportRepository {
   final RecipeRepository _recipeRepo;
   final RecipeExtractionAdapter _extractor;
@@ -23,8 +28,10 @@ class LocalImportRepository implements ImportRepository {
         _uuid = uuid;
 
   void _emitJobs() {
-    _jobsController.add(_jobs.values.toList());
+    if (!_jobsController.isClosed) _jobsController.add(_jobs.values.toList());
   }
+
+  void dispose() => _jobsController.close();
 
   @override
   Future<Result<ImportJob, AppFailure>> createJob({
@@ -32,72 +39,99 @@ class LocalImportRepository implements ImportRepository {
     required ImportSource source,
   }) async {
     final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final jobId = _uuid.v4();
-
-    var job = ImportJob(
-      id: jobId,
+    final job = ImportJob(
+      id: _uuid.v4(),
       profileId: profileId,
       source: source,
       status: ImportStatus.queued,
       createdAt: now,
       updatedAt: now,
     );
-
-    _jobs[jobId] = job;
+    _jobs[job.id] = job;
     _emitJobs();
 
-    // Trigger extraction pipeline asynchronously
-    _processJob(jobId);
-
+    unawaited(_processJob(job.id));
     return Result.ok(job);
   }
 
   Future<void> _processJob(String jobId) async {
     final current = _jobs[jobId];
     if (current == null) return;
+    _update(jobId, (j) => j.copyWith(status: ImportStatus.extracting));
 
-    // Transition to extracting
-    _jobs[jobId] = current.copyWith(status: ImportStatus.extracting);
-    _emitJobs();
+    final Result<RecipeExtraction, AppFailure> outcome;
+    final extractor = _extractor;
+    if (extractor is DetailedRecipeExtractor) {
+      outcome = await extractor.extractDetailed(source: current.source, profileId: current.profileId);
+    } else {
+      final res = await extractor.extractRecipe(source: current.source, profileId: current.profileId);
+      outcome = res.map((recipe) => RecipeExtraction(
+            recipe: recipe,
+            confidence: estimateConfidence(recipe),
+            engine: 'heuristic',
+          ));
+    }
 
-    final extractRes = await _extractor.extractRecipe(
-      source: current.source,
-      profileId: current.profileId,
-    );
-
-    extractRes.when(
-      ok: (extractedRecipe) {
-        final alerts = _safetyDetector.analyzeRecipe(extractedRecipe);
-        final warnings = alerts.map((a) => '${a.title}: ${a.message}').toList();
-
-        _jobs[jobId] = _jobs[jobId]!.copyWith(
-          status: ImportStatus.reviewRequired,
-          extractedDraft: extractedRecipe,
-          overallConfidence: 0.92,
-          warnings: warnings,
-          updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
+    outcome.when(
+      ok: (extraction) {
+        final alerts = _safetyDetector.analyzeRecipe(extraction.recipe);
+        _update(
+          jobId,
+          (j) => j.copyWith(
+            status: ImportStatus.reviewRequired,
+            extractedDraft: extraction.recipe,
+            overallConfidence: extraction.confidence,
+            warnings: alerts.map((a) => '${a.title}: ${a.message}').toList(),
+            reviewQuestions: extraction.notes,
+          ),
         );
-        _emitJobs();
       },
       err: (failure) {
-        _jobs[jobId] = _jobs[jobId]!.copyWith(
-          status: ImportStatus.failed,
-          failureReason: failure.message,
-          updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
+        _update(
+          jobId,
+          (j) => j.copyWith(
+            status: ImportStatus.failed,
+            failureReason: [failure.message, if (failure.recoveryAction != null) failure.recoveryAction].join(' '),
+          ),
         );
-        _emitJobs();
       },
     );
   }
 
-  @override
-  Future<Result<ImportJob?, AppFailure>> getJobById(String jobId) async {
-    return Result.ok(_jobs[jobId]);
+  /// Applies [change] if the job still exists (the user may have cancelled
+  /// while extraction was running).
+  void _update(String jobId, ImportJob Function(ImportJob) change) {
+    final existing = _jobs[jobId];
+    if (existing == null) return;
+    _jobs[jobId] = change(existing).copyWith(updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch);
+    _emitJobs();
+  }
+
+  /// Completeness-based confidence for extractors that do not report one.
+  static double estimateConfidence(Recipe recipe) {
+    var score = 0.25;
+    if (recipe.title.trim().isNotEmpty && recipe.title != 'Imported Recipe') score += 0.15;
+    if (recipe.ingredients.length >= 2) score += 0.2;
+    if (recipe.steps.isNotEmpty) score += 0.2;
+    if (recipe.ingredients.isNotEmpty) {
+      final quantified = recipe.ingredients.where((i) => i.quantity != null).length / recipe.ingredients.length;
+      score += 0.2 * quantified;
+    }
+    return score.clamp(0.0, 0.95);
   }
 
   @override
-  Stream<List<ImportJob>> watchImportJobs({required String profileId}) {
-    return _jobsController.stream;
+  Future<Result<ImportJob?, AppFailure>> getJobById(String jobId) async => Result.ok(_jobs[jobId]);
+
+  @override
+  Stream<List<ImportJob>> watchImportJobs({required String profileId}) => _jobsController.stream;
+
+  @override
+  Stream<ImportJob?> watchJob(String jobId) async* {
+    yield _jobs[jobId];
+    await for (final _ in _jobsController.stream) {
+      yield _jobs[jobId];
+    }
   }
 
   @override
@@ -113,18 +147,9 @@ class LocalImportRepository implements ImportRepository {
     required Recipe recipe,
   }) async {
     final saveRes = await _recipeRepo.saveRecipe(recipe);
-
     return saveRes.when(
       ok: (saved) {
-        final existing = _jobs[jobId];
-        if (existing != null) {
-          _jobs[jobId] = existing.copyWith(
-            status: ImportStatus.completed,
-            extractedDraft: saved,
-            updatedAt: DateTime.now().toUtc().millisecondsSinceEpoch,
-          );
-          _emitJobs();
-        }
+        _update(jobId, (j) => j.copyWith(status: ImportStatus.completed, extractedDraft: saved));
         return Result.ok(saved);
       },
       err: (failure) => Result.err(failure),

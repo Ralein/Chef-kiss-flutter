@@ -137,6 +137,18 @@ void main() {
     });
   });
 
+  group('notes', () {
+    test('recipe notes are persisted and reloaded', () async {
+      final r = recipeWithTimer('noted').copyWith(notes: const [
+        RecipeNote(id: 'n1', recipeId: 'noted', body: 'Source: https://example.com', noteType: 'source', position: 1),
+      ]);
+      await repo.saveRecipe(r);
+      final reloaded = (await repo.getRecipeById('noted')).orNull!;
+      expect(reloaded.notes.single.body, 'Source: https://example.com');
+      expect(reloaded.notes.single.noteType, 'source');
+    });
+  });
+
   group('deletion', () {
     test('purgeRecipe removes every child row', () async {
       await repo.saveRecipe(recipeWithTimer('gone'));

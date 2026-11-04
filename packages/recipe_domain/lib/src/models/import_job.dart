@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:meta/meta.dart';
 import 'recipe.dart';
 
@@ -6,7 +8,10 @@ enum ImportSourceKind {
   pdf,
   text,
   url,
-  dictation;
+  dictation,
+
+  /// A natural-language request to generate a new recipe with AI.
+  prompt;
 
   static ImportSourceKind fromString(String? val) {
     switch (val?.toLowerCase()) {
@@ -22,6 +27,9 @@ enum ImportSourceKind {
       case 'dictation':
       case 'voice':
         return ImportSourceKind.dictation;
+      case 'prompt':
+      case 'generate':
+        return ImportSourceKind.prompt;
       case 'text':
       default:
         return ImportSourceKind.text;
@@ -119,6 +127,10 @@ class ImportSource {
   final String? localFilePath;
   final String? rawText;
   final String? sourceUrl;
+
+  /// In-memory payload for photo sources (not persisted).
+  final Uint8List? inlineData;
+  final String? mediaType;
   final String sha256Checksum;
   final int byteSize;
   final int createdAt;
@@ -129,6 +141,8 @@ class ImportSource {
     this.localFilePath,
     this.rawText,
     this.sourceUrl,
+    this.inlineData,
+    this.mediaType,
     required this.sha256Checksum,
     required this.byteSize,
     required this.createdAt,

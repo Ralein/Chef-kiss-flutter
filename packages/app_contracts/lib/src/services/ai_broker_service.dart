@@ -29,3 +29,32 @@ class AiBrokerConfig {
     this.timeout = const Duration(seconds: 30),
   });
 }
+
+/// Outcome of an extraction with provenance the review screen can show.
+class RecipeExtraction {
+  final Recipe recipe;
+
+  /// 0..1 estimate of how faithfully the source was understood.
+  final double confidence;
+
+  /// Points the cook should double-check ("Servings were not stated").
+  final List<String> notes;
+
+  /// Which engine produced the draft: `json-ld`, `heuristic` or `ai`.
+  final String engine;
+
+  const RecipeExtraction({
+    required this.recipe,
+    required this.confidence,
+    this.notes = const [],
+    required this.engine,
+  });
+}
+
+/// An extractor that also reports confidence and review notes.
+abstract interface class DetailedRecipeExtractor implements RecipeExtractionAdapter {
+  Future<Result<RecipeExtraction, AppFailure>> extractDetailed({
+    required ImportSource source,
+    required String profileId,
+  });
+}

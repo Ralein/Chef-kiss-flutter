@@ -1,123 +1,74 @@
+import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
-import 'audio_chime_service.dart';
 
-enum ChefToastType {
-  info,
-  success,
-  alarm,
-  error;
-}
+enum ChefToastType { info, success, alarm, error }
 
-class ChefToastNotification {
-  final String title;
-  final String? description;
-  final ChefToastType type;
-  final Duration duration;
-
-  const ChefToastNotification({
-    required this.title,
-    this.description,
-    this.type = ChefToastType.info,
-    this.duration = const Duration(seconds: 3),
-  });
-}
-
+/// App-wide, theme-aware snackbar toasts.
+///
+/// Works with or without a [BuildContext]: when the caller's context is gone
+/// (a modal just closed, a timer fired in the background) the global
+/// [messengerKey] attached to `MaterialApp` is used instead.
 class ChefToastService {
+  ChefToastService._();
+
   static final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   static void show({
-    required BuildContext context,
+    BuildContext? context,
     required String title,
     String? description,
     ChefToastType type = ChefToastType.info,
     Duration duration = const Duration(seconds: 3),
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
-    audioChime.playTap();
+    final messenger = (context != null && context.mounted ? ScaffoldMessenger.maybeOf(context) : null) ??
+        messengerKey.currentState;
+    if (messenger == null) return;
+    final themeContext = messengerKey.currentContext ?? (context != null && context.mounted ? context : null);
+    final colors = themeContext?.chefColors ?? ChefColors.light;
 
-    Color bgColor;
-    Color borderColor;
-    Color textColor;
-    IconData icon;
+    final (Color accent, IconData icon) = switch (type) {
+      ChefToastType.success => (colors.stateSuccess, Icons.check_circle_rounded),
+      ChefToastType.alarm => (colors.accentTomato, Icons.alarm_on_rounded),
+      ChefToastType.error => (colors.stateDanger, Icons.error_rounded),
+      ChefToastType.info => (colors.accentHerb, Icons.info_rounded),
+    };
 
-    switch (type) {
-      case ChefToastType.success:
-        bgColor = const Color(0xFFEEF4F0);
-        borderColor = const Color(0xFF4A6B53);
-        textColor = const Color(0xFF283D2F);
-        icon = Icons.check_circle_outline;
-        break;
-      case ChefToastType.alarm:
-        bgColor = const Color(0xFFFBEFF1);
-        borderColor = const Color(0xFFD94B34);
-        textColor = const Color(0xFF8A2E14);
-        icon = Icons.alarm_on;
-        break;
-      case ChefToastType.error:
-        bgColor = const Color(0xFFFBEFF1);
-        borderColor = const Color(0xFFC7382B);
-        textColor = const Color(0xFF7A1C14);
-        icon = Icons.error_outline;
-        break;
-      case ChefToastType.info:
-        bgColor = const Color(0xFFFBF0EB);
-        borderColor = const Color(0xFFC85A32);
-        textColor = const Color(0xFF4A3219);
-        icon = Icons.info_outline;
-        break;
-    }
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: duration,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        content: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: borderColor.withValues(alpha: 0.18),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: duration,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: colors.surfacePaper,
+          elevation: 4,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: accent.withValues(alpha: 0.6), width: 1.2),
+          ),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          action: actionLabel == null || onAction == null
+              ? null
+              : SnackBarAction(label: actionLabel, textColor: accent, onPressed: onAction),
+          content: Semantics(
+            liveRegion: true,
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: borderColor, size: 20),
-                const SizedBox(width: 10),
-                Flexible(
+                Icon(icon, color: accent, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
+                        style: TextStyle(color: colors.contentPrimary, fontWeight: FontWeight.w700, fontSize: 14),
                       ),
                       if (description != null && description.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            color: textColor.withValues(alpha: 0.8),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11,
-                          ),
-                        ),
+                        Text(description, style: TextStyle(color: colors.contentSecondary, fontSize: 13)),
                       ],
                     ],
                   ),
@@ -126,7 +77,6 @@ class ChefToastService {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

@@ -40,35 +40,35 @@ class ChefColors extends ThemeExtension<ChefColors> {
   static const light = ChefColors(
     surfaceCanvas: Color(0xFFFAF7F2),
     surfacePaper: Color(0xFFFFFFFF),
-    surfaceRaised: Color(0xFFF4EFE6),
-    contentPrimary: Color(0xFF211D19),
-    contentSecondary: Color(0xFF686057),
+    surfaceRaised: Color(0xFFF3EDE4),
+    contentPrimary: Color(0xFF1E1A18),
+    contentSecondary: Color(0xFF6B625B),
     contentInverse: Color(0xFFFFFFFF),
-    accentTomato: Color(0xFFD94B34),
-    accentHerb: Color(0xFF3D7A5A),
-    accentYolk: Color(0xFFE5A124),
-    stateWarning: Color(0xFFD47A1E),
-    stateDanger: Color(0xFFC7382B),
-    stateSuccess: Color(0xFF2E8540),
-    outlineSubtle: Color(0xFFE4DDD3),
-    focusRing: Color(0xFFD94B34),
+    accentTomato: Color(0xFFC2552F), // terracotta, 4.5:1 on white
+    accentHerb: Color(0xFF4A6B53), // sage, 6.0:1 on white
+    accentYolk: Color(0xFFD9922B),
+    stateWarning: Color(0xFFB86A12),
+    stateDanger: Color(0xFFC0392B),
+    stateSuccess: Color(0xFF2E7D4A),
+    outlineSubtle: Color(0xFFE8E0D2),
+    focusRing: Color(0xFFC2552F),
   );
 
   static const dark = ChefColors(
-    surfaceCanvas: Color(0xFF161514),
-    surfacePaper: Color(0xFF201E1C),
-    surfaceRaised: Color(0xFF2A2724),
-    contentPrimary: Color(0xFFF5F2ED),
-    contentSecondary: Color(0xFFABA196),
+    surfaceCanvas: Color(0xFF161412),
+    surfacePaper: Color(0xFF201D1A),
+    surfaceRaised: Color(0xFF2B2724),
+    contentPrimary: Color(0xFFF5F0EA),
+    contentSecondary: Color(0xFFB3A99E),
     contentInverse: Color(0xFF1A1816),
-    accentTomato: Color(0xFFE8634D),
-    accentHerb: Color(0xFF529972),
+    accentTomato: Color(0xFFE57A55),
+    accentHerb: Color(0xFF7FA98A),
     accentYolk: Color(0xFFF2B84B),
     stateWarning: Color(0xFFEAA036),
-    stateDanger: Color(0xFFE05345),
-    stateSuccess: Color(0xFF44A95B),
-    outlineSubtle: Color(0xFF383430),
-    focusRing: Color(0xFFE8634D),
+    stateDanger: Color(0xFFEF6A5B),
+    stateSuccess: Color(0xFF5DBB7A),
+    outlineSubtle: Color(0xFF3A3430),
+    focusRing: Color(0xFFE57A55),
   );
 
   static const highContrast = ChefColors(
@@ -87,6 +87,40 @@ class ChefColors extends ThemeExtension<ChefColors> {
     outlineSubtle: Color(0xFF666666),
     focusRing: Color(0xFF00E5FF),
   );
+
+  bool get isDark => surfaceCanvas.computeLuminance() < 0.2;
+
+  /// Foreground for content placed on a filled accent (button labels, badges).
+  Color get onAccent => contentInverse;
+
+  Color _soft(Color accent) => Color.alphaBlend(accent.withValues(alpha: isDark ? 0.22 : 0.12), surfacePaper);
+
+  /// Tinted container backgrounds that work in light and dark themes.
+  Color get tomatoSoft => _soft(accentTomato);
+  Color get herbSoft => _soft(accentHerb);
+  Color get yolkSoft => _soft(accentYolk);
+  Color get dangerSoft => _soft(stateDanger);
+
+  // --- Data visualization --------------------------------------------------
+  //
+  // Categorical macro palette, validated with the dataviz six-checks script
+  // (OKLab ΔE, Machado 2009 CVD simulation) against surfacePaper:
+  //   light #C2552F · #3F72A8 · #2E8B57 — worst adjacent CVD ΔE 14.9, normal 16.7
+  //   dark  #E0703F · #5C8FD6 · #33A86E — worst adjacent CVD ΔE 16.8, normal 19.6
+  // All-pairs protein↔fat sits in the 6–8 CVD band, so these colors are only
+  // ever used with a text label beside them and in protein | carbs | fat order.
+  // Brand sage/yolk were rejected: sage reads as gray (chroma 0.05) and yolk
+  // is 2.6:1 on white.
+
+  Color get macroProtein => isDark ? const Color(0xFFE0703F) : const Color(0xFFC2552F);
+  Color get macroCarbs => isDark ? const Color(0xFF5C8FD6) : const Color(0xFF3F72A8);
+  Color get macroFat => isDark ? const Color(0xFF33A86E) : const Color(0xFF2E8B57);
+
+  /// Slot-1 color for single-series charts (e.g. daily calories).
+  Color get chartPrimary => macroProtein;
+
+  /// Meter track: a lighter step of the fill's own hue.
+  Color meterTrack(Color fill) => Color.alphaBlend(fill.withValues(alpha: isDark ? 0.26 : 0.16), surfacePaper);
 
   @override
   ChefColors copyWith({

@@ -1,216 +1,227 @@
+import 'package:app_contracts/app_contracts.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
-import 'package:app_contracts/app_contracts.dart';
+
+import '../core/ai/ai_connection.dart';
+import '../core/platform/wakelock_screen_awake_service.dart';
+import '../core/timers/kitchen_timers.dart';
 import '../data/db/app_database.dart';
-import '../data/repositories/drift_recipe_repository.dart';
-import '../data/repositories/drift_cooking_session_repository.dart';
-import '../data/repositories/drift_collection_repository.dart';
-import '../data/repositories/drift_settings_repository.dart';
 import '../data/repositories/drift_backup_repository.dart';
-import '../features/illustrations/data/illustration_matcher.dart';
+import '../data/repositories/drift_collection_repository.dart';
+import '../data/repositories/drift_cooking_session_repository.dart';
+import '../data/repositories/drift_food_log_repository.dart';
+import '../data/repositories/drift_recipe_repository.dart';
+import '../data/repositories/drift_settings_repository.dart';
+import '../features/cook_mode/voice/voice_cook_assistant.dart';
 import '../features/illustrations/data/illustration_governance_service.dart';
-import '../features/imports/services/heuristic_recipe_extractor.dart';
+import '../features/illustrations/data/illustration_matcher.dart';
 import '../features/imports/data/local_import_repository.dart';
-import '../features/sync/services/cloud_encryption_service.dart';
+import '../features/imports/services/ai_recipe_service.dart';
+import '../features/imports/services/smart_recipe_extractor.dart';
+import '../features/nutrition/data/ai_nutrition_service.dart';
+import '../features/scan/data/food_vision_service.dart';
+import '../features/sync/data/drift_sync_mediator.dart';
 import '../features/sync/data/in_memory_cloud_sync_server.dart';
 import '../features/sync/data/local_auth_repository.dart';
-import '../features/sync/data/drift_sync_mediator.dart';
 import '../features/sync/data/remote_backup_repository_impl.dart';
-import '../features/cook_mode/voice/voice_cook_assistant.dart';
+import '../features/sync/services/cloud_encryption_service.dart';
 
-// --- Database & Infrastructure ---
+// --- Environment & infrastructure ------------------------------------------
+
+final appEnvironmentProvider = Provider<AppEnvironment>((ref) => AppEnvironment.resolve(isRelease: kReleaseMode));
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase.defaults();
-  ref.onDispose(() => db.close());
+  ref.onDispose(db.close);
   return db;
 });
 
-final appLoggerProvider = Provider<AppLogger>((ref) {
-  return const StandardAppLogger();
-});
+final appLoggerProvider = Provider<AppLogger>((ref) => const StandardAppLogger());
 
-// --- Capability Services (with platform fakes/implementations) ---
+// --- Platform capabilities ---------------------------------------------------
 
-final screenAwakeServiceProvider = Provider<ScreenAwakeService>((ref) {
-  return FakeScreenAwakeService();
-});
+final screenAwakeServiceProvider = Provider<ScreenAwakeService>((ref) => WakelockScreenAwakeService());
 
-final localAlertServiceProvider = Provider<LocalAlertService>((ref) {
-  return FakeLocalAlertService();
-});
+final localAlertServiceProvider = Provider<LocalAlertService>((ref) => FakeLocalAlertService());
 
-final speechOutputServiceProvider = Provider<SpeechOutputService>((ref) {
-  return FakeSpeechOutputService();
-});
+final speechOutputServiceProvider = Provider<SpeechOutputService>((ref) => FakeSpeechOutputService());
 
-final speechCommandServiceProvider = Provider<SpeechCommandService>((ref) {
-  return FakeSpeechCommandService();
-});
+final speechCommandServiceProvider = Provider<SpeechCommandService>((ref) => FakeSpeechCommandService());
 
 final voiceCookAssistantProvider = Provider<VoiceCookAssistant>((ref) {
-  final tts = ref.watch(speechOutputServiceProvider);
-  final commands = ref.watch(speechCommandServiceProvider);
-  final logger = ref.watch(appLoggerProvider);
   return VoiceCookAssistant(
-    tts: tts,
-    speechCommands: commands,
-    logger: logger,
+    tts: ref.watch(speechOutputServiceProvider),
+    speechCommands: ref.watch(speechCommandServiceProvider),
+    logger: ref.watch(appLoggerProvider),
   );
 });
 
+/// Shared countdowns for the recipe page and Cook Mode.
+final kitchenTimersProvider = ChangeNotifierProvider<KitchenTimersController>((ref) => KitchenTimersController());
+
+// --- Illustrations (internal tooling) -----------------------------------------
+
 final illustrationGovernanceServiceProvider = Provider<IllustrationGovernanceService>((ref) {
   final service = IllustrationGovernanceService();
-  ref.onDispose(() => service.dispose());
+  ref.onDispose(service.dispose);
   return service;
 });
 
 final illustrationCandidatesStreamProvider = StreamProvider<List<IllustrationCandidate>>((ref) {
-  final service = ref.watch(illustrationGovernanceServiceProvider);
-  return service.watchCandidates();
+  return ref.watch(illustrationGovernanceServiceProvider).watchCandidates();
 });
 
-final illustrationMatcherProvider = Provider<IllustrationMatcher>((ref) {
-  return IllustrationMatcher();
+final illustrationMatcherProvider = Provider<IllustrationMatcher>((ref) => IllustrationMatcher());
+
+// --- AI services (null until AI is configured) --------------------------------
+
+final aiRecipeServiceProvider = Provider<AiRecipeService?>((ref) {
+  final client = ref.watch(claudeClientProvider);
+  return client == null ? null : AiRecipeService(client);
 });
 
+final foodVisionServiceProvider = Provider<FoodVisionService?>((ref) {
+  final client = ref.watch(claudeClientProvider);
+  return client == null ? null : FoodVisionService(client);
+});
+
+final aiNutritionServiceProvider = Provider<AiNutritionService?>((ref) {
+  final client = ref.watch(claudeClientProvider);
+  return client == null ? null : AiNutritionService(client);
+});
+
+/// Not watched: the extractor reads the *current* AI service per job, so the
+/// import pipeline (and its in-flight jobs) survives AI being configured.
 final recipeExtractionAdapterProvider = Provider<RecipeExtractionAdapter>((ref) {
-  return HeuristicRecipeExtractor();
+  return SmartRecipeExtractor(ai: () => ref.read(aiRecipeServiceProvider));
 });
 
-// --- Repositories ---
+// --- Repositories --------------------------------------------------------------
 
-final recipeRepositoryProvider = Provider<RecipeRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return DriftRecipeRepository(db);
-});
+final recipeRepositoryProvider = Provider<RecipeRepository>((ref) => DriftRecipeRepository(ref.watch(databaseProvider)));
 
-final cookingSessionRepositoryProvider = Provider<CookingSessionRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return DriftCookingSessionRepository(db);
-});
+final cookingSessionRepositoryProvider =
+    Provider<CookingSessionRepository>((ref) => DriftCookingSessionRepository(ref.watch(databaseProvider)));
 
-final collectionRepositoryProvider = Provider<CollectionRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return DriftCollectionRepository(db);
-});
+final collectionRepositoryProvider =
+    Provider<CollectionRepository>((ref) => DriftCollectionRepository(ref.watch(databaseProvider)));
 
-final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return DriftSettingsRepository(db);
-});
+final settingsRepositoryProvider =
+    Provider<SettingsRepository>((ref) => DriftSettingsRepository(ref.watch(databaseProvider)));
+
+final foodLogRepositoryProvider = Provider<FoodLogRepository>((ref) => DriftFoodLogRepository(ref.watch(databaseProvider)));
+
+final preferencesRepositoryProvider =
+    Provider<PreferencesRepository>((ref) => DriftPreferencesRepository(ref.watch(databaseProvider)));
 
 final importRepositoryProvider = Provider<ImportRepository>((ref) {
-  final recipeRepo = ref.watch(recipeRepositoryProvider);
-  final extractor = ref.watch(recipeExtractionAdapterProvider);
-  return LocalImportRepository(
-    recipeRepo: recipeRepo,
-    extractor: extractor,
+  final repo = LocalImportRepository(
+    recipeRepo: ref.watch(recipeRepositoryProvider),
+    extractor: ref.watch(recipeExtractionAdapterProvider),
   );
+  ref.onDispose(repo.dispose);
+  return repo;
 });
 
-final backupRepositoryProvider = Provider<BackupRepository>((ref) {
-  final db = ref.watch(databaseProvider);
-  return DriftBackupRepository(db);
-});
+final backupRepositoryProvider = Provider<BackupRepository>((ref) => DriftBackupRepository(ref.watch(databaseProvider)));
 
-// --- Cloud Sync, Auth & Encryption Services ---
+// --- Cloud sync (developer preview; in-memory server) -----------------------------
 
-final cloudSyncServerProvider = Provider<InMemoryCloudSyncServer>((ref) {
-  return InMemoryCloudSyncServer();
-});
+final cloudSyncServerProvider = Provider<InMemoryCloudSyncServer>((ref) => InMemoryCloudSyncServer());
 
-final cloudEncryptionServiceProvider = Provider<CloudEncryptionService>((ref) {
-  return CloudEncryptionService();
-});
+final cloudEncryptionServiceProvider = Provider<CloudEncryptionService>((ref) => CloudEncryptionService());
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final server = ref.watch(cloudSyncServerProvider);
-  final repo = LocalAuthRepository(server: server);
-  ref.onDispose(() => repo.dispose());
+  final repo = LocalAuthRepository(server: ref.watch(cloudSyncServerProvider));
+  ref.onDispose(repo.dispose);
   return repo;
 });
 
 final syncMediatorProvider = Provider<SyncMediator>((ref) {
-  final db = ref.watch(databaseProvider);
-  final server = ref.watch(cloudSyncServerProvider);
-  final authRepo = ref.watch(authRepositoryProvider);
   final mediator = DriftSyncMediator(
-    db: db,
-    server: server,
-    authRepo: authRepo,
+    db: ref.watch(databaseProvider),
+    server: ref.watch(cloudSyncServerProvider),
+    authRepo: ref.watch(authRepositoryProvider),
   );
-  ref.onDispose(() => mediator.dispose());
+  ref.onDispose(mediator.dispose);
   return mediator;
 });
 
 final remoteBackupRepositoryProvider = Provider<RemoteBackupRepository>((ref) {
-  final localBackup = ref.watch(backupRepositoryProvider);
-  final crypto = ref.watch(cloudEncryptionServiceProvider);
-  final server = ref.watch(cloudSyncServerProvider);
-  final authRepo = ref.watch(authRepositoryProvider);
   return RemoteBackupRepositoryImpl(
-    localBackupRepo: localBackup,
-    cryptoService: crypto,
-    server: server,
-    authRepo: authRepo,
+    localBackupRepo: ref.watch(backupRepositoryProvider),
+    cryptoService: ref.watch(cloudEncryptionServiceProvider),
+    server: ref.watch(cloudSyncServerProvider),
+    authRepo: ref.watch(authRepositoryProvider),
   );
 });
 
-// --- Reactive State & Query Streams ---
+// --- Reactive state & queries ------------------------------------------------------
 
-final recipeFilterProvider = StateProvider<RecipeFilter>((ref) {
-  return const RecipeFilter();
-});
+final recipeFilterProvider = StateProvider<RecipeFilter>((ref) => const RecipeFilter());
 
 final recipesStreamProvider = StreamProvider<List<Recipe>>((ref) {
-  final repo = ref.watch(recipeRepositoryProvider);
-  final filter = ref.watch(recipeFilterProvider);
-  return repo.watchRecipes(filter: filter);
+  return ref.watch(recipeRepositoryProvider).watchRecipes(filter: ref.watch(recipeFilterProvider));
 });
 
+/// All live recipes regardless of the library filter (search, recommendations).
+final allRecipesProvider = StreamProvider<List<Recipe>>((ref) => ref.watch(recipeRepositoryProvider).watchRecipes());
+
 final singleRecipeProvider = StreamProvider.family<Recipe?, String>((ref, id) {
-  final repo = ref.watch(recipeRepositoryProvider);
-  return repo.watchRecipeById(id);
+  return ref.watch(recipeRepositoryProvider).watchRecipeById(id);
+});
+
+final recipeNutritionAnalyzerProvider = Provider<RecipeNutritionAnalyzer>((ref) => RecipeNutritionAnalyzer());
+
+final recipeNutritionProvider = Provider.family<RecipeNutritionReport?, String>((ref, id) {
+  final recipe = ref.watch(singleRecipeProvider(id)).valueOrNull;
+  return recipe == null ? null : ref.watch(recipeNutritionAnalyzerProvider).analyze(recipe);
 });
 
 final activeCookingSessionProvider = StreamProvider<CookingSession?>((ref) {
-  final repo = ref.watch(cookingSessionRepositoryProvider);
-  return repo.watchActiveSession();
+  return ref.watch(cookingSessionRepositoryProvider).watchActiveSession();
 });
 
 final collectionsStreamProvider = StreamProvider<List<RecipeCollection>>((ref) {
-  final repo = ref.watch(collectionRepositoryProvider);
-  return repo.watchCollections();
+  return ref.watch(collectionRepositoryProvider).watchCollections();
 });
 
-final userProfileProvider = StreamProvider<UserProfile>((ref) {
-  final repo = ref.watch(settingsRepositoryProvider);
-  return repo.watchProfile();
-});
+final userProfileProvider = StreamProvider<UserProfile>((ref) => ref.watch(settingsRepositoryProvider).watchProfile());
 
 final capabilitiesProvider = StreamProvider<PlatformCapabilitySnapshot>((ref) {
-  final repo = ref.watch(settingsRepositoryProvider);
-  return repo.watchCapabilities();
+  return ref.watch(settingsRepositoryProvider).watchCapabilities();
 });
 
-final singleImportJobProvider = FutureProvider.family<ImportJob?, String>((ref, jobId) async {
-  final repo = ref.watch(importRepositoryProvider);
-  final res = await repo.getJobById(jobId);
-  return res.orNull;
+final singleImportJobProvider = StreamProvider.autoDispose.family<ImportJob?, String>((ref, jobId) {
+  return ref.watch(importRepositoryProvider).watchJob(jobId);
 });
 
-final authSessionStreamProvider = StreamProvider<AuthSession>((ref) {
-  final repo = ref.watch(authRepositoryProvider);
-  return repo.watchSession();
+// Food log ---------------------------------------------------------------------------
+
+const nutritionGoalsKey = 'nutrition.goals';
+
+final nutritionGoalsProvider = StreamProvider<NutritionGoals>((ref) {
+  return ref.watch(preferencesRepositoryProvider).watchJson(nutritionGoalsKey).map(NutritionGoals.fromJson);
 });
 
-final syncStateStreamProvider = StreamProvider<SyncEngineState>((ref) {
-  final mediator = ref.watch(syncMediatorProvider);
-  return mediator.watchSyncState();
+final foodLogDayProvider = StreamProvider.family<List<FoodLogEntry>, String>((ref, dayKey) {
+  return ref.watch(foodLogRepositoryProvider).watchDay(dayKey);
 });
+
+/// Daily totals for the 7 days ending on [dayKey].
+final foodLogWeekProvider = StreamProvider.family<List<DailyNutritionSummary>, String>((ref, dayKey) {
+  final end = dateForDayKey(dayKey);
+  final start = end.subtract(const Duration(days: 6));
+  return ref.watch(foodLogRepositoryProvider).watchSummaries(fromDayKey: dayKeyFor(start), toDayKey: dayKey);
+});
+
+// Cloud sync streams (developer preview) ---------------------------------------------
+
+final authSessionStreamProvider = StreamProvider<AuthSession>((ref) => ref.watch(authRepositoryProvider).watchSession());
+
+final syncStateStreamProvider = StreamProvider<SyncEngineState>((ref) => ref.watch(syncMediatorProvider).watchSyncState());
 
 final pendingConflictsStreamProvider = StreamProvider<List<SyncConflict>>((ref) {
-  final mediator = ref.watch(syncMediatorProvider);
-  return mediator.watchPendingConflicts();
+  return ref.watch(syncMediatorProvider).watchPendingConflicts();
 });

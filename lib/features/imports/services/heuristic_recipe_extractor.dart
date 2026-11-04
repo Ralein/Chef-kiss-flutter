@@ -1,7 +1,8 @@
-import 'dart:convert';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:app_contracts/app_contracts.dart';
 import 'package:uuid/uuid.dart';
+
+import 'json_ld_recipe_parser.dart';
 
 enum _TextSection { header, ingredients, steps }
 
@@ -27,16 +28,10 @@ class HeuristicRecipeExtractor implements RecipeExtractionAdapter {
         return const Result.err(ValidationFailure(message: 'Source content is empty.'));
       }
 
-      // 1. Try parsing as JSON-LD Schema.org Recipe
-      if (rawText.contains('"@type"') && (rawText.contains('"Recipe"') || rawText.contains('schema.org'))) {
-        try {
-          final jsonLdRecipe = _parseJsonLd(rawText, profileId);
-          if (jsonLdRecipe != null) {
-            return Result.ok(jsonLdRecipe);
-          }
-        } catch (_) {
-          // Fall through to text heuristic parsing
-        }
+      // 1. Structured schema.org Recipe data (JSON-LD or an HTML page with it).
+      if (rawText.contains('"@type"')) {
+        final jsonLdRecipe = JsonLdRecipeParser(uuid: _uuid).parse(rawText, profileId: profileId);
+        if (jsonLdRecipe != null) return Result.ok(jsonLdRecipe);
       }
 
       // 2. Freeform Text Heuristic Parsing
@@ -49,100 +44,7 @@ class HeuristicRecipeExtractor implements RecipeExtractionAdapter {
 
   @override
   Future<int> getRemainingDailyQuota(String profileId) async {
-    return 3; // Offline heuristic has unlimited quota
-  }
-
-  Recipe? _parseJsonLd(String jsonStr, String profileId) {
-    // Extract JSON block if surrounded by HTML script tags
-    String cleanJson = jsonStr;
-    final scriptMatch = RegExp(r'<script[^>]*type=["\x27]application/ld\+json["\x27][^>]*>(.*?)</script>', dotAll: true).firstMatch(jsonStr);
-    if (scriptMatch != null) {
-      cleanJson = scriptMatch.group(1)!.trim();
-    }
-
-    final dynamic parsed = jsonDecode(cleanJson);
-    Map<String, dynamic>? recipeMap;
-
-    if (parsed is Map<String, dynamic>) {
-      if (parsed['@type'] == 'Recipe' || parsed['@type']?.toString().contains('Recipe') == true) {
-        recipeMap = parsed;
-      } else if (parsed['@graph'] is List) {
-        final graph = parsed['@graph'] as List;
-        for (final item in graph) {
-          if (item is Map<String, dynamic> && item['@type']?.toString().contains('Recipe') == true) {
-            recipeMap = item;
-            break;
-          }
-        }
-      }
-    }
-
-    if (recipeMap == null) return null;
-
-    final recipeId = _uuid.v4();
-    final title = recipeMap['name'] as String? ?? 'Imported Recipe';
-    final description = recipeMap['description'] as String?;
-
-    // Servings
-    Rational servings = Rational(2);
-    final yieldVal = recipeMap['recipeYield'];
-    if (yieldVal != null) {
-      final yieldStr = yieldVal is List ? yieldVal.first.toString() : yieldVal.toString();
-      final numMatch = RegExp(r'\d+').firstMatch(yieldStr);
-      if (numMatch != null) {
-        final parsedServ = int.tryParse(numMatch.group(0)!);
-        if (parsedServ != null && parsedServ > 0) servings = Rational(parsedServ);
-      }
-    }
-
-    // Ingredients
-    final rawIngredients = (recipeMap['recipeIngredient'] as List<dynamic>?) ?? [];
-    final ingredients = <RecipeIngredient>[];
-    for (int i = 0; i < rawIngredients.length; i++) {
-      final raw = rawIngredients[i].toString();
-      ingredients.add(_normalizer.normalizeIngredient(raw, recipeId: recipeId, position: i + 1));
-    }
-
-    // Instructions
-    final steps = <RecipeStep>[];
-    final rawInstructions = recipeMap['recipeInstructions'];
-    if (rawInstructions is List) {
-      for (int i = 0; i < rawInstructions.length; i++) {
-        final item = rawInstructions[i];
-        String stepText = '';
-        if (item is Map && item['text'] != null) {
-          stepText = item['text'].toString();
-        } else {
-          stepText = item.toString();
-        }
-        if (stepText.isNotEmpty) {
-          steps.add(_normalizer.normalizeStep(stepText, recipeId: recipeId, position: steps.length + 1));
-        }
-      }
-    } else if (rawInstructions is String) {
-      final lines = rawInstructions.split('\n').where((l) => l.trim().isNotEmpty).toList();
-      for (int i = 0; i < lines.length; i++) {
-        steps.add(_normalizer.normalizeStep(lines[i], recipeId: recipeId, position: i + 1));
-      }
-    }
-
-    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-
-    return Recipe(
-      id: recipeId,
-      profileId: profileId,
-      title: title,
-      summary: description,
-      status: RecipeStatus.ready,
-      baseServings: servings,
-      difficulty: RecipeDifficulty.medium,
-      totalMinutes: 30,
-      createdAt: now,
-      updatedAt: now,
-      origin: Origin.imported,
-      ingredients: ingredients,
-      steps: steps,
-    );
+    return 1 << 30; // Offline parsing has no quota.
   }
 
   Recipe _parseFreeformText(String text, String profileId) {
