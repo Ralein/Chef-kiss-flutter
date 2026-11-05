@@ -189,12 +189,10 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
                             const SizedBox(height: 10),
                             Text(isToday ? 'Nothing logged yet today' : 'Nothing logged this day', style: t.titleMedium),
                             const SizedBox(height: 4),
-                            Text('Scan a meal or log a serving from one of your recipes.', style: t.bodySmall, textAlign: TextAlign.center),
-                            const SizedBox(height: 14),
-                            FilledButton.icon(
-                              onPressed: () => context.go('/scan'),
-                              icon: const Icon(Icons.photo_camera_rounded),
-                              label: const Text('Scan a meal'),
+                            Text(
+                              'Tap Add food to scan a meal or log a serving from one of your recipes.',
+                              style: t.bodySmall,
+                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),

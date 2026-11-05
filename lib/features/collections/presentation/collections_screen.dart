@@ -59,13 +59,18 @@ class CollectionsScreen extends ConsumerWidget {
     final recipes = ref.watch(allRecipesProvider).valueOrNull ?? const <Recipe>[];
     final byId = {for (final r in recipes) r.id: r};
 
+    // One way to create a collection at a time: the empty screen has its own
+    // button, so the floating one only appears once there is a list.
+    final hasCollections = collectionsAsync.valueOrNull?.isNotEmpty ?? false;
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'collections-fab',
-        onPressed: () => CollectionActions.create(context, ref),
-        icon: const Icon(Icons.create_new_folder_outlined),
-        label: const Text('New collection'),
-      ),
+      floatingActionButton: hasCollections
+          ? FloatingActionButton.extended(
+              heroTag: 'collections-fab',
+              onPressed: () => CollectionActions.create(context, ref),
+              icon: const Icon(LucideIcons.folderPlus),
+              label: const Text('New collection'),
+            )
+          : null,
       body: SafeArea(
         bottom: false,
         child: collectionsAsync.when(

@@ -11,23 +11,22 @@ import '../../../../app/widgets/kitchen_format.dart';
 import '../../../../app/widgets/recipe_image.dart';
 import '../../../../app/widgets/step_timer_button.dart';
 import '../../../../core/media/recipe_art.dart';
+import '../../../library/presentation/widgets/library_books.dart' show kSerifFamily;
 import '../../../recipe_detail/presentation/widgets/recipe_sections.dart';
 import '../../../voice/spoken_text.dart';
 import '../../application/recipe_edits.dart';
 import 'scrapbook_layer.dart';
 import 'sticker_art.dart';
 
-/// Paper, ink and binding colours for a recipe's theme in light or dark mode.
+/// Paper and ink for a recipe's theme in light or dark mode. The journal is
+/// deliberately quiet: warm paper, one accent colour, serif headings.
 class JournalPalette {
   final Color paper;
   final Color line;
   final Color margin;
   final Color accent;
   final Color binding;
-  final Color polaroid;
-  final Color polaroidInk;
-  final Color note;
-  final Color noteInk;
+  final Color back;
 
   const JournalPalette({
     required this.paper,
@@ -35,10 +34,7 @@ class JournalPalette {
     required this.margin,
     required this.accent,
     required this.binding,
-    required this.polaroid,
-    required this.polaroidInk,
-    required this.note,
-    required this.noteInk,
+    required this.back,
   });
 
   factory JournalPalette.of(BuildContext context, ScrapbookTheme theme) {
@@ -46,27 +42,21 @@ class JournalPalette {
     final accent = theme.accent(c);
     if (c.isDark) {
       return JournalPalette(
-        paper: const Color(0xFF26221E),
-        line: const Color(0xFF3B352F),
+        paper: const Color(0xFF23201D),
+        line: const Color(0xFF3A3530),
         margin: c.accentTomato.withValues(alpha: 0.4),
         accent: accent,
-        binding: Color.lerp(accent, Colors.black, 0.55)!,
-        polaroid: const Color(0xFFEDE7DF),
-        polaroidInk: const Color(0xFF2C2623),
-        note: const Color(0xFF4A3F22),
-        noteInk: const Color(0xFFF5EBD0),
+        binding: Color.lerp(accent, Colors.black, 0.6)!,
+        back: const Color(0xFF2E2A26),
       );
     }
     return JournalPalette(
-      paper: const Color(0xFFFDFAF4),
-      line: const Color(0xFFE8DECE),
+      paper: const Color(0xFFFCF9F4),
+      line: const Color(0xFFE7DFD3),
       margin: c.accentTomato.withValues(alpha: 0.35),
       accent: accent,
-      binding: Color.lerp(accent, Colors.black, 0.28)!,
-      polaroid: Colors.white,
-      polaroidInk: const Color(0xFF2C2623),
-      note: const Color(0xFFFFF1BF),
-      noteInk: const Color(0xFF4A3B12),
+      binding: Color.lerp(accent, Colors.black, 0.35)!,
+      back: const Color(0xFFF0E9DE),
     );
   }
 
@@ -74,6 +64,14 @@ class JournalPalette {
   Color ink(BuildContext context, Color color) =>
       context.chefColors.isDark ? Color.lerp(color, Colors.white, 0.4)! : color;
 }
+
+TextStyle _serif(double size, Color color, {bool italic = false, double height = 1.15}) => TextStyle(
+  fontFamily: kSerifFamily,
+  fontSize: size,
+  color: color,
+  height: height,
+  fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+);
 
 /// Everything a page can ask the journal to do. Pages stay dumb: the journal
 /// owns saving, selection and dialogs.
@@ -298,7 +296,7 @@ class _DogEarButtonState extends State<_DogEarButton> {
 
   @override
   Widget build(BuildContext context) {
-    final fold = _hover ? 46.0 : 34.0;
+    final fold = _hover ? 38.0 : 26.0;
     return Semantics(
       button: true,
       label: widget.ear.previous ? 'Previous page' : 'Next page',
@@ -374,38 +372,37 @@ class _DogEarPainter extends CustomPainter {
       old.fold != fold || old.previous != previous || old.under != under || old.flap != flap;
 }
 
-/// A dashed hairline between ingredients, like a hand-ruled list.
-class _DashedRule extends StatelessWidget {
-  final Color color;
-  const _DashedRule({required this.color});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 46),
-    child: SizedBox(
-      height: 1,
-      width: double.infinity,
-      child: CustomPaint(painter: _DashPainter(color)),
-    ),
-  );
-}
-
-class _DashPainter extends CustomPainter {
-  final Color color;
-  _DashPainter(this.color);
+/// Plain paper: optional faint ruling (unused by the minimal pages).
+class _PaperPainter extends CustomPainter {
+  final bool ruled;
+  final Color line;
+  final Color margin;
+  final double marginX;
+  _PaperPainter({required this.ruled, required this.line, required this.margin, required this.marginX});
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (!ruled) return;
     final paint = Paint()
-      ..color = color
+      ..color = line
       ..strokeWidth = 1;
-    for (var x = 0.0; x < size.width; x += 7) {
-      canvas.drawLine(Offset(x, 0.5), Offset(x + 3.5, 0.5), paint);
+    for (var y = 64.0; y < size.height; y += 30) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+    if (marginX > 0) {
+      canvas.drawLine(
+        Offset(marginX, 0),
+        Offset(marginX, size.height),
+        Paint()
+          ..color = margin
+          ..strokeWidth = 1.4,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(_DashPainter old) => old.color != color;
+  bool shouldRepaint(_PaperPainter old) =>
+      old.ruled != ruled || old.line != line || old.margin != margin || old.marginX != marginX;
 }
 
 /// A contents title followed by a dot leader that starts where the title's
@@ -458,252 +455,33 @@ class _LeaderTitlePainter extends CustomPainter {
   bool shouldRepaint(_LeaderTitlePainter old) => true;
 }
 
-// --- Front matter ---------------------------------------------------------------------
-
-/// The first page of the journal: an "ex libris" bookplate.
-class BookplatePage extends StatelessWidget {
-  final List<Recipe> recipes;
-  final DogEar? dogEar;
-  const BookplatePage({super.key, required this.recipes, this.dogEar});
-
-  static const theme = ScrapbookTheme.terracottaClassic;
+/// A hairline between list rows.
+class _Hairline extends StatelessWidget {
+  final Color color;
+  final double indent;
+  const _Hairline({required this.color, this.indent = 0});
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.chefColors;
-    final t = context.chefText;
-    final palette = JournalPalette.of(context, theme);
-    final accent = palette.ink(context, palette.accent);
-    final favorites = recipes.where((r) => r.isFavorite).length;
-    final first = recipes.isEmpty ? null : recipes.map((r) => r.createdAt).reduce(math.min);
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    final since = first == null || first <= 0
-        ? null
-        : () {
-            final d = DateTime.fromMillisecondsSinceEpoch(first);
-            return '${months[d.month - 1]} ${d.year}';
-          }();
-
-    return JournalPaper(
-      theme: theme,
-      dogEar: dogEar,
-      fillHeight: true,
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const SizedBox.shrink(),
-          Column(
-            children: [
-              Text(
-                'EX LIBRIS',
-                style: t.labelMedium?.copyWith(color: accent, letterSpacing: 4, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                constraints: const BoxConstraints(maxWidth: 360),
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  border: Border.all(color: accent.withValues(alpha: 0.7), width: 1.5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: accent.withValues(alpha: 0.45)),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Column(
-                    children: [
-                      const ExcludeSemantics(child: SvgWaxSealWidget(id: 'seal-michelin', size: 88, rotation: -6)),
-                      const SizedBox(height: 14),
-                      Semantics(
-                        header: true,
-                        child: Text('Recipe Journal', style: t.displaySmall, textAlign: TextAlign.center),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'A keepsake of everything you cook',
-                        style: t.bodyMedium?.copyWith(fontStyle: FontStyle.italic, color: c.contentSecondary),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: accent.withValues(alpha: 0.4))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Icon(LucideIcons.sparkle, size: 14, color: accent),
-                          ),
-                          Expanded(child: Divider(color: accent.withValues(alpha: 0.4))),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        '${recipes.length} recipe${recipes.length == 1 ? '' : 's'}  ·  $favorites favorite${favorites == 1 ? '' : 's'}',
-                        style: t.labelLarge,
-                      ),
-                      if (since != null) ...[
-                        const SizedBox(height: 4),
-                        Text('Kept since $since', style: t.bodySmall?.copyWith(color: c.contentSecondary)),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.only(top: 28),
-            child: _Folio(number: 1, caption: 'Ex libris'),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(left: indent),
+    child: SizedBox(
+      height: 1,
+      width: double.infinity,
+      child: ColoredBox(color: color),
+    ),
+  );
 }
 
-/// Table of contents: every recipe with its page number.
-class ContentsPage extends StatelessWidget {
-  final List<Recipe> recipes;
-  final ValueChanged<String> onOpen;
-  final DogEar? dogEar;
-  const ContentsPage({super.key, required this.recipes, required this.onOpen, this.dogEar});
-
-  static const _marginX = 52.0;
+class _Folio extends StatelessWidget {
+  final int number;
+  const _Folio({required this.number});
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.chefColors;
-    final t = context.chefText;
-    final palette = JournalPalette.of(context, BookplatePage.theme);
-    final accent = palette.ink(context, palette.accent);
-    return JournalPaper(
-      theme: BookplatePage.theme,
-      ruled: true,
-      marginX: _marginX,
-      dogEar: dogEar,
-      padding: const EdgeInsets.fromLTRB(12, 22, 20, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: _marginX - 4),
-            child: _PageHeader(label: 'Contents', color: accent),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: _marginX - 4, bottom: 10),
-            child: Text(
-              '${recipes.length} recipe${recipes.length == 1 ? '' : 's'} · tap one to open it',
-              style: t.bodySmall,
-            ),
-          ),
-          for (var i = 0; i < recipes.length; i++)
-            Semantics(
-              button: true,
-              label: '${recipes[i].title}, page ${3 + 2 * i}',
-              excludeSemantics: true,
-              child: InkWell(
-                onTap: () => onOpen(recipes[i].id),
-                borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 7),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: _marginX - 8,
-                        child: Center(
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 26,
-                                height: 26,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(color: recipes[i].theme.accent(c), shape: BoxShape.circle),
-                                child: Text(
-                                  '${i + 1}',
-                                  style: t.labelMedium?.copyWith(color: c.onAccent, fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              if (recipes[i].isFavorite)
-                                Positioned(
-                                  right: -5,
-                                  bottom: -3,
-                                  child: Icon(Icons.favorite_rounded, size: 13, color: c.accentTomato),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _LeaderTitle(text: recipes[i].title, style: t.titleSmall!, dots: palette.line),
-                      ),
-                      const SizedBox(width: 6),
-                      Text('p. ${3 + 2 * i}', style: t.labelMedium?.copyWith(color: c.contentSecondary)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 28),
-          const _Folio(number: 2, caption: 'Contents'),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaperPainter extends CustomPainter {
-  final bool ruled;
-  final Color line;
-  final Color margin;
-  final double marginX;
-  _PaperPainter({required this.ruled, required this.line, required this.margin, required this.marginX});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = line;
-    if (ruled) {
-      paint.strokeWidth = 1;
-      for (var y = 64.0; y < size.height; y += 30) {
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-      }
-      if (marginX > 0) {
-        canvas.drawLine(
-          Offset(marginX, 0),
-          Offset(marginX, size.height),
-          Paint()
-            ..color = margin
-            ..strokeWidth = 1.4,
-        );
-      }
-    } else {
-      for (var y = 14.0; y < size.height; y += 22) {
-        for (var x = 14.0; x < size.width; x += 22) {
-          canvas.drawCircle(Offset(x, y), 1.1, paint);
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PaperPainter old) =>
-      old.ruled != ruled || old.line != line || old.margin != margin || old.marginX != marginX;
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Center(
+      child: Text('$number', style: context.chefText.labelSmall?.copyWith(color: context.chefColors.contentSecondary)),
+    ),
+  );
 }
 
 // --- Story page (left) -------------------------------------------------------------
@@ -738,6 +516,7 @@ class _StoryPageState extends ConsumerState<StoryPage> {
     final c = context.chefColors;
     final t = context.chefText;
     final palette = JournalPalette.of(context, recipe.theme);
+    final accent = palette.ink(context, palette.accent);
     final base = math.max(1, recipe.baseServings.toDouble().round());
     final servings = ref.watch(journalServingsProvider(recipe.id)) ?? base;
     final readingIngredients = ref.watch(
@@ -753,21 +532,20 @@ class _StoryPageState extends ConsumerState<StoryPage> {
       if (group != null && group.isNotEmpty && group != lastGroup) {
         rows.add(
           Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 2),
+            padding: const EdgeInsets.only(top: 14, bottom: 4),
             child: Text(
               group.toUpperCase(),
-              style: t.labelSmall?.copyWith(letterSpacing: 1.2, color: c.contentSecondary),
+              style: t.labelSmall?.copyWith(letterSpacing: 1.4, color: c.contentSecondary),
             ),
           ),
         );
         lastGroup = group;
       }
-      final scaled = scaleFor(recipe, ing, servings.toDouble());
-      if (rows.isNotEmpty && rows.last is _IngredientLine) rows.add(_DashedRule(color: palette.line));
+      if (rows.isNotEmpty && rows.last is _IngredientLine) rows.add(_Hairline(color: palette.line));
       rows.add(
         _IngredientLine(
           ingredient: ing,
-          amount: ingredientAmount(scaled),
+          amount: ingredientAmount(scaleFor(recipe, ing, servings.toDouble())),
           checked: _checked.contains(ing.id),
           decorating: actions.decorating,
           palette: palette,
@@ -777,72 +555,80 @@ class _StoryPageState extends ConsumerState<StoryPage> {
       );
     }
 
+    final difficulty = switch (recipe.difficulty) {
+      RecipeDifficulty.easy => 'Easy',
+      RecipeDifficulty.medium => 'Medium',
+      RecipeDifficulty.hard => 'Challenging',
+    };
+
     return JournalPageFrame(
       recipe: recipe,
       side: 'left',
       actions: actions,
       dogEar: widget.dogEar,
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PageHeader(
-            label: 'No. ${widget.recipeNumber.toString().padLeft(2, '0')} · Keepsake',
-            color: palette.ink(context, palette.accent),
-            trailing: IconButton(
-              tooltip: recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites',
-              onPressed: () => actions.onToggleFavorite(recipe),
-              icon: Icon(
-                recipe.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: recipe.isFavorite ? c.accentTomato : c.contentSecondary,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'No. ${widget.recipeNumber.toString().padLeft(2, '0')}',
+                  style: t.labelMedium?.copyWith(color: c.contentSecondary, letterSpacing: 1.6),
+                ),
               ),
-            ),
+              IconButton(
+                tooltip: recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+                onPressed: () => actions.onToggleFavorite(recipe),
+                icon: Icon(
+                  recipe.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  size: 20,
+                  color: recipe.isFavorite ? c.accentTomato : c.contentSecondary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          Center(
-            child: _Polaroid(
-              recipe: recipe,
-              palette: palette,
-              decorating: actions.decorating,
-              onEdit: () => actions.onEditPolaroid(recipe),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Semantics(header: true, child: Text(recipe.title, style: t.headlineMedium?.copyWith(height: 1.2))),
-          if (recipe.summary != null && recipe.summary!.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
+          const SizedBox(height: 6),
+          _Photo(recipe: recipe, decorating: actions.decorating, onEdit: () => actions.onEditPolaroid(recipe)),
+          if (recipe.polaroidCaption?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 8),
             Text(
-              '“${recipe.summary!.trim()}”',
-              style: t.bodyMedium?.copyWith(fontStyle: FontStyle.italic, color: c.contentSecondary),
+              recipe.polaroidCaption!.trim(),
+              textAlign: TextAlign.center,
+              style: _serif(14, c.contentSecondary, italic: true),
             ),
+          ],
+          const SizedBox(height: 22),
+          Semantics(header: true, child: Text(recipe.title, style: _serif(28, c.contentPrimary))),
+          if (recipe.summary?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 8),
+            Text(recipe.summary!.trim(), style: t.bodyMedium?.copyWith(color: c.contentSecondary, height: 1.5)),
           ],
           if (recipe.moodStamps.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 6,
-              runSpacing: 8,
-              children: [
-                for (final (i, stamp) in recipe.moodStamps.take(4).indexed)
-                  DoodleStamp(
-                    label: stamp,
-                    icon: getCulinaryIconData(stamp),
-                    color: palette.ink(context, palette.accent),
-                    rotation: (i.isEven ? -1 : 1) * 0.03,
-                  ),
-              ],
+            Text(
+              recipe.moodStamps.take(4).join('  ·  ').toUpperCase(),
+              style: t.labelSmall?.copyWith(color: accent, letterSpacing: 1.4, fontWeight: FontWeight.w700),
             ),
           ],
-          const SizedBox(height: 14),
-          _MetaRow(recipe: recipe),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
+          Text(
+            [
+              KitchenFormat.minutes(recipe.totalMinutes),
+              'Serves ${recipe.baseServings.toDisplayString()}',
+              difficulty,
+            ].join('  ·  '),
+            style: t.labelMedium?.copyWith(color: c.contentSecondary),
+          ),
+          const SizedBox(height: 26),
           Row(
             children: [
               Expanded(
                 child: AnimatedDefaultTextStyle(
                   duration: ChefMotion.standard,
-                  style: (t.titleLarge ?? const TextStyle()).copyWith(
-                    color: readingIngredients ? palette.ink(context, palette.accent) : c.contentPrimary,
-                  ),
-                  child: const Text('Mise en place'),
+                  style: _serif(21, readingIngredients ? accent : c.contentPrimary),
+                  child: const Text('Ingredients'),
                 ),
               ),
               ServingsStepper(
@@ -851,7 +637,7 @@ class _StoryPageState extends ConsumerState<StoryPage> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           if (rows.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -859,102 +645,55 @@ class _StoryPageState extends ConsumerState<StoryPage> {
             )
           else
             ...rows,
-          const SizedBox(height: 28),
-          _Folio(number: widget.pageNumber, caption: 'Story & prep'),
+          const SizedBox(height: 32),
+          _Folio(number: widget.pageNumber),
         ],
       ),
     );
   }
 }
 
-class _Polaroid extends StatelessWidget {
+/// The recipe photo: clean, rounded, softly lifted off the page.
+class _Photo extends StatelessWidget {
   final Recipe recipe;
-  final JournalPalette palette;
   final bool decorating;
   final VoidCallback onEdit;
-  const _Polaroid({required this.recipe, required this.palette, required this.decorating, required this.onEdit});
+  const _Photo({required this.recipe, required this.decorating, required this.onEdit});
 
   @override
   Widget build(BuildContext context) {
-    final caption = (recipe.polaroidCaption?.trim().isNotEmpty ?? false)
-        ? recipe.polaroidCaption!.trim()
-        : recipe.title;
-    final tape = switch (recipe.theme) {
-      ScrapbookTheme.terracottaClassic => WashiTapePattern.terracotta,
-      ScrapbookTheme.matchaSage => WashiTapePattern.sage,
-      ScrapbookTheme.artisanKraft => WashiTapePattern.kraft,
-      ScrapbookTheme.nordicSlate => WashiTapePattern.dots,
-    };
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = math.min(constraints.maxWidth * 0.84, 340.0);
-        return Transform.rotate(
-          angle: degToRad(recipe.polaroidRotation ?? -2),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: width,
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-                decoration: BoxDecoration(
-                  color: palette.polaroid,
-                  borderRadius: BorderRadius.circular(3),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 10, offset: const Offset(0, 5)),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: ClipRect(
-                        child: RecipeImage(
-                          source: recipe.coverImage,
-                          theme: recipe.theme,
-                          semanticLabel: 'Photo of ${recipe.title}',
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: 40,
-                      child: Center(
-                        child: Text(
-                          caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: palette.polaroidInk,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                top: -9,
-                left: width / 2 - 45,
-                child: WashiTape(width: 90, height: 18, rotation: 0.05, pattern: tape),
-              ),
-              if (decorating)
-                Positioned(
-                  right: -8,
-                  top: -8,
-                  child: IconButton.filledTonal(
-                    tooltip: 'Change photo or caption',
-                    onPressed: onEdit,
-                    icon: const Icon(LucideIcons.pencil, size: 16),
-                  ),
-                ),
+    return Stack(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 14, offset: const Offset(0, 6)),
             ],
           ),
-        );
-      },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: RecipeImage(
+                source: recipe.coverImage,
+                theme: recipe.theme,
+                semanticLabel: 'Photo of ${recipe.title}',
+              ),
+            ),
+          ),
+        ),
+        if (decorating)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: IconButton.filledTonal(
+              tooltip: 'Change photo or caption',
+              onPressed: onEdit,
+              icon: const Icon(LucideIcons.pencil, size: 16),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -985,16 +724,8 @@ class _IngredientLine extends StatelessWidget {
     final ink = palette.ink(context, parseHexColor(ingredient.iconColor) ?? palette.accent);
     final iconKey = ingredient.icon ?? RecipeArt.iconKeyFor(ingredient.displayName);
     final strike = checked ? TextDecoration.lineThrough : null;
-    final bubble = Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: ink.withValues(alpha: 0.14),
-        border: decorating ? Border.all(color: ink, width: 1.5) : null,
-      ),
-      child: Icon(getCulinaryIconData(iconKey), size: 17, color: ink),
-    );
+    final textColor = checked ? c.contentSecondary : c.contentPrimary;
+    final icon = Icon(getCulinaryIconData(iconKey), size: 16, color: ink.withValues(alpha: checked ? 0.4 : 0.9));
 
     return Semantics(
       checked: decorating ? null : checked,
@@ -1004,101 +735,64 @@ class _IngredientLine extends StatelessWidget {
       excludeSemantics: !decorating,
       child: InkWell(
         onTap: decorating ? null : onToggle,
-        borderRadius: BorderRadius.circular(10),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              decorating
-                  ? IconButton(
-                      tooltip: 'Change icon for ${ingredient.displayName}',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                      onPressed: onPickIcon,
-                      icon: bubble,
-                    )
-                  : Padding(padding: const EdgeInsets.all(4), child: bubble),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 9),
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: ingredient.displayName,
-                          style: t.bodyLarge?.copyWith(
-                            decoration: strike,
-                            color: checked ? c.contentSecondary : c.contentPrimary,
+              SizedBox(
+                width: 28,
+                child: decorating
+                    ? IconButton(
+                        tooltip: 'Change icon for ${ingredient.displayName}',
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints.tightFor(width: 28, height: 24),
+                        onPressed: onPickIcon,
+                        icon: DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: ink, width: 1.2),
                           ),
+                          child: Padding(padding: const EdgeInsets.all(3), child: icon),
                         ),
-                        if (ingredient.prepText?.isNotEmpty ?? false)
-                          TextSpan(
-                            text: ', ${ingredient.prepText}',
-                            style: t.bodyMedium?.copyWith(color: c.contentSecondary, decoration: strike),
-                          ),
-                        if (ingredient.isOptional)
-                          TextSpan(
-                            text: ' (optional)',
-                            style: t.bodySmall?.copyWith(color: c.contentSecondary),
-                          ),
-                      ],
-                    ),
+                      )
+                    : Padding(padding: const EdgeInsets.only(top: 2), child: icon),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: ingredient.displayName,
+                        style: t.bodyLarge?.copyWith(decoration: strike, color: textColor),
+                      ),
+                      if (ingredient.prepText?.isNotEmpty ?? false)
+                        TextSpan(
+                          text: ', ${ingredient.prepText}',
+                          style: t.bodyMedium?.copyWith(color: c.contentSecondary, decoration: strike),
+                        ),
+                      if (ingredient.isOptional)
+                        TextSpan(
+                          text: ' (optional)',
+                          style: t.bodySmall?.copyWith(color: c.contentSecondary),
+                        ),
+                    ],
                   ),
                 ),
               ),
               if (amount.isNotEmpty) ...[
-                const SizedBox(width: 10),
-                Padding(
-                  padding: const EdgeInsets.only(top: 9),
-                  child: Text(
-                    amount,
-                    style: t.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      decoration: strike,
-                      color: checked ? c.contentSecondary : c.contentPrimary,
-                    ),
-                  ),
+                const SizedBox(width: 12),
+                Text(
+                  amount,
+                  style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700, decoration: strike, color: textColor),
                 ),
               ],
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  final Recipe recipe;
-  const _MetaRow({required this.recipe});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.chefColors;
-    final t = context.chefText;
-    Widget item(IconData icon, String text) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: c.contentSecondary),
-        const SizedBox(width: 5),
-        Text(text, style: t.labelMedium?.copyWith(color: c.contentSecondary)),
-      ],
-    );
-    return Wrap(
-      spacing: 14,
-      runSpacing: 6,
-      children: [
-        item(LucideIcons.clock, KitchenFormat.minutes(recipe.totalMinutes)),
-        item(LucideIcons.users, 'Serves ${recipe.baseServings.toDisplayString()}'),
-        item(LucideIcons.gauge, switch (recipe.difficulty) {
-          RecipeDifficulty.easy => 'Easy',
-          RecipeDifficulty.medium => 'Medium',
-          RecipeDifficulty.hard => 'Challenging',
-        }),
-        item(LucideIcons.listChecks, '${recipe.ingredients.length} ingredients'),
-      ],
     );
   }
 }
@@ -1112,8 +806,6 @@ class MethodPage extends ConsumerWidget {
   final DogEar? dogEar;
 
   const MethodPage({super.key, required this.recipe, required this.pageNumber, required this.actions, this.dogEar});
-
-  static const _marginX = 52.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1129,37 +821,25 @@ class MethodPage extends ConsumerWidget {
       recipe: recipe,
       side: 'right',
       actions: actions,
-      ruled: true,
-      marginX: _marginX,
       dogEar: dogEar,
-      padding: const EdgeInsets.fromLTRB(12, 22, 20, 28),
+      padding: const EdgeInsets.fromLTRB(24, 26, 24, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: _marginX - 4),
-            child: _PageHeader(label: 'Method & timers', color: palette.ink(context, palette.accent)),
+          Semantics(header: true, child: Text('Method', style: _serif(28, c.contentPrimary))),
+          const SizedBox(height: 4),
+          Text(
+            recipe.steps.isEmpty
+                ? recipe.title
+                : '${recipe.title}  ·  ${recipe.steps.length} step${recipe.steps.length == 1 ? '' : 's'}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: t.bodySmall?.copyWith(color: c.contentSecondary),
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: _marginX - 4, top: 2),
-            child: Text(recipe.title, style: t.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: _marginX - 4, top: 2),
-            child: Text(
-              recipe.steps.isEmpty
-                  ? 'No steps yet'
-                  : '${recipe.steps.length} step${recipe.steps.length == 1 ? '' : 's'} · ${KitchenFormat.minutes(recipe.totalMinutes)}',
-              style: t.bodySmall,
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (recipe.steps.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(left: _marginX - 4),
-              child: Text('Add the method in the editor to cook it step by step.', style: t.bodyMedium),
-            ),
-          for (var i = 0; i < recipe.steps.length; i++)
+          const SizedBox(height: 22),
+          if (recipe.steps.isEmpty) Text('Add the method in the editor to cook it step by step.', style: t.bodyMedium),
+          for (var i = 0; i < recipe.steps.length; i++) ...[
+            if (i > 0) _Hairline(color: palette.line, indent: 40),
             _StepEntry(
               recipe: recipe,
               step: recipe.steps[i],
@@ -1169,21 +849,18 @@ class MethodPage extends ConsumerWidget {
               decorating: actions.decorating,
               onPickIcon: () => actions.onPickStepIcon(recipe, recipe.steps[i]),
             ),
+          ],
           if (hasTip || actions.decorating) ...[
-            const SizedBox(height: 18),
-            Padding(
-              padding: const EdgeInsets.only(left: _marginX - 4),
-              child: _TipNote(
-                recipe: recipe,
-                palette: palette,
-                highlighted: reading == 'tip',
-                onTap: actions.decorating ? () => actions.onEditTip(recipe) : null,
-              ),
+            const SizedBox(height: 22),
+            _TipNote(
+              recipe: recipe,
+              palette: palette,
+              highlighted: reading == 'tip',
+              onTap: actions.decorating ? () => actions.onEditTip(recipe) : null,
             ),
           ],
-          const SizedBox(height: 28),
-          _Folio(number: pageNumber, caption: 'Method & timers'),
-          SizedBox(height: c.isDark ? 0 : 0),
+          const SizedBox(height: 32),
+          _Folio(number: pageNumber),
         ],
       ),
     );
@@ -1213,59 +890,35 @@ class _StepEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.chefColors;
     final t = context.chefText;
+    final accent = palette.ink(context, palette.accent);
     final ink = palette.ink(context, parseHexColor(step.iconColor) ?? palette.accent);
     final action = step.actionKey?.trim();
-    final chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: ink.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(ChefRadius.pill),
-        border: decorating ? Border.all(color: ink, width: 1.2) : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(getCulinaryIconData(step.iconKey ?? action), size: 14, color: ink),
-          if (action != null && action.isNotEmpty) ...[
-            const SizedBox(width: 4),
-            Text(
-              action.toUpperCase(),
-              style: t.labelSmall?.copyWith(color: ink, letterSpacing: 0.8, fontWeight: FontWeight.w800),
-            ),
-          ],
-          if (decorating) ...[const SizedBox(width: 4), Icon(LucideIcons.pencil, size: 11, color: ink)],
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(getCulinaryIconData(step.iconKey ?? action), size: 13, color: ink),
+        if (action != null && action.isNotEmpty) ...[
+          const SizedBox(width: 5),
+          Text(
+            action.toUpperCase(),
+            style: t.labelSmall?.copyWith(color: ink, letterSpacing: 1.2, fontWeight: FontWeight.w700),
+          ),
         ],
-      ),
+        if (decorating) ...[const SizedBox(width: 5), Icon(LucideIcons.pencil, size: 11, color: ink)],
+      ],
     );
 
     return AnimatedContainer(
       duration: ChefMotion.standard,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+      padding: const EdgeInsets.fromLTRB(0, 14, 6, 14),
       decoration: BoxDecoration(
         color: highlighted ? c.yolkSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: MethodPage._marginX - 8,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                width: 30,
-                height: 30,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: palette.accent, shape: BoxShape.circle),
-                child: Text(
-                  '$number',
-                  style: t.labelLarge?.copyWith(color: c.onAccent, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
+          SizedBox(width: 40, child: Text(number.toString().padLeft(2, '0'), style: _serif(22, accent, height: 1.05))),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1273,11 +926,10 @@ class _StepEntry extends StatelessWidget {
                 if (decorating)
                   InkWell(
                     onTap: onPickIcon,
-                    borderRadius: BorderRadius.circular(ChefRadius.pill),
-                    child: Semantics(button: true, label: 'Change icon for step $number', child: chip),
+                    child: Semantics(button: true, label: 'Change icon for step $number', child: label),
                   )
                 else if ((action?.isNotEmpty ?? false) || step.iconKey != null)
-                  chip,
+                  label,
                 const SizedBox(height: 6),
                 Text(step.instructionShort, style: t.titleMedium?.copyWith(height: 1.35)),
                 if (step.instructionDetail?.trim().isNotEmpty ?? false) ...[
@@ -1304,6 +956,7 @@ class _StepEntry extends StatelessWidget {
   }
 }
 
+/// The chef's tip as a quiet pull quote.
 class _TipNote extends StatelessWidget {
   final Recipe recipe;
   final JournalPalette palette;
@@ -1313,52 +966,35 @@ class _TipNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.chefColors;
     final t = context.chefText;
+    final accent = palette.ink(context, palette.accent);
     final tip = recipe.chefTip?.trim() ?? '';
-    final icon = getCulinaryIconData(recipe.chefTipIcon ?? 'lightbulb');
-    final note = Transform.rotate(
-      angle: degToRad(-1.2),
-      child: Stack(
-        clipBehavior: Clip.none,
+    final note = AnimatedContainer(
+      duration: ChefMotion.standard,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
+      decoration: BoxDecoration(
+        color: highlighted ? c.yolkSoft : Colors.transparent,
+        border: Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AnimatedContainer(
-            duration: ChefMotion.standard,
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-            decoration: BoxDecoration(
-              color: palette.note,
-              borderRadius: BorderRadius.circular(4),
-              border: highlighted ? Border.all(color: palette.accent, width: 2) : null,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withValues(alpha: 0.14), blurRadius: 8, offset: const Offset(2, 4)),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, size: 18, color: palette.noteInk),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Chef’s tip',
-                      style: t.labelLarge?.copyWith(color: palette.noteInk, fontWeight: FontWeight.w800),
-                    ),
-                    if (onTap != null) ...[const Spacer(), Icon(LucideIcons.pencil, size: 14, color: palette.noteInk)],
-                  ],
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'CHEF’S TIP',
+                  style: t.labelSmall?.copyWith(color: accent, letterSpacing: 1.4, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  tip.isEmpty ? 'Tap to add a secret, a swap, or a lesson learned.' : tip,
-                  style: t.bodyMedium?.copyWith(color: palette.noteInk, fontStyle: FontStyle.italic, height: 1.45),
-                ),
-              ],
-            ),
+              ),
+              if (onTap != null) Icon(LucideIcons.pencil, size: 14, color: c.contentSecondary),
+            ],
           ),
-          const Positioned(
-            top: -8,
-            left: 18,
-            child: WashiTape(width: 64, height: 16, rotation: -0.12, pattern: WashiTapePattern.dots),
+          const SizedBox(height: 6),
+          Text(
+            tip.isEmpty ? 'Tap to add a secret, a swap, or a lesson learned.' : tip,
+            style: _serif(17, c.contentPrimary, italic: true, height: 1.4),
           ),
         ],
       ),
@@ -1372,55 +1008,150 @@ class _TipNote extends StatelessWidget {
   }
 }
 
-class _PageHeader extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Widget? trailing;
-  const _PageHeader({required this.label, required this.color, this.trailing});
+// --- Front matter ---------------------------------------------------------------------
+
+/// The first page of the journal: an "ex libris" title page.
+class BookplatePage extends StatelessWidget {
+  final List<Recipe> recipes;
+  final DogEar? dogEar;
+  const BookplatePage({super.key, required this.recipes, this.dogEar});
+
+  static const theme = ScrapbookTheme.terracottaClassic;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: Row(
+    final c = context.chefColors;
+    final t = context.chefText;
+    final palette = JournalPalette.of(context, theme);
+    final accent = palette.ink(context, palette.accent);
+    final favorites = recipes.where((r) => r.isFavorite).length;
+    final first = recipes.isEmpty ? null : recipes.map((r) => r.createdAt).reduce(math.min);
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June', //
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final since = first == null || first <= 0
+        ? null
+        : () {
+            final d = DateTime.fromMillisecondsSinceEpoch(first);
+            return '${months[d.month - 1]} ${d.year}';
+          }();
+
+    return JournalPaper(
+      theme: theme,
+      dogEar: dogEar,
+      fillHeight: true,
+      padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.chefText.labelMedium?.copyWith(
-                color: color,
-                letterSpacing: 1.6,
-                fontWeight: FontWeight.w800,
+          const SizedBox.shrink(),
+          Column(
+            children: [
+              Text('EX LIBRIS', style: t.labelMedium?.copyWith(color: accent, letterSpacing: 5)),
+              const SizedBox(height: 28),
+              Semantics(
+                header: true,
+                child: Text('Recipe Journal', textAlign: TextAlign.center, style: _serif(38, c.contentPrimary)),
               ),
-            ),
+              const SizedBox(height: 10),
+              Text(
+                'A keepsake of everything you cook',
+                textAlign: TextAlign.center,
+                style: _serif(16, c.contentSecondary, italic: true),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: 140,
+                child: Row(
+                  children: [
+                    Expanded(child: Divider(color: accent.withValues(alpha: 0.35))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Icon(LucideIcons.sparkle, size: 12, color: accent),
+                    ),
+                    Expanded(child: Divider(color: accent.withValues(alpha: 0.35))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '${recipes.length} recipe${recipes.length == 1 ? '' : 's'}  ·  $favorites favorite${favorites == 1 ? '' : 's'}',
+                style: t.labelLarge,
+              ),
+              if (since != null) ...[
+                const SizedBox(height: 4),
+                Text('Kept since $since', style: t.bodySmall?.copyWith(color: c.contentSecondary)),
+              ],
+            ],
           ),
-          if (trailing != null) trailing!,
+          const Padding(padding: EdgeInsets.only(top: 28), child: _Folio(number: 1)),
         ],
       ),
     );
   }
 }
 
-class _Folio extends StatelessWidget {
-  final int number;
-  final String caption;
-  const _Folio({required this.number, required this.caption});
+/// Table of contents: every recipe with its page number.
+class ContentsPage extends StatelessWidget {
+  final List<Recipe> recipes;
+  final ValueChanged<String> onOpen;
+  final DogEar? dogEar;
+  const ContentsPage({super.key, required this.recipes, required this.onOpen, this.dogEar});
 
   @override
   Widget build(BuildContext context) {
     final c = context.chefColors;
     final t = context.chefText;
-    return ExcludeSemantics(
+    final palette = JournalPalette.of(context, BookplatePage.theme);
+    return JournalPaper(
+      theme: BookplatePage.theme,
+      dogEar: dogEar,
+      padding: const EdgeInsets.fromLTRB(24, 26, 24, 28),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('— $number —', style: t.labelMedium?.copyWith(color: c.contentSecondary)),
-          const SizedBox(height: 2),
+          Semantics(header: true, child: Text('Contents', style: _serif(28, c.contentPrimary))),
+          const SizedBox(height: 4),
           Text(
-            'Chef’s Kiss · $caption'.toUpperCase(),
-            style: t.labelSmall?.copyWith(color: c.contentSecondary, letterSpacing: 1.4),
+            '${recipes.length} recipe${recipes.length == 1 ? '' : 's'} · tap one to open it',
+            style: t.bodySmall?.copyWith(color: c.contentSecondary),
           ),
+          const SizedBox(height: 18),
+          for (var i = 0; i < recipes.length; i++)
+            Semantics(
+              button: true,
+              label: '${recipes[i].title}, page ${3 + 2 * i}',
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: () => onOpen(recipes[i].id),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 36,
+                        child: Text(
+                          (i + 1).toString().padLeft(2, '0'),
+                          style: _serif(17, palette.ink(context, recipes[i].theme.accent(c))),
+                        ),
+                      ),
+                      Expanded(
+                        child: _LeaderTitle(text: recipes[i].title, style: t.titleSmall!, dots: palette.line),
+                      ),
+                      const SizedBox(width: 6),
+                      if (recipes[i].isFavorite) ...[
+                        Icon(Icons.favorite_rounded, size: 12, color: c.accentTomato),
+                        const SizedBox(width: 6),
+                      ],
+                      Text('p. ${3 + 2 * i}', style: t.labelMedium?.copyWith(color: c.contentSecondary)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 32),
+          const _Folio(number: 2),
         ],
       ),
     );

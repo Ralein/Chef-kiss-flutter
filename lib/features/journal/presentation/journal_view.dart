@@ -15,6 +15,7 @@ import '../../../app/widgets/recipe_image.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sheets.dart';
 import '../../voice/listen_button.dart';
 import '../application/recipe_edits.dart';
+import '../../library/presentation/widgets/library_books.dart' show kSerifFamily;
 import 'widgets/journal_pages.dart';
 import 'widgets/page_flip_book.dart';
 import 'widgets/sticker_art.dart';
@@ -24,7 +25,7 @@ import 'widgets/sticker_tray.dart';
 /// then every recipe as a two-page keepsake spread (story & ingredients on
 /// the left, method on the right) in a book whose pages turn.
 ///
-/// Phones show one page at a time with a spiral binding; wide screens show
+/// Phones show one page at a time; wide screens show
 /// facing pages with index tabs down the side. "Decorate" turns the visible
 /// pages into a scrapbook: stickers, washi tape, icons and themes.
 class JournalView extends ConsumerStatefulWidget {
@@ -378,16 +379,6 @@ class JournalViewState extends ConsumerState<JournalView> {
               title: const Text('Edit caption'),
               onTap: () => Navigator.pop(ctx, 'caption'),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.rotateCcw),
-              title: const Text('Tilt left'),
-              onTap: () => Navigator.pop(ctx, 'left'),
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.rotateCw),
-              title: const Text('Tilt right'),
-              onTap: () => Navigator.pop(ctx, 'right'),
-            ),
           ],
         ),
       ),
@@ -408,12 +399,6 @@ class JournalViewState extends ConsumerState<JournalView> {
           initial: recipe.polaroidCaption ?? recipe.title,
         );
         if (caption != null && mounted) await _edit(recipe, (r) => r.copyWith(polaroidCaption: caption.trim()));
-      case 'left' || 'right':
-        final delta = choice == 'left' ? -3.0 : 3.0;
-        await _edit(
-          recipe,
-          (r) => r.copyWith(polaroidRotation: ((r.polaroidRotation ?? -2) + delta).clamp(-12.0, 12.0)),
-        );
     }
   }
 
@@ -525,85 +510,80 @@ class JournalViewState extends ConsumerState<JournalView> {
     );
   }
 
+  /// The book: a clean page with a soft shadow and a hint of the pages
+  /// stacked behind it.
   Widget _binder(Recipe? recipe, PageFlipController controller, bool spread) {
     final palette = JournalPalette.of(context, recipe?.theme ?? BookplatePage.theme);
-    final positions = _positionCount;
-    final progress = positions <= 1 ? 0.0 : controller.position / (positions - 1);
-    Widget corner(double turns) => IgnorePointer(
-      child: Transform.rotate(angle: turns * math.pi / 2, child: const _BrassCorner()),
-    );
     final first = _firstVisiblePage + 1;
+    final radius = BorderRadius.circular(spread ? 10 : 16);
     return Semantics(
       label: spread
           ? 'Recipe journal, pages $first and ${first + 1} of $_pageCount'
           : 'Recipe journal, page $first of $_pageCount',
       container: true,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedContainer(
-              duration: ChefMotion.emphasis,
-              decoration: BoxDecoration(
-                color: palette.binding,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 18, offset: const Offset(0, 8)),
-                ],
-              ),
-              padding: spread ? const EdgeInsets.all(12) : const EdgeInsets.fromLTRB(18, 8, 8, 8),
-              child: Stack(
-                children: [
-                  if (spread)
-                    Positioned.fill(
-                      child: _PageEdges(progress: progress, color: palette.paper),
-                    ),
-                  Positioned.fill(
-                    left: spread ? 6 : 0,
-                    right: spread ? 6 : 0,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(spread ? 6 : 10),
-                      child: PageFlipBook(
-                        controller: controller,
-                        spread: spread,
-                        pageCount: _pageCount,
-                        pageIdentity: _pageIdentity,
-                        pageBuilder: _buildPage,
-                        interactive: !_decorating,
-                        onPositionChanged: _onPositionChanged,
-                        onEdgeReached: () => HapticFeedback.selectionClick(),
-                      ),
-                    ),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 6, bottom: 6),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            for (final depth in const [6.0, 3.0])
+              Positioned.fill(
+                left: depth,
+                top: depth,
+                right: -depth,
+                bottom: -depth,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color.lerp(palette.paper, Colors.black, depth / 120),
+                    borderRadius: radius,
+                    border: Border.all(color: palette.line.withValues(alpha: 0.6), width: 0.5),
                   ),
-                ],
+                ),
+              ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 18, offset: const Offset(0, 8)),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: radius,
+                  child: PageFlipBook(
+                    controller: controller,
+                    spread: spread,
+                    pageCount: _pageCount,
+                    pageIdentity: _pageIdentity,
+                    pageBuilder: _buildPage,
+                    interactive: !_decorating,
+                    backColor: palette.back,
+                    onPositionChanged: _onPositionChanged,
+                    onEdgeReached: () => HapticFeedback.selectionClick(),
+                  ),
+                ),
               ),
             ),
-          ),
-          if (!spread) const Positioned(left: 2, top: 6, bottom: 6, child: _SpiralBinding()),
-          if (spread) Positioned(left: 0, top: 0, child: corner(0)),
-          Positioned(right: 0, top: 0, child: corner(1)),
-          Positioned(right: 0, bottom: 0, child: corner(2)),
-          if (spread) Positioned(left: 0, bottom: 0, child: corner(3)),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   /// Toolbar over the bookplate and contents.
   Widget _frontToolbar(bool spread) {
-    final t = context.chefText;
+    final c = context.chefColors;
     final onContents = _firstVisiblePage == 1 || spread;
     return Padding(
-      padding: EdgeInsets.fromLTRB(spread ? 20 : 16, 4, spread ? 20 : 8, 4),
+      padding: EdgeInsets.fromLTRB(spread ? 20 : 18, 4, spread ? 20 : 8, 4),
       child: SizedBox(
         height: 48,
         child: Row(
           children: [
-            Icon(onContents ? LucideIcons.tableOfContents : LucideIcons.bookMarked, size: 20),
-            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 spread ? 'Ex libris & contents' : (onContents ? 'Contents' : 'Ex libris'),
-                style: t.titleMedium,
+                style: TextStyle(fontFamily: kSerifFamily, fontSize: 20, color: c.contentPrimary),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -630,44 +610,34 @@ class JournalViewState extends ConsumerState<JournalView> {
   );
 
   Widget _toolbarFor(Recipe recipe, bool spread, int servings) {
+    final c = context.chefColors;
     final t = context.chefText;
     final index = _recipeIndex ?? 0;
     final listen = ListenButton(
       sessionId: 'recipe:${recipe.id}',
-      compact: !spread,
-      tonal: true,
+      compact: true,
       script: () => recipeScript(recipe, servings: servings.toDouble()),
+    );
+    final decorate = IconButton(
+      tooltip: 'Decorate page',
+      onPressed: () => _setDecorating(true),
+      icon: const Icon(LucideIcons.wandSparkles),
     );
     if (!spread) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+        padding: const EdgeInsets.fromLTRB(18, 4, 4, 4),
         child: Row(
           children: [
-            // Shrinks rather than overflowing with large text.
             Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text('Story'), icon: Icon(LucideIcons.bookOpenText, size: 18)),
-                      ButtonSegment(value: 1, label: Text('Method'), icon: Icon(LucideIcons.listOrdered, size: 18)),
-                    ],
-                    selected: {_side},
-                    onSelectionChanged: (s) => _controller?.animateTo(_positionForRecipe(index, side: s.first)),
-                  ),
-                ),
+              child: Text(
+                recipe.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontFamily: kSerifFamily, fontSize: 20, color: c.contentPrimary),
               ),
             ),
             listen,
-            IconButton(
-              tooltip: 'Decorate page',
-              onPressed: () => _setDecorating(true),
-              icon: const Icon(LucideIcons.wandSparkles),
-            ),
+            decorate,
             _moreMenu(recipe),
           ],
         ),
@@ -677,55 +647,29 @@ class JournalViewState extends ConsumerState<JournalView> {
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
       child: Row(
         children: [
-          Flexible(
-            child: Text(
-              'Recipe ${index + 1} of ${widget.recipes.length}',
-              style: t.labelLarge,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+          Text(
+            'Recipe ${index + 1} of ${widget.recipes.length}',
+            style: t.labelLarge?.copyWith(color: c.contentSecondary),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           TextButton.icon(
             onPressed: _openContents,
             icon: const Icon(LucideIcons.tableOfContents, size: 18),
             label: const Text('Contents'),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            flex: 3,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    listen,
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _setDecorating(true),
-                      icon: const Icon(LucideIcons.wandSparkles, size: 18),
-                      label: const Text('Decorate'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => context.push('/recipe/${recipe.id}'),
-                      icon: const Icon(LucideIcons.notebookText, size: 18),
-                      label: const Text('Details'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.icon(
-                      onPressed: recipe.steps.isEmpty
-                          ? null
-                          : () => context.push('/cook/${recipe.id}?servings=$servings'),
-                      icon: const Icon(LucideIcons.chefHat, size: 18),
-                      label: const Text('Cook'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          const Spacer(),
+          listen,
+          decorate,
+          TextButton.icon(
+            onPressed: () => context.push('/recipe/${recipe.id}'),
+            icon: const Icon(LucideIcons.notebookText, size: 18),
+            label: const Text('Details'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: recipe.steps.isEmpty ? null : () => context.push('/cook/${recipe.id}?servings=$servings'),
+            icon: const Icon(LucideIcons.chefHat, size: 18),
+            label: const Text('Cook'),
           ),
         ],
       ),
@@ -833,6 +777,7 @@ class JournalViewState extends ConsumerState<JournalView> {
     },
   );
 
+  /// Previous · where you are (with a thin progress line) · next, and Cook.
   Widget _bottomBarFor(Recipe? recipe, PageFlipController controller, bool spread, int servings) {
     final t = context.chefText;
     final c = context.chefColors;
@@ -844,113 +789,69 @@ class JournalViewState extends ConsumerState<JournalView> {
         ? 'Pages $first–${first + 1} of $_pageCount'
         : index == null
         ? (first == 1 ? 'Ex libris' : 'Contents')
-        : '${index + 1} of ${widget.recipes.length} · ${_side == 0 ? 'Story' : 'Method'}';
+        : '${_side == 0 ? 'Ingredients' : 'Method'}  ·  ${index + 1} of ${widget.recipes.length}';
+    final progress = _positionCount <= 1 ? 1.0 : controller.position / (_positionCount - 1);
 
-    final captionRow = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            caption,
-            style: (spread ? t.labelLarge : t.labelSmall)?.copyWith(color: c.contentSecondary),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        if (widget.recipes.length > 1 && widget.recipes.length <= 12) ...[
-          const SizedBox(width: 10),
-          _PageDots(count: widget.recipes.length, current: index, onTap: (i) => openRecipe(widget.recipes[i].id)),
-        ],
-      ],
-    );
-
-    final Widget center;
-    if (spread) {
-      center = Center(child: captionRow);
-    } else {
-      center = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          captionRow,
-          const SizedBox(height: 4),
-          SizedBox(
-            width: double.infinity,
-            child: recipe == null
-                ? FilledButton.tonalIcon(
-                    onPressed: first == 1 ? _openContents : () => openRecipe(widget.recipes.first.id),
-                    icon: Icon(first == 1 ? LucideIcons.tableOfContents : LucideIcons.bookOpen, size: 18),
-                    label: Text(first == 1 ? 'Contents' : 'Open the first recipe'),
-                  )
-                : FilledButton.icon(
-                    onPressed: recipe.steps.isEmpty
-                        ? null
-                        : () => context.push('/cook/${recipe.id}?servings=$servings'),
-                    icon: const Icon(LucideIcons.chefHat, size: 18),
-                    label: const Text('Start cooking'),
-                  ),
-          ),
-        ],
-      );
-    }
+    final Widget? action = spread
+        ? null
+        : recipe == null
+        ? FilledButton.tonalIcon(
+            onPressed: first == 1 ? _openContents : () => openRecipe(widget.recipes.first.id),
+            icon: Icon(first == 1 ? LucideIcons.tableOfContents : LucideIcons.bookOpen, size: 18),
+            label: Text(first == 1 ? 'Contents' : 'Open'),
+          )
+        : FilledButton.icon(
+            onPressed: recipe.steps.isEmpty ? null : () => context.push('/cook/${recipe.id}?servings=$servings'),
+            icon: const Icon(LucideIcons.chefHat, size: 18),
+            label: const Text('Cook'),
+          );
 
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(spread ? 20 : 8, 2, spread ? 20 : 8, 6),
+        padding: EdgeInsets.fromLTRB(spread ? 20 : 8, 2, spread ? 20 : 12, 8),
         child: Row(
           children: [
-            IconButton.outlined(
+            IconButton(
               tooltip: 'Previous page',
               onPressed: atStart ? null : () => _go(-1),
               icon: const Icon(LucideIcons.chevronLeft),
             ),
-            const SizedBox(width: 8),
-            Expanded(child: center),
-            const SizedBox(width: 8),
-            IconButton.outlined(
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: t.labelMedium?.copyWith(color: c.contentSecondary),
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: progress),
+                      duration: ChefMotion.emphasis,
+                      builder: (context, value, _) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 3,
+                        backgroundColor: c.outlineSubtle,
+                        color: c.contentSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
               tooltip: 'Next page',
               onPressed: atEnd ? null : () => _go(1),
               icon: const Icon(LucideIcons.chevronRight),
             ),
+            if (action != null) ...[const SizedBox(width: 4), action],
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// One dot per recipe; the open one is a longer pill.
-class _PageDots extends StatelessWidget {
-  final int count;
-  final int? current;
-  final ValueChanged<int> onTap;
-  const _PageDots({required this.count, required this.current, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.chefColors;
-    return ExcludeSemantics(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < count; i++)
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onTap(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
-                child: AnimatedContainer(
-                  duration: ChefMotion.standard,
-                  width: i == current ? 14 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: i == current ? c.accentTomato : c.outlineSubtle,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }
@@ -1065,115 +966,4 @@ class _IndexTabs extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Paper block thickness on either side of an open book.
-class _PageEdges extends StatelessWidget {
-  final double progress;
-  final Color color;
-  const _PageEdges({required this.progress, required this.color});
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(child: CustomPaint(painter: _PageEdgesPainter(progress, color)));
-}
-
-class _PageEdgesPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  _PageEdgesPainter(this.progress, this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final line = Paint()
-      ..color = Colors.black.withValues(alpha: 0.12)
-      ..strokeWidth = 0.8;
-    final left = (2 + 6 * progress).round();
-    final right = (2 + 6 * (1 - progress)).round();
-    for (var i = 0; i < left; i++) {
-      final x = 6.0 - i * 1.0;
-      canvas.drawRect(Rect.fromLTRB(x - 1, 2, x, size.height - 2), paint);
-      canvas.drawLine(Offset(x - 1, 2), Offset(x - 1, size.height - 2), line);
-    }
-    for (var i = 0; i < right; i++) {
-      final x = size.width - 6.0 + i * 1.0;
-      canvas.drawRect(Rect.fromLTRB(x, 2, x + 1, size.height - 2), paint);
-      canvas.drawLine(Offset(x + 1, 2), Offset(x + 1, size.height - 2), line);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PageEdgesPainter old) => old.progress != progress || old.color != color;
-}
-
-/// Metal rings down the left edge of the single-page book.
-class _SpiralBinding extends StatelessWidget {
-  const _SpiralBinding();
-
-  @override
-  Widget build(BuildContext context) => const IgnorePointer(
-    child: SizedBox(width: 26, child: CustomPaint(painter: _SpiralPainter())),
-  );
-}
-
-class _SpiralPainter extends CustomPainter {
-  const _SpiralPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.6
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF8D8D8D), Color(0xFFE6E6E6), Color(0xFF7A7A7A)],
-      ).createShader(Offset.zero & size);
-    final hole = Paint()..color = Colors.black.withValues(alpha: 0.35);
-    for (var y = 22.0; y < size.height - 10; y += 28) {
-      canvas.drawCircle(Offset(size.width - 6, y), 3.2, hole);
-      canvas.drawArc(
-        Rect.fromCenter(center: Offset(size.width / 2, y), width: size.width - 4, height: 12),
-        math.pi * 0.95,
-        math.pi * 1.1,
-        false,
-        ring,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SpiralPainter old) => false;
-}
-
-class _BrassCorner extends StatelessWidget {
-  const _BrassCorner();
-
-  @override
-  Widget build(BuildContext context) =>
-      const SizedBox.square(dimension: 26, child: CustomPaint(painter: _BrassPainter()));
-}
-
-class _BrassPainter extends CustomPainter {
-  const _BrassPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(0, size.height)
-      ..close();
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFE9C98A), Color(0xFFB98B3E), Color(0xFF8A6427)],
-        ).createShader(Offset.zero & size),
-    );
-    canvas.drawCircle(Offset(size.width * 0.28, size.height * 0.28), 2, Paint()..color = const Color(0xFF6E4E1C));
-  }
-
-  @override
-  bool shouldRepaint(_BrassPainter old) => false;
 }

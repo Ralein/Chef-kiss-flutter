@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 import 'rational.dart';
 import 'scaling_policy.dart';
 import '../nutrition/nutrition_facts.dart';
+import 'book_style.dart';
 
 enum RecipeStatus {
   draft,
@@ -627,6 +628,9 @@ class Recipe {
   final List<ScrapbookSticker> stickers;
   final List<WashiTapeDecoration> washiTapes;
 
+  /// How the recipe looks as a book in the library.
+  final BookStyle bookStyle;
+
   /// Per-ingredient nutrition estimates (e.g. from AI) keyed by
   /// `RecipeNutritionAnalyzer.fingerprint`, used for lines the offline
   /// catalog cannot resolve.
@@ -670,6 +674,7 @@ class Recipe {
     this.moodStamps = const [],
     this.stickers = const [],
     this.washiTapes = const [],
+    this.bookStyle = const BookStyle(),
     this.nutritionOverrides = const {},
     this.visualTemplate,
     this.visualStyleVersion = 'v1',
@@ -713,6 +718,7 @@ class Recipe {
     List<String>? moodStamps,
     List<ScrapbookSticker>? stickers,
     List<WashiTapeDecoration>? washiTapes,
+    BookStyle? bookStyle,
     Map<String, NutritionFacts>? nutritionOverrides,
     String? visualTemplate,
     String? visualStyleVersion,
@@ -754,6 +760,7 @@ class Recipe {
       moodStamps: moodStamps ?? this.moodStamps,
       stickers: stickers ?? this.stickers,
       washiTapes: washiTapes ?? this.washiTapes,
+      bookStyle: bookStyle ?? this.bookStyle,
       nutritionOverrides: nutritionOverrides ?? this.nutritionOverrides,
       visualTemplate: visualTemplate ?? this.visualTemplate,
       visualStyleVersion: visualStyleVersion ?? this.visualStyleVersion,

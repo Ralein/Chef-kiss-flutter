@@ -50,3 +50,12 @@ flutter:
   assets:
     - assets/seed/
     - assets/illustrations/
+    - assets/fonts/DMSerifDisplay-OFL.txt
+  # DM Serif Display (SIL Open Font License 1.1, see assets/fonts/DMSerifDisplay-OFL.txt):
+  # book spines and journal headings.
+  fonts:
+    - family: DMSerifDisplay
+      fonts:
+        - asset: assets/fonts/DMSerifDisplay-Regular.ttf
+        - asset: assets/fonts/DMSerifDisplay-Italic.ttf
+          style: italic

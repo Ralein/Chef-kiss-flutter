@@ -25,6 +25,11 @@ const _starterSeedKey = 'seed.starter_version';
 
 Future<void> bootstrapAndRun() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Bundled fonts carry their own licence (shown in Settings → About → Licenses).
+  LicenseRegistry.addLicense(() async* {
+    final text = await rootBundle.loadString('assets/fonts/DMSerifDisplay-OFL.txt');
+    yield LicenseEntryWithLineBreaks(const ['DM Serif Display (font)'], text);
+  });
   final container = ProviderContainer();
   final logger = container.read(appLoggerProvider);
   _installErrorHandlers(logger);

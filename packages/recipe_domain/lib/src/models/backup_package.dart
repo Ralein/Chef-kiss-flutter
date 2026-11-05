@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:meta/meta.dart';
+import 'book_style.dart';
 import 'recipe.dart';
 import 'collection.dart';
 import 'profile.dart';
@@ -151,6 +152,19 @@ class ChefBackupPackage {
         'isCurated': r.isCurated,
         'createdAt': r.createdAt,
         'updatedAt': r.updatedAt,
+        'visual': {
+          'coverImage': r.coverImage,
+          'polaroidCaption': r.polaroidCaption,
+          'polaroidRotation': r.polaroidRotation,
+          'chefTip': r.chefTip,
+          'chefTipIcon': r.chefTipIcon,
+          'chefTipIconColor': r.chefTipIconColor,
+          'theme': r.theme.toKey(),
+          'moodStamps': r.moodStamps,
+          'stickers': r.stickers.map((s) => s.toJson()).toList(),
+          'washiTapes': r.washiTapes.map((w) => w.toJson()).toList(),
+          if (!r.bookStyle.isDefault) 'bookStyle': r.bookStyle.toJson(),
+        },
         'ingredients': r.ingredients
             .map((i) => {
                   'id': i.id,
@@ -162,6 +176,8 @@ class ChefBackupPackage {
                   'scalingPolicy': i.scalingPolicy.toDbString(),
                   'prepText': i.prepText,
                   'position': i.position,
+                  if (i.icon != null) 'icon': i.icon,
+                  if (i.iconColor != null) 'iconColor': i.iconColor,
                 })
             .toList(),
         'steps': r.steps
@@ -174,6 +190,8 @@ class ChefBackupPackage {
                   'durationSeconds': s.durationSeconds,
                   'temperatureC': s.temperatureC,
                   'temperatureF': s.temperatureF,
+                  if (s.iconKey != null) 'iconKey': s.iconKey,
+                  if (s.iconColor != null) 'iconColor': s.iconColor,
                   'timers': s.timers
                       .map((t) => {
                             'id': t.id,
@@ -203,6 +221,8 @@ class ChefBackupPackage {
             scalingPolicy: ScalingPolicy.fromString(m['scalingPolicy'] as String?),
             prepText: m['prepText'] as String?,
             position: m['position'] as int? ?? 1,
+            icon: m['icon'] as String?,
+            iconColor: m['iconColor'] as String?,
           );
         }).toList() ??
         [];
@@ -232,13 +252,31 @@ class ChefBackupPackage {
             durationSeconds: m['durationSeconds'] as int?,
             temperatureC: m['temperatureC'] as int?,
             temperatureF: m['temperatureF'] as int?,
+            iconKey: m['iconKey'] as String?,
+            iconColor: m['iconColor'] as String?,
             timers: timers,
           );
         }).toList() ??
         [];
 
+    final visual = json['visual'] is Map ? (json['visual'] as Map).cast<String, dynamic>() : const <String, dynamic>{};
+    List<T> list<T>(Object? raw, T Function(Map<String, dynamic>) parse) => raw is List
+        ? raw.whereType<Map>().map((e) => parse(e.cast<String, dynamic>())).toList()
+        : <T>[];
+
     return Recipe(
       id: recipeId,
+      coverImage: visual['coverImage'] as String?,
+      polaroidCaption: visual['polaroidCaption'] as String?,
+      polaroidRotation: (visual['polaroidRotation'] as num?)?.toDouble(),
+      chefTip: visual['chefTip'] as String?,
+      chefTipIcon: visual['chefTipIcon'] as String?,
+      chefTipIconColor: visual['chefTipIconColor'] as String?,
+      theme: ScrapbookTheme.fromKey(visual['theme'] as String?),
+      moodStamps: (visual['moodStamps'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      stickers: list(visual['stickers'], ScrapbookSticker.fromJson),
+      washiTapes: list(visual['washiTapes'], WashiTapeDecoration.fromJson),
+      bookStyle: BookStyle.fromJson(visual['bookStyle']),
       profileId: json['profileId'] as String? ?? 'default',
       title: json['title'] as String,
       slug: json['slug'] as String?,

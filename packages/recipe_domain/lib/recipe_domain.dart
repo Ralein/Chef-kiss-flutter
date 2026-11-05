@@ -1,6 +1,7 @@
 export 'src/models/rational.dart';
 export 'src/models/scaling_policy.dart';
 export 'src/models/recipe.dart';
+export 'src/models/book_style.dart';
 export 'src/models/cooking_session.dart';
 export 'src/models/collection.dart';
 export 'src/models/profile.dart';

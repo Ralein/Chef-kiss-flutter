@@ -7,6 +7,7 @@ import '../features/collections/presentation/collections_screen.dart';
 import '../features/cook_mode/presentation/cook_mode_screen.dart';
 import '../features/food_log/presentation/food_log_screen.dart';
 import '../features/imports/presentation/import_review_screen.dart';
+import '../features/library/presentation/book_editor_screen.dart';
 import '../features/library/presentation/library_screen.dart';
 import '../features/recipe_detail/presentation/recipe_detail_screen.dart';
 import '../features/recipe_editor/presentation/recipe_editor_screen.dart';
@@ -88,6 +89,11 @@ GoRouter createRouter({String initialLocation = '/'}) {
         parentNavigatorKey: rootNavigatorKey,
         path: '/recipe/:id',
         builder: (context, state) => RecipeDetailScreen(recipeId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/book/:id',
+        builder: (context, state) => BookEditorScreen(recipeId: state.pathParameters['id']!),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

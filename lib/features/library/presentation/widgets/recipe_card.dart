@@ -26,7 +26,8 @@ class RecipeCard extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: '${recipe.title}. ${KitchenFormat.minutes(recipe.totalMinutes)}, serves $servings'
+      label:
+          '${recipe.title}. ${KitchenFormat.minutes(recipe.totalMinutes)}, serves $servings'
           '${kcal != null ? ', about ${kcal.round()} calories per serving' : ''}'
           '${recipe.isFavorite ? ', favorite' : ''}',
       excludeSemantics: true,
@@ -72,12 +73,7 @@ class RecipeCard extends StatelessWidget {
                     Text(recipe.title, style: t.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (recipe.summary != null && recipe.summary!.trim().isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text(
-                        recipe.summary!,
-                        style: t.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(recipe.summary!, style: t.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                     const SizedBox(height: 10),
                     Wrap(
@@ -126,10 +122,10 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(ChefRadius.pill)),
-        child: Text(label, style: context.chefText.labelSmall?.copyWith(color: context.chefColors.contentPrimary)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(ChefRadius.pill)),
+    child: Text(label, style: context.chefText.labelSmall?.copyWith(color: context.chefColors.contentPrimary)),
+  );
 }
 
 class _FavoriteButton extends StatelessWidget {
@@ -168,36 +164,38 @@ class RecipeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverLayoutBuilder(builder: (context, constraints) {
-      final columns = columnsFor(constraints.crossAxisExtent);
-      final rows = (recipes.length / columns).ceil();
-      return SliverList.separated(
-        itemCount: rows,
-        separatorBuilder: (_, __) => const SizedBox(height: 16),
-        itemBuilder: (context, row) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var col = 0; col < columns; col++) ...[
-                if (col > 0) const SizedBox(width: 16),
-                Expanded(
-                  child: row * columns + col < recipes.length
-                      ? RecipeCard(
-                          key: ValueKey(recipes[row * columns + col].id),
-                          recipe: recipes[row * columns + col],
-                          onTap: () => onOpen(recipes[row * columns + col]),
-                          onToggleFavorite: onToggleFavorite == null
-                              ? null
-                              : () => onToggleFavorite!(recipes[row * columns + col]),
-                          onLongPress: onLongPress == null ? null : () => onLongPress!(recipes[row * columns + col]),
-                        )
-                      : const SizedBox.shrink(),
-                ),
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final columns = columnsFor(constraints.crossAxisExtent);
+        final rows = (recipes.length / columns).ceil();
+        return SliverList.separated(
+          itemCount: rows,
+          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          itemBuilder: (context, row) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) const SizedBox(width: 16),
+                  Expanded(
+                    child: row * columns + col < recipes.length
+                        ? RecipeCard(
+                            key: ValueKey(recipes[row * columns + col].id),
+                            recipe: recipes[row * columns + col],
+                            onTap: () => onOpen(recipes[row * columns + col]),
+                            onToggleFavorite: onToggleFavorite == null
+                                ? null
+                                : () => onToggleFavorite!(recipes[row * columns + col]),
+                            onLongPress: onLongPress == null ? null : () => onLongPress!(recipes[row * columns + col]),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
               ],
-            ],
-          );
-        },
-      );
-    });
+            );
+          },
+        );
+      },
+    );
   }
 }

@@ -12,7 +12,7 @@ import 'package:chefs_kiss/features/journal/application/recipe_edits.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/journal_pages.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/page_flip_book.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/sticker_art.dart';
-import 'package:chefs_kiss/features/library/presentation/widgets/bookshelf.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/library_books.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/recipe_card.dart';
 import 'package:design_tokens/design_tokens.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -326,12 +326,12 @@ void main() {
   testWidgets('library: cards, shelf and journal views — the choice is remembered', (tester) async {
     final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
     // Shelf by default.
-    expect(find.byType(BookCover), findsOneWidget);
+    expect(find.byType(ShelfBook), findsOneWidget);
 
     await tester.tap(find.byTooltip('Recipe cards'));
     await tester.pumpAndSettle();
     expect(find.byType(RecipeCard), findsOneWidget);
-    expect(find.byType(BookCover), findsNothing);
+    expect(find.byType(ShelfBook), findsNothing);
     final stored = await tester.runAsync(() => container.read(preferencesRepositoryProvider).readJson(libraryViewKey));
     expect(stored, 'cards');
 
@@ -386,7 +386,7 @@ void main() {
     // Back returns to where the journal was opened from.
     await tester.binding.handlePopRoute(); // system Back button
     await tester.pumpAndSettle();
-    expect(find.byType(BookCover), findsNWidgets(2));
+    expect(find.byType(ShelfBook), findsNWidgets(2));
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
   });

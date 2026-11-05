@@ -15,7 +15,6 @@ import '../../../app/widgets/recipe_image.dart';
 import 'widgets/recipe_sections.dart';
 import 'widgets/recipe_sheets.dart';
 import '../../voice/listen_button.dart';
-import '../../../app/widgets/food_art.dart';
 
 enum _MenuAction { collection, journal, decorate, cover, tip, copy, delete }
 
@@ -187,11 +186,6 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     final overview = _Overview(recipe: recipe, servings: servings, onEditTip: () => _onMenu(_MenuAction.tip, recipe));
     final nutrition = NutritionSection(recipe: recipe, report: report);
     final method = MethodSection(recipe: recipe);
-    final keepsake = _KeepsakeCard(
-      recipe: recipe,
-      onOpen: () => _onMenu(_MenuAction.journal, recipe),
-      onDecorate: () => _onMenu(_MenuAction.decorate, recipe),
-    );
     final notes = recipe.notes.isEmpty ? null : _NotesCard(notes: recipe.notes);
 
     return Scaffold(
@@ -211,8 +205,6 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                         children: [
                           method,
                           if (notes != null) ...[gap, notes],
-                          gap,
-                          keepsake,
                         ],
                       ),
                     ),
@@ -229,8 +221,6 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
                     gap,
                     nutrition,
                     if (notes != null) ...[gap, notes],
-                    gap,
-                    keepsake,
                   ],
                 );
 
@@ -560,65 +550,6 @@ class _CookBar extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Preview of the recipe's journal pages with a way in.
-class _KeepsakeCard extends StatelessWidget {
-  final Recipe recipe;
-  final VoidCallback onOpen;
-  final VoidCallback onDecorate;
-  const _KeepsakeCard({required this.recipe, required this.onOpen, required this.onDecorate});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.chefColors;
-    final t = context.chefText;
-    final count = recipe.stickers.length + recipe.washiTapes.length;
-    final doodle =
-        FoodArt.doodleFor([recipe.title, ...recipe.ingredients.map((i) => i.displayName)]) ??
-        FoodArt.fallbackDoodle(recipe.id);
-    return ChefCard(
-      onTap: onOpen,
-      child: Row(
-        children: [
-          FoodDoodle(id: doodle, size: 64, rotation: -6),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Keepsake pages', style: t.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  count == 0
-                      ? 'See this recipe as a journal spread, and decorate it with stamps and washi tape.'
-                      : '$count decoration${count == 1 ? '' : 's'} on this recipe’s journal pages.',
-                  style: t.bodySmall?.copyWith(color: c.contentSecondary),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    FilledButton.tonalIcon(
-                      onPressed: onOpen,
-                      icon: const Icon(Icons.auto_stories_outlined, size: 18),
-                      label: const Text('Open journal'),
-                    ),
-                    TextButton.icon(
-                      onPressed: onDecorate,
-                      icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
-                      label: const Text('Decorate'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
