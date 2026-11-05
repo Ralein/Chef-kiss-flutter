@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../../app/audio_chime_service.dart';
@@ -164,7 +165,7 @@ class _StickerTrayState extends State<_StickerTray> {
             controller: _doodleQuery,
             onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
+              prefixIcon: Icon(LucideIcons.search, size: 20),
               hintText: 'Search doodles — taco, croissant, matcha…',
               isDense: true,
             ),
@@ -316,7 +317,7 @@ class _StickerTrayState extends State<_StickerTray> {
               ),
             ),
           ),
-          icon: const Icon(Icons.verified_outlined),
+          icon: const Icon(LucideIcons.stamp, size: 18),
           label: const Text('Place badge'),
         ),
       ],
@@ -424,7 +425,7 @@ class InkSwatches extends StatelessWidget {
                     width: i == selected ? 3 : 1,
                   ),
                 ),
-                child: i == selected ? Icon(Icons.check_rounded, size: 18, color: inkPalette[i].paper) : null,
+                child: i == selected ? Icon(LucideIcons.check, size: 18, color: inkPalette[i].paper) : null,
               ),
             ),
           ),

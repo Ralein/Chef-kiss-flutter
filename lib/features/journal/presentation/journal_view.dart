@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:design_tokens/design_tokens.dart';
@@ -6,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/audio_chime_service.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
-import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/recipe_image.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sheets.dart';
 import '../../voice/listen_button.dart';
@@ -21,8 +20,9 @@ import 'widgets/page_flip_book.dart';
 import 'widgets/sticker_art.dart';
 import 'widgets/sticker_tray.dart';
 
-/// The recipe journal: every recipe as a two-page keepsake spread (story &
-/// ingredients on the left, method on the right) in a book whose pages turn.
+/// The recipe journal: an "ex libris" bookplate and a table of contents,
+/// then every recipe as a two-page keepsake spread (story & ingredients on
+/// the left, method on the right) in a book whose pages turn.
 ///
 /// Phones show one page at a time with a spiral binding; wide screens show
 /// facing pages with index tabs down the side. "Decorate" turns the visible
@@ -56,11 +56,17 @@ class JournalView extends ConsumerStatefulWidget {
 }
 
 class JournalViewState extends ConsumerState<JournalView> {
+  /// The bookplate and the contents page come before the recipes.
+  static const _frontPages = 2;
+
   PageFlipController? _controller;
   bool? _spread;
   bool _decorating = false;
   String? _selectedId;
   late String? _currentId = widget.initialRecipeId;
+
+  /// True while the book is silently re-aligned after the recipe list changed.
+  bool _resyncing = false;
 
   bool get isDecorating => _decorating;
 
@@ -81,29 +87,55 @@ class JournalViewState extends ConsumerState<JournalView> {
     super.dispose();
   }
 
-  int _indexOf(String? id) {
-    final i = widget.recipes.indexWhere((r) => r.id == id);
-    return i < 0 ? 0 : i;
-  }
+  // --- Pages and positions --------------------------------------------------------
+  //
+  // Page indexes: 0 bookplate, 1 contents, then recipe i on pages 2+2i (story)
+  // and 3+2i (method). A position is a page in single-page mode and a spread
+  // (pages 2p, 2p+1) in spread mode, so recipe i is spread i+1.
 
-  int get _recipeIndex {
+  int get _pageCount => _frontPages + widget.recipes.length * 2;
+
+  int get _positionCount => _spread == true ? _pageCount ~/ 2 : _pageCount;
+
+  int get _firstVisiblePage {
     final c = _controller;
-    if (c == null || widget.recipes.isEmpty) return 0;
-    final i = _spread == true ? c.position : c.position ~/ 2;
-    return i.clamp(0, widget.recipes.length - 1);
+    if (c == null) return 0;
+    return _spread == true ? c.position * 2 : c.position;
   }
 
-  /// 0 = story page, 1 = method page (single-page mode only).
-  int get _side => (_spread == true || _controller == null) ? 0 : _controller!.position % 2;
+  /// The recipe on screen, or null on the bookplate/contents.
+  int? get _recipeIndex {
+    if (widget.recipes.isEmpty) return null;
+    final page = _firstVisiblePage;
+    if (page < _frontPages) return null;
+    return ((page - _frontPages) ~/ 2).clamp(0, widget.recipes.length - 1);
+  }
 
-  Recipe? get _current => widget.recipes.isEmpty ? null : widget.recipes[_recipeIndex];
+  /// 0 = story page, 1 = method page (single-page mode).
+  int get _side => _spread == true ? 0 : (_firstVisiblePage - _frontPages) % 2;
+
+  Recipe? get _current {
+    final i = _recipeIndex;
+    return i == null ? null : widget.recipes[i];
+  }
+
+  int _positionForRecipe(int index, {int side = 0, bool? spread}) =>
+      (spread ?? _spread == true) ? index + 1 : _frontPages + index * 2 + side;
+
+  int get _contentsPosition => _spread == true ? 0 : 1;
 
   void _ensureController(bool spread) {
     if (_spread == spread && _controller != null) return;
-    final index = _controller == null ? _indexOf(_currentId) : _recipeIndex;
-    final side = _side;
+    final int position;
+    if (_controller == null) {
+      final i = widget.recipes.indexWhere((r) => r.id == _currentId);
+      position = i < 0 ? 0 : _positionForRecipe(i, spread: spread);
+    } else {
+      final i = _recipeIndex;
+      position = i == null ? 0 : _positionForRecipe(i, side: spread ? 0 : _side, spread: spread);
+    }
     final old = _controller;
-    _controller = PageFlipController(initialPosition: spread ? index : index * 2 + side);
+    _controller = PageFlipController(initialPosition: position);
     _spread = spread;
     if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
   }
@@ -111,12 +143,12 @@ class JournalViewState extends ConsumerState<JournalView> {
   @override
   void didUpdateWidget(JournalView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Keep the same recipe open when the list changes (edits re-sort it).
+    // Keep the same recipe open when recipes are added or removed.
     final c = _controller;
-    if (c == null || _currentId == null || widget.recipes.isEmpty) return;
+    if (c == null || _currentId == null || widget.recipes.isEmpty || _firstVisiblePage < _frontPages) return;
     final index = widget.recipes.indexWhere((r) => r.id == _currentId);
     if (index < 0) return;
-    final target = _spread == true ? index : index * 2 + _side;
+    final target = _positionForRecipe(index, side: _side);
     if (target != c.position) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -126,9 +158,6 @@ class JournalViewState extends ConsumerState<JournalView> {
       });
     }
   }
-
-  /// True while the book is silently re-aligned after the recipe list changed.
-  bool _resyncing = false;
 
   void _onPositionChanged(int _) {
     if (_resyncing) return;
@@ -146,8 +175,10 @@ class JournalViewState extends ConsumerState<JournalView> {
     final index = widget.recipes.indexWhere((r) => r.id == recipeId);
     final c = _controller;
     if (index < 0 || c == null) return;
-    await c.animateTo(_spread == true ? index : index * 2);
+    await c.animateTo(_positionForRecipe(index));
   }
+
+  Future<void> _openContents() async => _controller?.animateTo(_contentsPosition);
 
   Future<void> _go(int delta) async {
     final c = _controller;
@@ -205,38 +236,36 @@ class JournalViewState extends ConsumerState<JournalView> {
     );
   }
 
-  Future<void> _addDecoration({String? side}) async {
+  Future<void> _addDecoration() async {
     final recipe = _current;
     if (recipe == null) return;
-    var pageSide = side;
-    if (pageSide == null) {
-      if (_spread == true) {
-        pageSide = await showModalBottomSheet<String>(
-          context: context,
-          useRootNavigator: true,
-          showDragHandle: true,
-          builder: (ctx) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.auto_stories_outlined),
-                  title: const Text('Story page (left)'),
-                  onTap: () => Navigator.pop(ctx, 'left'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.format_list_numbered_rounded),
-                  title: const Text('Method page (right)'),
-                  onTap: () => Navigator.pop(ctx, 'right'),
-                ),
-              ],
-            ),
+    String? pageSide;
+    if (_spread == true) {
+      pageSide = await showModalBottomSheet<String>(
+        context: context,
+        useRootNavigator: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(LucideIcons.bookOpenText),
+                title: const Text('Story page (left)'),
+                onTap: () => Navigator.pop(ctx, 'left'),
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.listOrdered),
+                title: const Text('Method page (right)'),
+                onTap: () => Navigator.pop(ctx, 'right'),
+              ),
+            ],
           ),
-        );
-        if (pageSide == null || !mounted) return;
-      } else {
-        pageSide = _side == 0 ? 'left' : 'right';
-      }
+        ),
+      );
+      if (pageSide == null || !mounted) return;
+    } else {
+      pageSide = _side == 0 ? 'left' : 'right';
     }
     final addition = await showStickerTray(context, pageSide: pageSide);
     if (addition == null || !mounted) return;
@@ -271,7 +300,7 @@ class JournalViewState extends ConsumerState<JournalView> {
               ListTile(
                 leading: CircleAvatar(backgroundColor: option.accent(c), radius: 14),
                 title: Text(option.label),
-                trailing: option == recipe.theme ? const Icon(Icons.check_rounded) : null,
+                trailing: option == recipe.theme ? const Icon(LucideIcons.check) : null,
                 onTap: () => Navigator.pop(ctx, option),
               ),
             const SizedBox(height: 8),
@@ -340,22 +369,22 @@ class JournalViewState extends ConsumerState<JournalView> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.image_outlined),
+              leading: const Icon(LucideIcons.imagePlus),
               title: const Text('Change photo'),
               onTap: () => Navigator.pop(ctx, 'photo'),
             ),
             ListTile(
-              leading: const Icon(Icons.edit_note_rounded),
+              leading: const Icon(LucideIcons.penLine),
               title: const Text('Edit caption'),
               onTap: () => Navigator.pop(ctx, 'caption'),
             ),
             ListTile(
-              leading: const Icon(Icons.rotate_left_rounded),
+              leading: const Icon(LucideIcons.rotateCcw),
               title: const Text('Tilt left'),
               onTap: () => Navigator.pop(ctx, 'left'),
             ),
             ListTile(
-              leading: const Icon(Icons.rotate_right_rounded),
+              leading: const Icon(LucideIcons.rotateCw),
               title: const Text('Tilt right'),
               onTap: () => Navigator.pop(ctx, 'right'),
             ),
@@ -408,56 +437,31 @@ class JournalViewState extends ConsumerState<JournalView> {
     onToggleFavorite: (recipe) => ref.read(recipeRepositoryProvider).toggleFavorite(recipe.id),
   );
 
+  Object _pageIdentity(int pageIndex) => pageIndex < _frontPages
+      ? 'front:$pageIndex'
+      : '${widget.recipes[(pageIndex - _frontPages) ~/ 2].id}:${pageIndex % 2}';
+
   Widget _buildPage(BuildContext context, int pageIndex) {
-    final recipe = widget.recipes[pageIndex ~/ 2];
+    final spread = _spread == true;
+    // A folded corner on the outer edge turns the page: bottom-left on the
+    // left page of a spread (back), bottom-right otherwise (forward).
+    DogEar? ear;
+    if (spread && pageIndex.isEven) {
+      if (pageIndex > 0) ear = DogEar.previous(() => _go(-1));
+    } else if (pageIndex < _pageCount - 1) {
+      ear = DogEar.next(() => _go(1));
+    }
+
+    // The bottom bar already offers "Contents" on the bookplate.
+    if (pageIndex == 0) return BookplatePage(recipes: widget.recipes, dogEar: ear);
+    if (pageIndex == 1) return ContentsPage(recipes: widget.recipes, onOpen: openRecipe, dogEar: ear);
+
+    final index = (pageIndex - _frontPages) ~/ 2;
+    final recipe = widget.recipes[index];
     final actions = _actions;
     return pageIndex.isEven
-        ? StoryPage(recipe: recipe, pageNumber: pageIndex + 1, recipeNumber: pageIndex ~/ 2 + 1, actions: actions)
-        : MethodPage(recipe: recipe, pageNumber: pageIndex + 1, actions: actions);
-  }
-
-  Future<void> _showContents() async {
-    final c = context.chefColors;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.6,
-        maxChildSize: 0.92,
-        builder: (ctx, scroll) => ListView.builder(
-          controller: scroll,
-          itemCount: widget.recipes.length + 1,
-          itemBuilder: (ctx, i) {
-            if (i == 0) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('Contents', style: ctx.chefText.titleLarge),
-              );
-            }
-            final r = widget.recipes[i - 1];
-            final current = r.id == _current?.id;
-            return ListTile(
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox.square(
-                  dimension: 48,
-                  child: RecipeImage(source: r.coverImage, theme: r.theme),
-                ),
-              ),
-              title: Text(r.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text('Pages ${2 * i - 1}–${2 * i} · ${KitchenFormat.minutes(r.totalMinutes)}'),
-              trailing: current ? Icon(Icons.bookmark_rounded, color: c.accentTomato) : null,
-              selected: current,
-              onTap: () => Navigator.pop(ctx, r.id),
-            );
-          },
-        ),
-      ),
-    );
-    if (picked != null && mounted) await openRecipe(picked);
+        ? StoryPage(recipe: recipe, pageNumber: pageIndex + 1, recipeNumber: index + 1, actions: actions, dogEar: ear)
+        : MethodPage(recipe: recipe, pageNumber: pageIndex + 1, actions: actions, dogEar: ear);
   }
 
   @override
@@ -471,7 +475,8 @@ class JournalViewState extends ConsumerState<JournalView> {
         return ListenableBuilder(
           listenable: controller,
           builder: (context, _) {
-            final recipe = _current!;
+            final recipe = _current;
+            final decorating = _decorating && recipe != null;
             return CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.arrowRight): () => _go(1),
@@ -483,7 +488,12 @@ class JournalViewState extends ConsumerState<JournalView> {
                 autofocus: true,
                 child: Column(
                   children: [
-                    _decorating ? _decorateBar(spread) : _toolbar(recipe, spread),
+                    if (decorating)
+                      _decorateBar(spread)
+                    else if (recipe == null)
+                      _frontToolbar(spread)
+                    else
+                      _toolbar(recipe, spread),
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(spread ? 20 : 12, 4, spread ? 8 : 12, 4),
@@ -495,14 +505,16 @@ class JournalViewState extends ConsumerState<JournalView> {
                                   _IndexTabs(
                                     recipes: widget.recipes,
                                     currentIndex: _recipeIndex,
-                                    onOpen: (id) => openRecipe(id),
+                                    enabled: !decorating,
+                                    onOpen: openRecipe,
+                                    onContents: _openContents,
                                   ),
                                 ],
                               )
                             : _binder(recipe, controller, spread),
                       ),
                     ),
-                    if (!_decorating) _bottomBar(recipe, controller, spread),
+                    if (!decorating) _bottomBar(recipe, controller, spread),
                   ],
                 ),
               ),
@@ -513,17 +525,18 @@ class JournalViewState extends ConsumerState<JournalView> {
     );
   }
 
-  Widget _binder(Recipe recipe, PageFlipController controller, bool spread) {
-    final palette = JournalPalette.of(context, recipe.theme);
-    final positions = spread ? widget.recipes.length : widget.recipes.length * 2;
+  Widget _binder(Recipe? recipe, PageFlipController controller, bool spread) {
+    final palette = JournalPalette.of(context, recipe?.theme ?? BookplatePage.theme);
+    final positions = _positionCount;
     final progress = positions <= 1 ? 0.0 : controller.position / (positions - 1);
     Widget corner(double turns) => IgnorePointer(
       child: Transform.rotate(angle: turns * math.pi / 2, child: const _BrassCorner()),
     );
+    final first = _firstVisiblePage + 1;
     return Semantics(
       label: spread
-          ? 'Recipe journal, pages ${controller.position * 2 + 1} and ${controller.position * 2 + 2} of ${positions * 2}'
-          : 'Recipe journal, page ${controller.position + 1} of $positions',
+          ? 'Recipe journal, pages $first and ${first + 1} of $_pageCount'
+          : 'Recipe journal, page $first of $_pageCount',
       container: true,
       child: Stack(
         children: [
@@ -552,8 +565,8 @@ class JournalViewState extends ConsumerState<JournalView> {
                       child: PageFlipBook(
                         controller: controller,
                         spread: spread,
-                        pageCount: widget.recipes.length * 2,
-                        pageIdentity: (i) => '${widget.recipes[i ~/ 2].id}:${i % 2}',
+                        pageCount: _pageCount,
+                        pageIdentity: _pageIdentity,
                         pageBuilder: _buildPage,
                         interactive: !_decorating,
                         onPositionChanged: _onPositionChanged,
@@ -575,6 +588,39 @@ class JournalViewState extends ConsumerState<JournalView> {
     );
   }
 
+  /// Toolbar over the bookplate and contents.
+  Widget _frontToolbar(bool spread) {
+    final t = context.chefText;
+    final onContents = _firstVisiblePage == 1 || spread;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(spread ? 20 : 16, 4, spread ? 20 : 8, 4),
+      child: SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            Icon(onContents ? LucideIcons.tableOfContents : LucideIcons.bookMarked, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                spread ? 'Ex libris & contents' : (onContents ? 'Contents' : 'Ex libris'),
+                style: t.titleMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            // On phones the bottom bar already offers this.
+            if (spread)
+              TextButton.icon(
+                onPressed: () => openRecipe(widget.recipes.first.id),
+                icon: const Icon(LucideIcons.bookOpen, size: 18),
+                label: const Text('First recipe'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _toolbar(Recipe recipe, bool spread) => Consumer(
     builder: (context, ref, _) {
       final servings =
@@ -585,6 +631,7 @@ class JournalViewState extends ConsumerState<JournalView> {
 
   Widget _toolbarFor(Recipe recipe, bool spread, int servings) {
     final t = context.chefText;
+    final index = _recipeIndex ?? 0;
     final listen = ListenButton(
       sessionId: 'recipe:${recipe.id}',
       compact: !spread,
@@ -606,15 +653,11 @@ class JournalViewState extends ConsumerState<JournalView> {
                     showSelectedIcon: false,
                     style: const ButtonStyle(visualDensity: VisualDensity.compact),
                     segments: const [
-                      ButtonSegment(value: 0, label: Text('Story'), icon: Icon(Icons.auto_stories_outlined, size: 18)),
-                      ButtonSegment(
-                        value: 1,
-                        label: Text('Method'),
-                        icon: Icon(Icons.format_list_numbered_rounded, size: 18),
-                      ),
+                      ButtonSegment(value: 0, label: Text('Story'), icon: Icon(LucideIcons.bookOpenText, size: 18)),
+                      ButtonSegment(value: 1, label: Text('Method'), icon: Icon(LucideIcons.listOrdered, size: 18)),
                     ],
                     selected: {_side},
-                    onSelectionChanged: (s) => _controller?.animateTo(_recipeIndex * 2 + s.first),
+                    onSelectionChanged: (s) => _controller?.animateTo(_positionForRecipe(index, side: s.first)),
                   ),
                 ),
               ),
@@ -623,7 +666,7 @@ class JournalViewState extends ConsumerState<JournalView> {
             IconButton(
               tooltip: 'Decorate page',
               onPressed: () => _setDecorating(true),
-              icon: const Icon(Icons.auto_fix_high_outlined),
+              icon: const Icon(LucideIcons.wandSparkles),
             ),
             _moreMenu(recipe),
           ],
@@ -636,14 +679,18 @@ class JournalViewState extends ConsumerState<JournalView> {
         children: [
           Flexible(
             child: Text(
-              'Recipe ${_recipeIndex + 1} of ${widget.recipes.length}',
+              'Recipe ${index + 1} of ${widget.recipes.length}',
               style: t.labelLarge,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(width: 8),
-          TextButton.icon(onPressed: _showContents, icon: const Icon(Icons.toc_rounded), label: const Text('Contents')),
+          TextButton.icon(
+            onPressed: _openContents,
+            icon: const Icon(LucideIcons.tableOfContents, size: 18),
+            label: const Text('Contents'),
+          ),
           const SizedBox(width: 16),
           Expanded(
             flex: 3,
@@ -658,19 +705,21 @@ class JournalViewState extends ConsumerState<JournalView> {
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
                       onPressed: () => _setDecorating(true),
-                      icon: const Icon(Icons.auto_fix_high_outlined),
+                      icon: const Icon(LucideIcons.wandSparkles, size: 18),
                       label: const Text('Decorate'),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
                       onPressed: () => context.push('/recipe/${recipe.id}'),
-                      icon: const Icon(Icons.open_in_new_rounded),
+                      icon: const Icon(LucideIcons.notebookText, size: 18),
                       label: const Text('Details'),
                     ),
                     const SizedBox(width: 8),
                     FilledButton.icon(
-                      onPressed: recipe.steps.isEmpty ? null : () => context.push('/cook/${recipe.id}?servings=$servings'),
-                      icon: const Icon(Icons.play_arrow_rounded),
+                      onPressed: recipe.steps.isEmpty
+                          ? null
+                          : () => context.push('/cook/${recipe.id}?servings=$servings'),
+                      icon: const Icon(LucideIcons.chefHat, size: 18),
                       label: const Text('Cook'),
                     ),
                   ],
@@ -686,10 +735,11 @@ class JournalViewState extends ConsumerState<JournalView> {
   Widget _moreMenu(Recipe recipe) {
     return PopupMenuButton<String>(
       tooltip: 'More',
+      icon: const Icon(LucideIcons.ellipsisVertical),
       onSelected: (v) {
         switch (v) {
           case 'contents':
-            _showContents();
+            _openContents();
           case 'details':
             context.push('/recipe/${recipe.id}');
           case 'collection':
@@ -701,19 +751,19 @@ class JournalViewState extends ConsumerState<JournalView> {
       itemBuilder: (_) => const [
         PopupMenuItem(
           value: 'contents',
-          child: ListTile(leading: Icon(Icons.toc_rounded), title: Text('Contents')),
+          child: ListTile(leading: Icon(LucideIcons.tableOfContents), title: Text('Contents')),
         ),
         PopupMenuItem(
           value: 'details',
-          child: ListTile(leading: Icon(Icons.open_in_new_rounded), title: Text('Details & nutrition')),
+          child: ListTile(leading: Icon(LucideIcons.notebookText), title: Text('Details & nutrition')),
         ),
         PopupMenuItem(
           value: 'collection',
-          child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Save to collection')),
+          child: ListTile(leading: Icon(LucideIcons.folderHeart), title: Text('Save to collection')),
         ),
         PopupMenuItem(
           value: 'edit',
-          child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit recipe')),
+          child: ListTile(leading: Icon(LucideIcons.squarePen), title: Text('Edit recipe')),
         ),
       ],
     );
@@ -721,74 +771,127 @@ class JournalViewState extends ConsumerState<JournalView> {
 
   Widget _decorateBar(bool spread) {
     final t = context.chefText;
-    return LayoutBuilder(builder: (context, box) {
-      final roomy = box.maxWidth >= 440;
-      return Padding(
-        padding: EdgeInsets.fromLTRB(spread ? 20 : 12, 4, spread ? 20 : 12, 4),
-        child: Row(
-          children: [
-            if (roomy) ...[
-              FilledButton.tonalIcon(
-                onPressed: _addDecoration,
-                icon: const Icon(Icons.add_reaction_outlined),
-                label: const Text('Add'),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final roomy = box.maxWidth >= 440;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(spread ? 20 : 12, 4, spread ? 20 : 12, 4),
+          child: Row(
+            children: [
+              if (roomy) ...[
+                FilledButton.tonalIcon(
+                  onPressed: _addDecoration,
+                  icon: const Icon(LucideIcons.sticker, size: 18),
+                  label: const Text('Add'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _pickTheme,
+                  icon: const Icon(LucideIcons.palette, size: 18),
+                  label: const Text('Theme'),
+                ),
+              ] else ...[
+                IconButton.filledTonal(
+                  tooltip: 'Add a sticker',
+                  onPressed: _addDecoration,
+                  icon: const Icon(LucideIcons.sticker),
+                ),
+                IconButton.outlined(
+                  tooltip: 'Page theme',
+                  onPressed: _pickTheme,
+                  icon: const Icon(LucideIcons.palette),
+                ),
+              ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  spread ? 'Drag to move · pinch or use the toolbar to resize and rotate' : 'Drag · pinch · tap icons',
+                  style: t.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: _pickTheme,
-                icon: const Icon(Icons.palette_outlined),
-                label: const Text('Theme'),
-              ),
-            ] else ...[
-              IconButton.filledTonal(
-                tooltip: 'Add a sticker',
-                onPressed: _addDecoration,
-                icon: const Icon(Icons.add_reaction_outlined),
-              ),
-              IconButton.outlined(
-                tooltip: 'Page theme',
-                onPressed: _pickTheme,
-                icon: const Icon(Icons.palette_outlined),
+              FilledButton.icon(
+                onPressed: () => _setDecorating(false),
+                icon: const Icon(LucideIcons.check, size: 18),
+                label: const Text('Done'),
               ),
             ],
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                spread ? 'Drag to move · pinch or use the toolbar to resize and rotate' : 'Drag · pinch · tap icons',
-                style: t.bodySmall,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: () => _setDecorating(false),
-              icon: const Icon(Icons.check_rounded),
-              label: const Text('Done'),
-            ),
-          ],
-        ),
-      );
-    });
+          ),
+        );
+      },
+    );
   }
 
-  Widget _bottomBar(Recipe recipe, PageFlipController controller, bool spread) => Consumer(
+  Widget _bottomBar(Recipe? recipe, PageFlipController controller, bool spread) => Consumer(
     builder: (context, ref, _) {
-      final servings =
-          ref.watch(journalServingsProvider(recipe.id)) ?? math.max(1, recipe.baseServings.toDouble().round());
+      final servings = recipe == null
+          ? 1
+          : ref.watch(journalServingsProvider(recipe.id)) ?? math.max(1, recipe.baseServings.toDouble().round());
       return _bottomBarFor(recipe, controller, spread, servings);
     },
   );
 
-  Widget _bottomBarFor(Recipe recipe, PageFlipController controller, bool spread, int servings) {
+  Widget _bottomBarFor(Recipe? recipe, PageFlipController controller, bool spread, int servings) {
     final t = context.chefText;
     final c = context.chefColors;
-    final positions = spread ? widget.recipes.length : widget.recipes.length * 2;
     final atStart = controller.position <= 0;
-    final atEnd = controller.position >= positions - 1;
+    final atEnd = controller.position >= _positionCount - 1;
+    final index = _recipeIndex;
+    final first = _firstVisiblePage + 1;
     final caption = spread
-        ? 'Pages ${controller.position * 2 + 1}–${controller.position * 2 + 2} of ${positions * 2}'
-        : '${_recipeIndex + 1} of ${widget.recipes.length} · ${_side == 0 ? 'Story' : 'Method'}';
+        ? 'Pages $first–${first + 1} of $_pageCount'
+        : index == null
+        ? (first == 1 ? 'Ex libris' : 'Contents')
+        : '${index + 1} of ${widget.recipes.length} · ${_side == 0 ? 'Story' : 'Method'}';
+
+    final captionRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Text(
+            caption,
+            style: (spread ? t.labelLarge : t.labelSmall)?.copyWith(color: c.contentSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (widget.recipes.length > 1 && widget.recipes.length <= 12) ...[
+          const SizedBox(width: 10),
+          _PageDots(count: widget.recipes.length, current: index, onTap: (i) => openRecipe(widget.recipes[i].id)),
+        ],
+      ],
+    );
+
+    final Widget center;
+    if (spread) {
+      center = Center(child: captionRow);
+    } else {
+      center = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          captionRow,
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            child: recipe == null
+                ? FilledButton.tonalIcon(
+                    onPressed: first == 1 ? _openContents : () => openRecipe(widget.recipes.first.id),
+                    icon: Icon(first == 1 ? LucideIcons.tableOfContents : LucideIcons.bookOpen, size: 18),
+                    label: Text(first == 1 ? 'Contents' : 'Open the first recipe'),
+                  )
+                : FilledButton.icon(
+                    onPressed: recipe.steps.isEmpty
+                        ? null
+                        : () => context.push('/cook/${recipe.id}?servings=$servings'),
+                    icon: const Icon(LucideIcons.chefHat, size: 18),
+                    label: const Text('Start cooking'),
+                  ),
+          ),
+        ],
+      );
+    }
 
     return SafeArea(
       top: false,
@@ -799,37 +902,15 @@ class JournalViewState extends ConsumerState<JournalView> {
             IconButton.outlined(
               tooltip: 'Previous page',
               onPressed: atStart ? null : () => _go(-1),
-              icon: const Icon(Icons.chevron_left_rounded),
+              icon: const Icon(LucideIcons.chevronLeft),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: spread
-                  ? Center(
-                      child: Text(caption, style: t.labelLarge?.copyWith(color: c.contentSecondary)),
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(caption, style: t.labelSmall?.copyWith(color: c.contentSecondary)),
-                        const SizedBox(height: 2),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: recipe.steps.isEmpty
-                                ? null
-                                : () => context.push('/cook/${recipe.id}?servings=$servings'),
-                            icon: const Icon(Icons.play_arrow_rounded),
-                            label: const Text('Start cooking'),
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
+            Expanded(child: center),
             const SizedBox(width: 8),
             IconButton.outlined(
               tooltip: 'Next page',
               onPressed: atEnd ? null : () => _go(1),
-              icon: const Icon(Icons.chevron_right_rounded),
+              icon: const Icon(LucideIcons.chevronRight),
             ),
           ],
         ),
@@ -838,67 +919,147 @@ class JournalViewState extends ConsumerState<JournalView> {
   }
 }
 
-/// Coloured bookmark tabs down the side of the open book.
-class _IndexTabs extends StatelessWidget {
-  final List<Recipe> recipes;
-  final int currentIndex;
-  final ValueChanged<String> onOpen;
-  const _IndexTabs({required this.recipes, required this.currentIndex, required this.onOpen});
+/// One dot per recipe; the open one is a longer pill.
+class _PageDots extends StatelessWidget {
+  final int count;
+  final int? current;
+  final ValueChanged<int> onTap;
+  const _PageDots({required this.count, required this.current, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final c = context.chefColors;
-    return SizedBox(
-      width: 112,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        itemCount: recipes.length,
-        itemBuilder: (context, i) {
-          final r = recipes[i];
-          final active = i == currentIndex;
-          final color = Color.lerp(r.theme.accent(c), Colors.black, c.isDark ? 0.35 : 0.18)!;
-          final word = r.title.split(RegExp(r'\s+')).firstWhere((w) => w.length > 2, orElse: () => r.title);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Tooltip(
-                message: r.title,
-                child: Semantics(
-                  button: true,
-                  selected: active,
-                  label: 'Open ${r.title}',
-                  excludeSemantics: true,
-                  child: AnimatedContainer(
-                    duration: ChefMotion.standard,
-                    width: active ? 108 : 96,
-                    child: Material(
-                      color: color,
-                      elevation: active ? 4 : 1,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.horizontal(right: Radius.circular(14)),
-                      ),
-                      child: InkWell(
-                        onTap: () => onOpen(r.id),
-                        borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
-                          child: Text(
-                            word,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.chefText.labelMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+    return ExcludeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < count; i++)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onTap(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+                child: AnimatedContainer(
+                  duration: ChefMotion.standard,
+                  width: i == current ? 14 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i == current ? c.accentTomato : c.outlineSubtle,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Coloured bookmark tabs down the side of the open book: Contents first,
+/// then one per recipe.
+class _IndexTabs extends StatelessWidget {
+  final List<Recipe> recipes;
+  final int? currentIndex;
+  final bool enabled;
+  final ValueChanged<String> onOpen;
+  final VoidCallback onContents;
+
+  const _IndexTabs({
+    required this.recipes,
+    required this.currentIndex,
+    required this.enabled,
+    required this.onOpen,
+    required this.onContents,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    Widget tab({
+      required String label,
+      required String tooltip,
+      required Color color,
+      required bool active,
+      required VoidCallback onTap,
+      IconData? icon,
+    }) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Tooltip(
+            message: tooltip,
+            child: Semantics(
+              button: true,
+              selected: active,
+              enabled: enabled,
+              label: tooltip,
+              excludeSemantics: true,
+              child: AnimatedContainer(
+                duration: ChefMotion.standard,
+                width: active ? 108 : 96,
+                child: Material(
+                  color: enabled ? color : color.withValues(alpha: 0.5),
+                  elevation: active ? 4 : 1,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.horizontal(right: Radius.circular(14)),
+                  ),
+                  child: InkWell(
+                    onTap: enabled ? onTap : null,
+                    borderRadius: const BorderRadius.horizontal(right: Radius.circular(14)),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                      child: Row(
+                        children: [
+                          if (icon != null) ...[Icon(icon, size: 14, color: Colors.white), const SizedBox(width: 6)],
+                          Expanded(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.chefText.labelMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: 112,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        itemCount: recipes.length + 1,
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            return tab(
+              label: 'Contents',
+              tooltip: 'Contents',
+              icon: LucideIcons.tableOfContents,
+              color: c.isDark ? const Color(0xFF4A4440) : const Color(0xFF3B3430),
+              active: currentIndex == null,
+              onTap: onContents,
+            );
+          }
+          final r = recipes[i - 1];
+          final word = r.title.split(RegExp(r'\s+')).firstWhere((w) => w.length > 2, orElse: () => r.title);
+          return tab(
+            label: word,
+            tooltip: 'Open ${r.title}',
+            color: Color.lerp(r.theme.accent(c), Colors.black, c.isDark ? 0.35 : 0.18)!,
+            active: currentIndex == i - 1,
+            onTap: () => onOpen(r.id),
           );
         },
       ),

@@ -33,7 +33,13 @@ Widget? renderCulinaryStampById(
     );
   }
 
-  // 2. Vintage Postage Stamps
+  // 2. An exact id wins in any category. Without this, "food-avocado-toast"
+  // fuzzy-matched the avocado *postage stamp* below before doodles were tried.
+  for (final def in allCulinarySvgStamps) {
+    if (def.id == norm) return def.builder(size: size, rotation: rotation ?? def.defaultRotation);
+  }
+
+  // 3. Vintage Postage Stamps (loose match for older ids)
   final stampMatch = postageStampDefs.firstWhere(
     (s) => s.id == norm || norm.contains(s.id.replaceAll('postage-', '')),
     orElse: () => CulinaryStampDef(id: '', name: '', category: '', defaultRotation: 0, builder: ({double size = 56, double rotation = 0}) => const SizedBox.shrink()),
@@ -42,7 +48,7 @@ Widget? renderCulinaryStampById(
     return stampMatch.builder(size: size, rotation: rotation ?? stampMatch.defaultRotation);
   }
 
-  // 3. Embossed Wax Seals
+  // 4. Embossed Wax Seals
   final sealMatch = waxSealDefs.firstWhere(
     (s) => s.id == norm || norm.contains(s.id.replaceAll('seal-', '')),
     orElse: () => CulinaryStampDef(id: '', name: '', category: '', defaultRotation: 0, builder: ({double size = 56, double rotation = 0}) => const SizedBox.shrink()),
@@ -51,7 +57,7 @@ Widget? renderCulinaryStampById(
     return sealMatch.builder(size: size, rotation: rotation ?? sealMatch.defaultRotation);
   }
 
-  // 4. Food Doodles
+  // 5. Food Doodles
   final doodleMatch = foodDoodleDefs.firstWhere(
     (s) => s.id == norm || norm.contains(s.id.replaceAll('food-', '').replaceAll('doodle-', '')),
     orElse: () => CulinaryStampDef(id: '', name: '', category: '', defaultRotation: 0, builder: ({double size = 56, double rotation = 0}) => const SizedBox.shrink()),
@@ -60,7 +66,7 @@ Widget? renderCulinaryStampById(
     return doodleMatch.builder(size: size, rotation: rotation ?? doodleMatch.defaultRotation);
   }
 
-  // 5. Fallback Doodle Painter using the ID
+  // 6. Fallback Doodle Painter using the ID
   return SvgFoodDoodleWidget(
     id: stampId,
     size: size,

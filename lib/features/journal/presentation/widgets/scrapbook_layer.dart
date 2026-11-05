@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import 'sticker_art.dart';
@@ -448,12 +449,12 @@ class _SelectionPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              button(Icons.remove_rounded, isTape ? 'Shorter' : 'Smaller', onShrink),
-              button(Icons.add_rounded, isTape ? 'Longer' : 'Bigger', onGrow),
-              button(Icons.rotate_left_rounded, 'Rotate left', onRotateLeft),
-              button(Icons.rotate_right_rounded, 'Rotate right', onRotateRight),
-              if (onFront != null) button(Icons.flip_to_front_rounded, 'Bring to front', onFront),
-              button(Icons.delete_outline_rounded, 'Remove', onRemove, color: c.stateDanger),
+              button(LucideIcons.minus, isTape ? 'Shorter' : 'Smaller', onShrink),
+              button(LucideIcons.plus, isTape ? 'Longer' : 'Bigger', onGrow),
+              button(LucideIcons.rotateCcw, 'Rotate left', onRotateLeft),
+              button(LucideIcons.rotateCw, 'Rotate right', onRotateRight),
+              if (onFront != null) button(LucideIcons.bringToFront, 'Bring to front', onFront),
+              button(LucideIcons.trash2, 'Remove', onRemove, color: c.stateDanger),
             ],
           ),
         ),

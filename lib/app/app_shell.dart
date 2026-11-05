@@ -2,6 +2,7 @@ import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'providers.dart';
 import 'widgets/kitchen_format.dart';
@@ -13,12 +14,14 @@ class _Destination {
   const _Destination(this.icon, this.selectedIcon, this.label);
 }
 
+// Lucide line icons (as in the web app); the selected tab is marked by the
+// navigation indicator rather than a filled glyph.
 const _destinations = [
-  _Destination(Icons.menu_book_outlined, Icons.menu_book_rounded, 'Recipes'),
-  _Destination(Icons.photo_camera_outlined, Icons.photo_camera_rounded, 'Scan'),
-  _Destination(Icons.insights_outlined, Icons.insights_rounded, 'Food log'),
-  _Destination(Icons.collections_bookmark_outlined, Icons.collections_bookmark_rounded, 'Collections'),
-  _Destination(Icons.settings_outlined, Icons.settings_rounded, 'Settings'),
+  _Destination(LucideIcons.bookOpen, LucideIcons.bookOpen, 'Recipes'),
+  _Destination(LucideIcons.scanLine, LucideIcons.scanLine, 'Scan'),
+  _Destination(LucideIcons.chartColumnBig, LucideIcons.chartColumnBig, 'Food log'),
+  _Destination(LucideIcons.folderHeart, LucideIcons.folderHeart, 'Collections'),
+  _Destination(LucideIcons.settings, LucideIcons.settings, 'Settings'),
 ];
 
 /// Adaptive navigation: bottom bar on phones, rail on tablets/desktop.

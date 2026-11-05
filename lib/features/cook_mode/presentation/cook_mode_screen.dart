@@ -547,7 +547,7 @@ class _FinishView extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SvgWaxSealWidget(id: 'seal-chef-kiss', size: 96),
+              const SvgWaxSealWidget(id: 'seal-michelin', size: 96),
               const SizedBox(height: 20),
               Text('Chef’s kiss!', style: t.displaySmall, textAlign: TextAlign.center),
               const SizedBox(height: 8),

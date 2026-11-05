@@ -264,6 +264,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return 'Good evening';
   }
 
+  /// Back inside the journal: leave decorate mode, then return to the view
+  /// the journal was opened from. Ignored when another tab or a full-screen
+  /// page is showing, so Back works normally there.
+  Future<bool> _handleBack() async {
+    if (!mounted || _view != LibraryView.journal) return false;
+    if (!TickerMode.valuesOf(context).enabled || !(ModalRoute.of(context)?.isCurrent ?? false)) return false;
+    final journal = _journalKey.currentState;
+    if (journal != null && journal.isDecorating) {
+      journal.stopDecorating();
+      return true;
+    }
+    // Leaving the journal with Back also makes the previous view the one to
+    // reopen next time.
+    _chooseView(_browseView);
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final recipesAsync = ref.watch(allRecipesProvider);
@@ -279,17 +296,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         const SingleActivator(LogicalKeyboardKey.keyK, meta: true): _searchFocus.requestFocus,
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): _searchFocus.requestFocus,
       },
-      child: PopScope(
-        canPop: view != LibraryView.journal,
-        onPopInvokedWithResult: (didPop, _) {
-          if (didPop) return;
-          final journal = _journalKey.currentState;
-          if (journal != null && journal.isDecorating) {
-            journal.stopDecorating();
-            return;
-          }
-          setState(() => _view = _browseView);
-        },
+      // go_router only consults PopScope when a navigator has more than one
+      // page, so the tab's root screen listens for Back directly.
+      child: BackButtonListener(
+        onBackButtonPressed: _handleBack,
         child: Scaffold(
           floatingActionButton: view == LibraryView.journal || view == null
               ? null

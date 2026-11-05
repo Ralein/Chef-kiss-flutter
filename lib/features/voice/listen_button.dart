@@ -1,5 +1,6 @@
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
@@ -82,7 +83,7 @@ class ListenButton extends ConsumerWidget {
       duration: ChefMotion.quick,
       child: reading
           ? const SpeakingWaves(key: ValueKey('waves'))
-          : const Icon(Icons.volume_up_rounded, key: ValueKey('speaker')),
+          : const Icon(LucideIcons.volume2, key: ValueKey('speaker')),
     );
     if (compact) {
       return IconButton(

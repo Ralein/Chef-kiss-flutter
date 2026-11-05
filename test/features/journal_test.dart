@@ -7,9 +7,14 @@ import 'package:chefs_kiss/core/ai/ai_connection.dart';
 import 'package:chefs_kiss/core/media/image_store.dart';
 import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
+import 'package:chefs_kiss/data/repositories/drift_food_log_repository.dart';
 import 'package:chefs_kiss/features/journal/application/recipe_edits.dart';
+import 'package:chefs_kiss/features/journal/presentation/widgets/journal_pages.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/page_flip_book.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/sticker_art.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/bookshelf.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/recipe_card.dart';
+import 'package:design_tokens/design_tokens.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -191,6 +196,64 @@ void main() {
     });
   });
 
+  group('dog-ear', () {
+    Future<int> pumpPaper(WidgetTester tester, {required double contentHeight}) async {
+      var turns = 0;
+      await tester.pumpWidget(MaterialApp(
+        theme: ChefTheme.light(),
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            height: 600,
+            child: JournalPaper(
+              theme: ScrapbookTheme.terracottaClassic,
+              dogEar: DogEar.next(() => turns++),
+              child: SizedBox(height: contentHeight, child: const Text('Page text')),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(360 - 12, 600 - 12));
+      await tester.pumpAndSettle();
+      return turns;
+    }
+
+    testWidgets('turns the page when the page fits on screen', (tester) async {
+      expect(await pumpPaper(tester, contentHeight: 200), 1);
+    });
+
+    testWidgets('stays out of the way until a long page is read to the end', (tester) async {
+      var turns = 0;
+      await tester.pumpWidget(MaterialApp(
+        theme: ChefTheme.light(),
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            height: 600,
+            child: JournalPaper(
+              theme: ScrapbookTheme.terracottaClassic,
+              dogEar: DogEar.next(() => turns++),
+              child: const SizedBox(height: 2000, child: Text('Long page')),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(360 - 12, 600 - 12));
+      await tester.pumpAndSettle();
+      expect(turns, 0, reason: 'mid-page the corner must not catch taps');
+
+      await tester.drag(find.byType(Scrollable), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(Scrollable), const Offset(0, -900));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(360 - 12, 600 - 12));
+      await tester.pumpAndSettle();
+      expect(turns, 1);
+    });
+  });
+
   testWidgets('journal: decorate a page — add, remove and undo a sticker', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('soup', 'Tomato soup')]);
 
@@ -257,6 +320,88 @@ void main() {
     expect(find.text('Mise en place'), findsOneWidget);
     expect(find.textContaining(' of 2 · Story'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('library: cards, shelf and journal views — the choice is remembered', (tester) async {
+    final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
+    // Shelf by default.
+    expect(find.byType(BookCover), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Recipe cards'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RecipeCard), findsOneWidget);
+    expect(find.byType(BookCover), findsNothing);
+    final stored = await tester.runAsync(() => container.read(preferencesRepositoryProvider).readJson(libraryViewKey));
+    expect(stored, 'cards');
+
+    // Cards open the full recipe page, as before.
+    await tester.tap(find.text('Apple pie'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start cooking'), findsOneWidget);
+    expect(find.text('Nutrition'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('remembered view is used on the next launch', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await DriftPreferencesRepository(db).writeJson(libraryViewKey, 'cards');
+    await DriftRecipeRepository(db).saveRecipe(_recipe('a', 'Apple pie'));
+    tester.view.physicalSize = const Size(390, 844) * 3;
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        secretStoreProvider.overrideWithValue(InMemorySecretStore()),
+        screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
+        imageStoreProvider.overrideWithValue(const NoopImageStore()),
+      ],
+      child: const ChefApp(),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byType(RecipeCard), findsOneWidget);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('journal opens on the bookplate; contents lead to a recipe', (tester) async {
+    final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie'), _recipe('b', 'Banana bread')]);
+    await tester.tap(find.byTooltip('Recipe journal'));
+    await tester.pumpAndSettle();
+    expect(find.text('EX LIBRIS'), findsOneWidget);
+    expect(find.text('2 recipes  ·  0 favorites'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Contents'));
+    await tester.pumpAndSettle();
+    expect(find.text('p. 5'), findsOneWidget, reason: 'Banana bread starts on page 5');
+
+    // The whole contents row is a link (titles are drawn with their dot leader).
+    expect(find.bySemanticsLabel('Banana bread, page 5'), findsOneWidget);
+    await tester.tap(find.text('p. 5'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mise en place'), findsOneWidget);
+    expect(find.textContaining('2 of 2 · Story'), findsOneWidget);
+
+    // Back returns to where the journal was opened from.
+    await tester.binding.handlePopRoute(); // system Back button
+    await tester.pumpAndSettle();
+    expect(find.byType(BookCover), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('Back on another tab leaves the journal alone', (tester) async {
+    final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
+    await tester.tap(find.byTooltip('Recipe journal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scan').last);
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Recipes').last);
+    await tester.pumpAndSettle();
+    expect(find.text('EX LIBRIS'), findsOneWidget, reason: 'still in the journal');
     await _teardown(tester, db);
   });
 
