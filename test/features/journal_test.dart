@@ -9,6 +9,7 @@ import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:chefs_kiss/features/journal/application/recipe_edits.dart';
 import 'package:chefs_kiss/features/journal/presentation/widgets/page_flip_book.dart';
+import 'package:chefs_kiss/features/journal/presentation/widgets/sticker_art.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -210,6 +211,14 @@ void main() {
     expect(saved.stickers.single.pageSide, 'left');
     expect(saved.stickers.single.content, 'postage-tomato');
 
+    // Drag it with a finger: the page doesn't scroll, the sticker moves.
+    final before = saved.stickers.single;
+    await tester.dragFrom(tester.getCenter(find.byType(StickerArt)), const Offset(60, 120));
+    await tester.pumpAndSettle();
+    saved = await _load(tester, db, 'soup');
+    expect(saved.stickers.single.x, greaterThan(before.x));
+    expect(saved.stickers.single.y, greaterThan(before.y));
+
     // The new sticker is selected: its toolbar can resize and remove it.
     await tester.tap(find.byTooltip('Bigger'));
     await tester.pumpAndSettle();
@@ -232,8 +241,9 @@ void main() {
 
   testWidgets('journal: Story/Method toggle and page buttons turn pages', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie'), _recipe('b', 'Banana bread')]);
-    // Most recently saved first: the journal opens Banana bread, then Apple pie.
-    await tester.tap(find.text('Banana bread'));
+    // The journal keeps the order recipes were added (ties: A–Z), so editing
+    // never reshuffles it: Apple pie is page 1, Banana bread follows.
+    await tester.tap(find.text('Apple pie'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Method'));

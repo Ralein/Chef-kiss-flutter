@@ -119,12 +119,19 @@ class JournalViewState extends ConsumerState<JournalView> {
     final target = _spread == true ? index : index * 2 + _side;
     if (target != c.position) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) c.jumpTo(target);
+        if (!mounted) return;
+        _resyncing = true;
+        c.jumpTo(target);
+        _resyncing = false;
       });
     }
   }
 
+  /// True while the book is silently re-aligned after the recipe list changed.
+  bool _resyncing = false;
+
   void _onPositionChanged(int _) {
+    if (_resyncing) return;
     audioChime.playPageFlip();
     final recipe = _current;
     if (recipe != null && recipe.id != _currentId) {

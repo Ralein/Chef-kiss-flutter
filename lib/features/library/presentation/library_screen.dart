@@ -280,7 +280,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   /// All recipes in the shelf's sort order — the journal is the whole book,
   /// whatever the shelf is filtered to.
-  List<Recipe> _bookOrder(List<Recipe> all) => _apply(all, _filtersFor(all), unfiltered: true);
+  /// The journal is a book: recipes stay in the order they were added, so
+  /// editing or decorating one never shuffles the pages.
+  List<Recipe> _bookOrder(List<Recipe> all) => [...all]
+    ..sort((a, b) {
+      final byAdded = a.createdAt.compareTo(b.createdAt);
+      return byAdded != 0 ? byAdded : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
 
   Widget _buildJournal(BuildContext context, List<Recipe> all) {
     final t = context.chefText;
