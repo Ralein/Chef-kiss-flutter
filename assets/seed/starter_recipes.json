@@ -22,15 +22,8 @@
     "chefTip": "Vigorously toss the pasta with a splash of starchy cooking water to emulsify the sauce into a glossy glaze.",
     "chefTipIcon": "chefHat",
     "chefTipIconColor": "#C85A32",
-    "stickers": [
-      {"id": "pasta-pomodoro-stk-stamp", "content": "postage-tomato", "type": "stamp", "iconId": "postage-tomato", "label": "San Marzano Tomato", "pageSide": "left", "x": 80.0, "y": 11.0, "rotation": 8.0, "scale": 0.9, "zIndex": 3},
-      {"id": "pasta-pomodoro-stk-seal", "content": "stamp-al-dente", "type": "seal", "iconId": "stamp-al-dente", "label": "Wax seal", "pageSide": "left", "x": 16.0, "y": 24.0, "rotation": -10.0, "scale": 0.8, "zIndex": 2},
-      {"id": "pasta-pomodoro-stk-doodle", "content": "food-basil", "type": "doodle", "iconId": "food-basil", "label": "Doodle", "pageSide": "left", "x": 76.0, "y": 92.0, "rotation": -6.0, "scale": 0.85, "zIndex": 1},
-      {"id": "pasta-pomodoro-stk-bottom", "content": "food-garlic", "type": "doodle", "iconId": "food-garlic", "label": "Doodle", "pageSide": "right", "x": 16.0, "y": 96.0, "rotation": 7.0, "scale": 0.8, "zIndex": 1}
-    ],
-    "washiTapes": [
-      {"id": "pasta-pomodoro-wash-top", "pattern": "terracotta", "pageSide": "right", "x": 74.0, "y": 2.5, "width": 110.0, "rotation": -4.0}
-    ],
+    "stickers": [],
+    "washiTapes": [],
     "ingredients": [
       { "id": "p-1", "displayName": "Type 00 Flour", "quantityNum": 200, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
       { "id": "p-2", "displayName": "Fresh Farm Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "egg", "iconColor": "#E5A124" },
@@ -101,15 +94,8 @@
     "chefTip": "Rest the batter for 15 minutes before cooking so the gluten relaxes for paper-thin, delicate crêpes.",
     "chefTipIcon": "chefHat",
     "chefTipIconColor": "#8C7355",
-    "stickers": [
-      {"id": "french-crepes-stk-stamp", "content": "postage-strawberry", "type": "stamp", "iconId": "postage-strawberry", "label": "Fragole", "pageSide": "left", "x": 80.0, "y": 11.0, "rotation": 8.0, "scale": 0.9, "zIndex": 3},
-      {"id": "french-crepes-stk-seal", "content": "seal-handcrafted-daily", "type": "seal", "iconId": "seal-handcrafted-daily", "label": "Wax seal", "pageSide": "left", "x": 16.0, "y": 24.0, "rotation": -10.0, "scale": 0.8, "zIndex": 2},
-      {"id": "french-crepes-stk-doodle", "content": "food-crepe", "type": "doodle", "iconId": "food-crepe", "label": "Doodle", "pageSide": "left", "x": 76.0, "y": 92.0, "rotation": -6.0, "scale": 0.85, "zIndex": 1},
-      {"id": "french-crepes-stk-bottom", "content": "food-strawberry", "type": "doodle", "iconId": "food-strawberry", "label": "Doodle", "pageSide": "right", "x": 16.0, "y": 96.0, "rotation": 7.0, "scale": 0.8, "zIndex": 1}
-    ],
-    "washiTapes": [
-      {"id": "french-crepes-wash-top", "pattern": "kraft", "pageSide": "right", "x": 74.0, "y": 2.5, "width": 110.0, "rotation": -4.0}
-    ],
+    "stickers": [],
+    "washiTapes": [],
     "ingredients": [
       { "id": "c-1", "displayName": "Type 00 Pastry Flour", "quantityNum": 120, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
       { "id": "c-2", "displayName": "Ceremonial Matcha Powder", "quantityNum": 2, "quantityDen": 1, "unitCode": "tsp", "position": 2, "icon": "leaf", "iconColor": "#4A6B53" },
@@ -171,15 +157,8 @@
     "chefTip": "A splash of fresh lemon juice prevents avocado oxidation and adds a bright zesty punch.",
     "chefTipIcon": "chefHat",
     "chefTipIconColor": "#4A6B53",
-    "stickers": [
-      {"id": "avocado-brioche-stk-stamp", "content": "postage-avocado", "type": "stamp", "iconId": "postage-avocado", "label": "Aguacate", "pageSide": "left", "x": 80.0, "y": 11.0, "rotation": 8.0, "scale": 0.9, "zIndex": 3},
-      {"id": "avocado-brioche-stk-seal", "content": "seal-farm-table", "type": "seal", "iconId": "seal-farm-table", "label": "Wax seal", "pageSide": "left", "x": 16.0, "y": 24.0, "rotation": -10.0, "scale": 0.8, "zIndex": 2},
-      {"id": "avocado-brioche-stk-doodle", "content": "food-avocado-toast", "type": "doodle", "iconId": "food-avocado-toast", "label": "Doodle", "pageSide": "left", "x": 76.0, "y": 92.0, "rotation": -6.0, "scale": 0.85, "zIndex": 1},
-      {"id": "avocado-brioche-stk-bottom", "content": "food-fried-egg", "type": "doodle", "iconId": "food-fried-egg", "label": "Doodle", "pageSide": "right", "x": 16.0, "y": 96.0, "rotation": 7.0, "scale": 0.8, "zIndex": 1}
-    ],
-    "washiTapes": [
-      {"id": "avocado-brioche-wash-top", "pattern": "sage", "pageSide": "right", "x": 74.0, "y": 2.5, "width": 110.0, "rotation": -4.0}
-    ],
+    "stickers": [],
+    "washiTapes": [],
     "ingredients": [
       { "id": "a-1", "displayName": "Artisan Brioche Slices", "quantityNum": 2, "quantityDen": 1, "unitCode": "thick slices", "position": 1, "icon": "wheat", "iconColor": "#D9822B" },
       { "id": "a-2", "displayName": "Ripe Hass Avocado", "quantityNum": 1, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "salad", "iconColor": "#4A6B53" },
@@ -238,15 +217,8 @@
     "chefTip": "Boil noodles for exactly 90 seconds for that perfect bouncy springiness.",
     "chefTipIcon": "chefHat",
     "chefTipIconColor": "#8C7355",
-    "stickers": [
-      {"id": "tokyo-ramen-stk-stamp", "content": "postage-ramen", "type": "stamp", "iconId": "postage-ramen", "label": "Ramen-ya", "pageSide": "left", "x": 80.0, "y": 11.0, "rotation": 8.0, "scale": 0.9, "zIndex": 3},
-      {"id": "tokyo-ramen-stk-seal", "content": "stamp-slow-simmer", "type": "seal", "iconId": "stamp-slow-simmer", "label": "Wax seal", "pageSide": "left", "x": 16.0, "y": 24.0, "rotation": -10.0, "scale": 0.8, "zIndex": 2},
-      {"id": "tokyo-ramen-stk-doodle", "content": "food-ramen-dish", "type": "doodle", "iconId": "food-ramen-dish", "label": "Doodle", "pageSide": "left", "x": 76.0, "y": 92.0, "rotation": -6.0, "scale": 0.85, "zIndex": 1},
-      {"id": "tokyo-ramen-stk-bottom", "content": "food-edamame-dish", "type": "doodle", "iconId": "food-edamame-dish", "label": "Doodle", "pageSide": "right", "x": 16.0, "y": 96.0, "rotation": 7.0, "scale": 0.8, "zIndex": 1}
-    ],
-    "washiTapes": [
-      {"id": "tokyo-ramen-wash-top", "pattern": "dots", "pageSide": "right", "x": 74.0, "y": 2.5, "width": 110.0, "rotation": -4.0}
-    ],
+    "stickers": [],
+    "washiTapes": [],
     "ingredients": [
       { "id": "r-1", "displayName": "Fresh Ramen Noodles", "quantityNum": 2, "quantityDen": 1, "unitCode": "portions", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
       { "id": "r-2", "displayName": "Chicken Dashi Broth", "quantityNum": 600, "quantityDen": 1, "unitCode": "ml", "position": 2, "icon": "soup", "iconColor": "#D9822B" },
@@ -306,15 +278,8 @@
     "chefTip": "Bake with the Dutch oven lid closed for 20 minutes to trap steam and create explosive oven spring blisters.",
     "chefTipIcon": "chefHat",
     "chefTipIconColor": "#8C7355",
-    "stickers": [
-      {"id": "rustic-sourdough-stk-stamp", "content": "postage-baguette", "type": "stamp", "iconId": "postage-baguette", "label": "Fournil", "pageSide": "left", "x": 80.0, "y": 11.0, "rotation": 8.0, "scale": 0.9, "zIndex": 3},
-      {"id": "rustic-sourdough-stk-seal", "content": "seal-wild-ferment", "type": "seal", "iconId": "seal-wild-ferment", "label": "Wax seal", "pageSide": "left", "x": 16.0, "y": 24.0, "rotation": -10.0, "scale": 0.8, "zIndex": 2},
-      {"id": "rustic-sourdough-stk-doodle", "content": "food-sourdough", "type": "doodle", "iconId": "food-sourdough", "label": "Doodle", "pageSide": "left", "x": 76.0, "y": 92.0, "rotation": -6.0, "scale": 0.85, "zIndex": 1},
-      {"id": "rustic-sourdough-stk-bottom", "content": "food-whisk", "type": "doodle", "iconId": "food-whisk", "label": "Doodle", "pageSide": "right", "x": 16.0, "y": 96.0, "rotation": 7.0, "scale": 0.8, "zIndex": 1}
-    ],
-    "washiTapes": [
-      {"id": "rustic-sourdough-wash-top", "pattern": "kraft", "pageSide": "right", "x": 74.0, "y": 2.5, "width": 110.0, "rotation": -4.0}
-    ],
+    "stickers": [],
+    "washiTapes": [],
     "ingredients": [
       { "id": "s-1", "displayName": "Unbleached Bread Flour", "quantityNum": 450, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
       { "id": "s-2", "displayName": "Whole Wheat Flour", "quantityNum": 50, "quantityDen": 1, "unitCode": "g", "position": 2, "icon": "wheat", "iconColor": "#8C7355" },

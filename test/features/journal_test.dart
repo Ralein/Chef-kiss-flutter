@@ -79,6 +79,8 @@ Future<void> _teardown(WidgetTester tester, AppDatabase db) async {
 Future<Recipe> _load(WidgetTester tester, AppDatabase db, String id) async =>
     (await tester.runAsync(() => DriftRecipeRepository(db).getRecipeById(id)))!.orNull!;
 
+Finder _book(String title) => find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == title);
+
 void main() {
   group('FoodArt', () {
     test('matches whole words, most specific first', () {
@@ -113,23 +115,17 @@ void main() {
   });
 
   group('starter decorations', () {
-    test('only undecorated, undeleted starters get the bundled stickers', () async {
+    test('the minimal journal removes only the stickers v2 bundled', () async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final repo = DriftRecipeRepository(db);
-      const userSticker = ScrapbookSticker(id: 'mine', content: 'food-donut', type: 'doodle', pageSide: 'left', x: 5, y: 5, rotation: 0, scale: 1);
+      ScrapbookSticker sticker(String id) =>
+          ScrapbookSticker(id: id, content: 'food-donut', type: 'doodle', pageSide: 'left', x: 5, y: 5, rotation: 0, scale: 1);
+      await repo.saveRecipe(_recipe('soup', 'Soup', stickers: [sticker('soup-stk-stamp'), sticker('soup-stk-seal'), sticker('mine')]));
       await repo.saveRecipe(_recipe('plain', 'Plain'));
-      await repo.saveRecipe(_recipe('decorated', 'Decorated', stickers: const [userSticker]));
-      await repo.saveRecipe(_recipe('gone', 'Gone'));
-      await repo.deleteRecipe('gone');
 
-      const bundled = ScrapbookSticker(id: 'b', content: 'postage-tomato', type: 'stamp', pageSide: 'left', x: 80, y: 7, rotation: 8, scale: 0.9);
-      final starters = [
-        for (final id in ['plain', 'decorated', 'gone', 'missing']) _recipe(id, id, stickers: const [bundled]),
-      ];
-      expect(await decorateStarterRecipes(repo, starters), 1);
-      expect((await repo.getRecipeById('plain')).orNull!.stickers.single.id, 'b');
-      expect((await repo.getRecipeById('decorated')).orNull!.stickers.single.id, 'mine');
+      expect(await removeBundledDecorations(repo, ['soup', 'plain', 'missing']), 1);
+      expect((await repo.getRecipeById('soup')).orNull!.stickers.map((s) => s.id), ['mine']);
     });
   });
 
@@ -257,9 +253,9 @@ void main() {
   testWidgets('journal: decorate a page — add, remove and undo a sticker', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('soup', 'Tomato soup')]);
 
-    await tester.tap(find.text('Tomato soup'));
+    await tester.tap(_book('Tomato soup'));
     await tester.pumpAndSettle();
-    expect(find.text('Mise en place'), findsOneWidget);
+    expect(find.text('Ingredients'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Decorate page'));
     await tester.pumpAndSettle();
@@ -302,23 +298,24 @@ void main() {
     await _teardown(tester, db);
   });
 
-  testWidgets('journal: Story/Method toggle and page buttons turn pages', (tester) async {
+  testWidgets('journal: page buttons turn from ingredients to method to the next recipe', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie'), _recipe('b', 'Banana bread')]);
     // The journal keeps the order recipes were added (ties: A–Z), so editing
     // never reshuffles it: Apple pie is page 1, Banana bread follows.
-    await tester.tap(find.text('Apple pie'));
+    await tester.tap(_book('Apple pie'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Ingredients  ·  1 of 2'), findsOneWidget);
 
-    await tester.tap(find.text('Method'));
+    await tester.tap(find.byTooltip('Next page'));
     await tester.pumpAndSettle();
-    expect(find.text('METHOD & TIMERS'), findsOneWidget);
+    expect(find.text('Method'), findsOneWidget);
     expect(find.textContaining('Do step 1 of'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Next page'));
     await tester.pumpAndSettle();
-    // Next recipe's story page.
-    expect(find.text('Mise en place'), findsOneWidget);
-    expect(find.textContaining(' of 2 · Story'), findsOneWidget);
+    // Next recipe's ingredients page.
+    expect(find.text('Ingredients'), findsOneWidget);
+    expect(find.textContaining('Ingredients  ·  2 of 2'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
   });
@@ -380,8 +377,8 @@ void main() {
     expect(find.bySemanticsLabel('Banana bread, page 5'), findsOneWidget);
     await tester.tap(find.text('p. 5'));
     await tester.pumpAndSettle();
-    expect(find.text('Mise en place'), findsOneWidget);
-    expect(find.textContaining('2 of 2 · Story'), findsOneWidget);
+    expect(find.text('Ingredients'), findsOneWidget);
+    expect(find.textContaining('Ingredients  ·  2 of 2'), findsOneWidget);
 
     // Back returns to where the journal was opened from.
     await tester.binding.handlePopRoute(); // system Back button

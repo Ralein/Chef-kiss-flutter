@@ -6,6 +6,7 @@ import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/library_books.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,16 +65,17 @@ void main() {
 
     // Library with bottom navigation (no duplicate headers).
     expect(find.text('Your recipes'), findsOneWidget);
-    expect(find.text('Heirloom Tomato Salad'), findsOneWidget);
+    // Spines carry the title in small caps; the book itself is the target.
+    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'Heirloom Tomato Salad'), findsOneWidget);
     for (final tab in ['Recipes', 'Scan', 'Food log', 'Collections', 'Settings']) {
       expect(find.text(tab), findsWidgets, reason: '$tab tab');
     }
 
     // Opening a book shows its journal spread; ingredients scale with servings.
-    await tester.tap(find.text('Heirloom Tomato Salad'));
+    await tester.tap(find.byType(ShelfBook).first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 1');
-    expect(find.text('Start cooking'), findsOneWidget);
+    expect(find.text('Cook'), findsOneWidget);
     expect(find.textContaining('Heirloom tomatoes', findRichText: true), findsWidgets);
     expect(find.text('2 serv.'), findsOneWidget);
     await tester.tap(find.byTooltip('More servings'));
@@ -83,7 +85,7 @@ void main() {
     expect(find.textContaining('3 tbsp', findRichText: true), findsOneWidget, reason: '2 tbsp × 1.5');
 
     // Cook mode → finish.
-    await tester.tap(find.text('Start cooking'));
+    await tester.tap(find.text('Cook'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 3');
     expect(find.text('Step 1 of 1'), findsOneWidget);
@@ -96,7 +98,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 5');
     // Back in the journal; return to the bookshelf.
-    expect(find.text('Mise en place'), findsOneWidget);
+    expect(find.text('Ingredients'), findsOneWidget);
     await tester.tap(find.byTooltip('Bookshelf'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 6');
@@ -129,11 +131,11 @@ void main() {
     expect(find.byType(NavigationBar), findsNothing);
 
     // The journal opens as a two-page spread with index tabs.
-    await tester.tap(find.text('Heirloom Tomato Salad'));
+    await tester.tap(find.byType(ShelfBook).first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'journal spread');
-    expect(find.text('Mise en place'), findsOneWidget);
-    expect(find.text('METHOD & TIMERS'), findsOneWidget);
+    expect(find.text('Ingredients'), findsOneWidget);
+    expect(find.text('Method'), findsOneWidget);
     expect(find.text('Recipe 1 of 1'), findsOneWidget);
 
     // Details: two-column recipe page with nutrition.

@@ -88,6 +88,9 @@ class LibraryBookcase extends StatelessWidget {
 
   List<_Row> _layout(double available, double shelfHeight, double scale) {
     final rows = <_Row>[];
+    // A handful of books is spread over at least three shelves, so the wall
+    // reads as a styled bookcase instead of one crowded plank.
+    final perShelf = recipes.length <= 3 ? 1 : (recipes.length / 3).ceil();
     var next = 0;
     var r = 0;
     while (next < recipes.length) {
@@ -108,7 +111,7 @@ class LibraryBookcase extends StatelessWidget {
       var room = available - [...left, ...right].fold(0.0, (s, it) => s + it.width + 10);
       final books = <_ShelfItem>[];
       var faceOutUsed = false;
-      while (next < recipes.length) {
+      while (next < recipes.length && books.length < perShelf) {
         final recipe = recipes[next];
         final display = recipe.bookStyle.display;
         final wantsCover =

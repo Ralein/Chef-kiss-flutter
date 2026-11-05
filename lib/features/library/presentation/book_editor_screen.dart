@@ -164,21 +164,25 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
     final draft = _draft;
     return Column(
       children: [
+        // Pinned, so the way out never scrolls away with the options.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: IconButton.outlined(
+              tooltip: 'Close',
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: const Icon(LucideIcons.x),
+            ),
+          ),
+        ),
         Expanded(
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton.outlined(
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(LucideIcons.x),
-                    ),
-                  ),
                   Center(
                     child: Text.rich(
                       TextSpan(

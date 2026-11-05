@@ -19,8 +19,9 @@ import 'providers.dart';
 import 'router.dart';
 
 /// Bump when the bundled starter recipes change, to offer new ones once.
-/// v2: starter recipes come with journal decorations.
-const _starterSeedVersion = 2;
+/// v2 added journal decorations to the starters; v3 (the minimal journal)
+/// takes those bundled pieces back off again.
+const _starterSeedVersion = 3;
 const _starterSeedKey = 'seed.starter_version';
 
 Future<void> bootstrapAndRun() async {
@@ -97,7 +98,7 @@ Future<void> _seedStarterRecipesOnce(ProviderContainer container, AppLogger logg
     final recipes = parsed.whereType<Map<String, dynamic>>().map(parseStarterRecipe).toList();
     final repo = container.read(recipeRepositoryProvider);
     final res = await repo.seedStarterRecipes(recipes);
-    if (previous >= 1) await decorateStarterRecipes(repo, recipes);
+    if (previous == 2) await removeBundledDecorations(repo, recipes.map((r) => r.id));
     if (res.isSuccess) await prefs.writeJson(_starterSeedKey, _starterSeedVersion);
     logger.info('Starter recipes seeded', feature: 'bootstrap', metadata: {'count': res.orNull});
   } catch (e, st) {
@@ -106,17 +107,19 @@ Future<void> _seedStarterRecipesOnce(ProviderContainer container, AppLogger logg
   }
 }
 
-/// Adds the bundled stickers to starter recipes from an older install —
-/// only to ones the user hasn't decorated (or deleted) themselves.
+/// Removes the stickers and tape that v2 bundled with the starter recipes —
+/// only those exact pieces, so anything the user added stays.
 @visibleForTesting
-Future<int> decorateStarterRecipes(RecipeRepository repo, List<Recipe> starters) async {
+Future<int> removeBundledDecorations(RecipeRepository repo, Iterable<String> starterIds) async {
   var count = 0;
-  for (final starter in starters) {
-    if (starter.stickers.isEmpty && starter.washiTapes.isEmpty) continue;
-    final existing = (await repo.getRecipeById(starter.id)).orNull;
-    if (existing == null || existing.isDeleted) continue;
-    if (existing.stickers.isNotEmpty || existing.washiTapes.isNotEmpty) continue;
-    final saved = await repo.saveRecipe(existing.copyWith(stickers: starter.stickers, washiTapes: starter.washiTapes));
+  for (final id in starterIds) {
+    final recipe = (await repo.getRecipeById(id)).orNull;
+    if (recipe == null || recipe.isDeleted) continue;
+    final bundled = {for (final suffix in ['stamp', 'seal', 'doodle', 'bottom']) '$id-stk-$suffix'};
+    final stickers = recipe.stickers.where((s) => !bundled.contains(s.id)).toList();
+    final tapes = recipe.washiTapes.where((t) => t.id != '$id-wash-top').toList();
+    if (stickers.length == recipe.stickers.length && tapes.length == recipe.washiTapes.length) continue;
+    final saved = await repo.saveRecipe(recipe.copyWith(stickers: stickers, washiTapes: tapes));
     if (saved.isSuccess) count++;
   }
   return count;

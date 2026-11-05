@@ -206,13 +206,21 @@ class LightWash extends StatelessWidget {
     return IgnorePointer(
       child: SizedBox(
         height: height,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [light.withValues(alpha: 0.20), light.withValues(alpha: 0.06), Colors.transparent],
-              stops: const [0, 0.35, 1],
+        // Fade the sides too, so the wash reads as light rather than a panel.
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (rect) => const LinearGradient(
+            colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+            stops: [0, 0.14, 0.86, 1],
+          ).createShader(rect),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [light.withValues(alpha: 0.20), light.withValues(alpha: 0.06), Colors.transparent],
+                stops: const [0, 0.35, 1],
+              ),
             ),
           ),
         ),

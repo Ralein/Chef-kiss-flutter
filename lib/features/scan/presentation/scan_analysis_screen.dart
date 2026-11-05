@@ -265,7 +265,6 @@ class _MealResultState extends ConsumerState<_MealResult> {
     setState(() => _saving = true);
     final repo = ref.read(foodLogRepositoryProvider);
     final images = ref.read(imageStoreProvider);
-    final router = GoRouter.of(context);
     final id = const Uuid().v4();
     final prepared = widget.prepared;
     final imagePath = prepared == null
@@ -305,14 +304,16 @@ class _MealResultState extends ConsumerState<_MealResult> {
       _saving = false;
       _logged = res.isSuccess;
     });
-    ChefToastService.show(
-      context: context,
-      title: res.isSuccess ? 'Logged to ${_slot.label}' : 'Could not log this meal',
-      description: res.isSuccess ? '${KitchenFormat.kcal(_total.calories)} kcal · ${widget.analysis.title}' : res.error?.message,
-      type: res.isSuccess ? ChefToastType.success : ChefToastType.error,
-      actionLabel: res.isSuccess ? 'View log' : null,
-      onAction: res.isSuccess ? () => router.go('/log') : null,
-    );
+    // Success is confirmed in place: the bar becomes "Logged · view food log".
+    // A toast would repeat that and cover the button.
+    if (res.isFailure) {
+      ChefToastService.show(
+        context: context,
+        title: 'Could not log this meal',
+        description: res.error?.message,
+        type: ChefToastType.error,
+      );
+    }
   }
 
   @override
@@ -525,10 +526,13 @@ class _MealResultState extends ConsumerState<_MealResult> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _logged
-                            ? OutlinedButton.icon(
-                                onPressed: () => context.go('/log'),
-                                icon: const Icon(Icons.check_rounded),
-                                label: const Text('Logged · view food log'),
+                            ? Semantics(
+                                liveRegion: true,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => context.go('/log'),
+                                  icon: const Icon(Icons.check_rounded),
+                                  label: const Text('Logged · view food log'),
+                                ),
                               )
                             : FilledButton.icon(
                                 onPressed: _saving || total.calories <= 0 ? null : _log,
