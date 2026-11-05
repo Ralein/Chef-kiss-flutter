@@ -159,6 +159,9 @@ class JournalViewState extends ConsumerState<JournalView> {
     }
   }
 
+  /// Leaves decorate mode (Back button while decorating).
+  void stopDecorating() => _setDecorating(false);
+
   void _setDecorating(bool value) {
     setState(() {
       _decorating = value;

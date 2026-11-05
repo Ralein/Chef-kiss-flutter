@@ -2,13 +2,13 @@ import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/recipe_image.dart';
-import '../../../app/widgets/food_art.dart';
-import '../../library/presentation/widgets/bookshelf.dart';
+import '../../library/presentation/widgets/recipe_card.dart';
 import 'collections_screen.dart';
 
 class CollectionDetailScreen extends ConsumerWidget {
@@ -68,8 +68,7 @@ class CollectionDetailScreen extends ConsumerWidget {
           ),
           body: inCollection.isEmpty
               ? EmptyStateScene(
-                  icon: Icons.playlist_add_rounded,
-                  illustration: const DoodleCluster(ids: ['food-paella', 'food-lemon', 'food-chili']),
+                  icon: LucideIcons.folderPlus,
                   title: 'No recipes here yet',
                   message: 'Add recipes from your cookbook to this collection.',
                   actionLabel: 'Add recipes',
@@ -85,9 +84,10 @@ class CollectionDetailScreen extends ConsumerWidget {
                     ),
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      sliver: BookshelfSliver(
+                      sliver: RecipeGrid(
                         recipes: inCollection,
                         onOpen: (r) => context.push('/recipe/${r.id}'),
+                        onToggleFavorite: (r) => ref.read(recipeRepositoryProvider).toggleFavorite(r.id),
                       ),
                     ),
                     const SliverToBoxAdapter(child: SizedBox(height: 40)),

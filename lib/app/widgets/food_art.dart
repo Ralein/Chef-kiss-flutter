@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'recipe_image.dart';
 
@@ -234,46 +235,9 @@ class FoodDoodle extends StatelessWidget {
   }
 }
 
-/// Three overlapping doodles for empty states and headers.
-class DoodleCluster extends StatelessWidget {
-  final List<String> ids;
-  final double size;
-  const DoodleCluster({super.key, required this.ids, this.size = 120});
-
-  @override
-  Widget build(BuildContext context) {
-    final picks = ids.take(3).toList();
-    final small = size * 0.46;
-    return ExcludeSemantics(
-      child: SizedBox(
-        width: size * 1.5,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (picks.length > 1)
-              Positioned(
-                left: 0,
-                bottom: size * 0.08,
-                child: FoodDoodle(id: picks[1], size: small, rotation: -12),
-              ),
-            if (picks.length > 2)
-              Positioned(
-                right: 0,
-                top: size * 0.04,
-                child: FoodDoodle(id: picks[2], size: small, rotation: 10),
-              ),
-            if (picks.isNotEmpty) FoodDoodle(id: picks[0], size: size * 0.7, rotation: math.pi * 0),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A meal's photo, or — when there is none — a doodle of what it is.
-/// Fills its parent. [homeCooked] adds a small wax seal (meals cooked from
-/// your own recipes).
+/// A meal's photo, or a simple utensils icon when there is none. Fills its
+/// parent. [homeCooked] adds a small chef-hat badge (meals cooked from your
+/// own recipes).
 class FoodPicture extends StatelessWidget {
   final String? imagePath;
   final String title;
@@ -287,7 +251,6 @@ class FoodPicture extends StatelessWidget {
     final hasImage = imagePath != null && imagePath!.isNotEmpty;
     return LayoutBuilder(builder: (context, box) {
       final side = math.min(box.maxWidth, box.maxHeight);
-      final doodle = FoodArt.doodleFor([title]) ?? FoodArt.fallbackDoodle(title);
       return Stack(
         clipBehavior: Clip.none,
         children: [
@@ -295,18 +258,29 @@ class FoodPicture extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(radius),
               child: hasImage
-                  ? RecipeImage(source: imagePath, placeholderIcon: Icons.restaurant_rounded)
+                  ? RecipeImage(source: imagePath, placeholderIcon: LucideIcons.utensils)
                   : ColoredBox(
                       color: c.surfaceRaised,
-                      child: Center(child: FoodDoodle(id: doodle, size: side * 0.8, rotation: -4)),
+                      child: Center(child: Icon(LucideIcons.utensils, size: side * 0.4, color: c.contentSecondary)),
                     ),
             ),
           ),
           if (homeCooked)
             Positioned(
-              right: -side * 0.1,
-              bottom: -side * 0.1,
-              child: ExcludeSemantics(child: SvgWaxSealWidget(id: 'seal-handcrafted-daily', size: side * 0.42, rotation: -8)),
+              right: -4,
+              bottom: -4,
+              child: Tooltip(
+                message: 'Cooked from your recipe',
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: c.accentHerb,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.surfacePaper, width: 2),
+                  ),
+                  child: Icon(LucideIcons.chefHat, size: math.max(11, side * 0.2), color: c.onAccent),
+                ),
+              ),
             ),
         ],
       );

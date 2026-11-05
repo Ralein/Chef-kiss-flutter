@@ -42,7 +42,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
                 final q = state.uri.queryParameters;
                 return LibraryScreen(
                   key: ValueKey('library:${state.uri.query}'),
-                  initialView: q['view'] == 'journal' ? LibraryView.journal : LibraryView.shelf,
+                  initialView: LibraryView.fromName(q['view']),
                   initialRecipeId: q['recipe'],
                   startDecorating: q['decorate'] == '1',
                 );

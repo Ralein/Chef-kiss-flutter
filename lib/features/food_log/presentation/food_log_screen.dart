@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:uuid/uuid.dart';
@@ -179,7 +180,12 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Column(
                           children: [
-                            const DoodleCluster(ids: ['food-breakfast-plate', 'food-coffee-cup', 'food-apple'], size: 96),
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(color: c.tomatoSoft, shape: BoxShape.circle),
+                              child: Icon(LucideIcons.utensils, size: 32, color: c.accentTomato),
+                            ),
                             const SizedBox(height: 10),
                             Text(isToday ? 'Nothing logged yet today' : 'Nothing logged this day', style: t.titleMedium),
                             const SizedBox(height: 4),

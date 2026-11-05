@@ -1,13 +1,13 @@
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
-import '../../../app/widgets/food_art.dart';
 import '../../../app/widgets/recipe_image.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sheets.dart';
 
@@ -74,8 +74,7 @@ class CollectionsScreen extends ConsumerWidget {
           data: (collections) {
             if (collections.isEmpty) {
               return EmptyStateScene(
-                icon: Icons.collections_bookmark_outlined,
-                illustration: const DoodleCluster(ids: ['food-cake-slice', 'food-croissant', 'food-teapot']),
+                icon: LucideIcons.folderHeart,
                 title: 'No collections yet',
                 message: 'Group recipes for meal plans, holidays, or anything else — a recipe can live in several.',
                 actionLabel: 'Create a collection',

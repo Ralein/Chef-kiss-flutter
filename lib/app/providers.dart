@@ -85,6 +85,15 @@ final readAloudProvider = ChangeNotifierProvider<ReadAloudController>((ref) {
 Future<void> saveVoiceSettings(WidgetRef ref, VoiceSettings settings) =>
     ref.read(preferencesRepositoryProvider).writeJson(voiceSettingsKey, settings.toJson());
 
+// --- Library ---------------------------------------------------------------------
+
+/// The Recipes tab's last chosen view: `cards`, `shelf` or `journal`.
+const libraryViewKey = 'library.view';
+
+final libraryViewPrefProvider = StreamProvider<String?>((ref) {
+  return ref.watch(preferencesRepositoryProvider).watchJson(libraryViewKey).map((v) => v is String ? v : null);
+});
+
 /// Shared countdowns for the recipe page and Cook Mode.
 final kitchenTimersProvider = ChangeNotifierProvider<KitchenTimersController>((ref) => KitchenTimersController());
 

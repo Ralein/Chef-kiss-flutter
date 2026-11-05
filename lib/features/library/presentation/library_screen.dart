@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/audio_chime_service.dart';
@@ -13,10 +14,10 @@ import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../imports/presentation/import_flows.dart';
 import '../../nutrition/presentation/recipe_insights.dart';
-import '../../../app/widgets/food_art.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../journal/presentation/journal_view.dart';
 import 'widgets/bookshelf.dart';
+import 'widgets/recipe_card.dart';
 
 enum _Sort { recent, alphabetical, quickest, fewestIngredients }
 
@@ -39,18 +40,36 @@ class _Filter {
   const _Filter(this.id, this.label, this.test, {this.icon});
 }
 
-enum LibraryView { shelf, journal }
+/// How the Recipes tab shows your recipes. The last choice is remembered.
+enum LibraryView {
+  cards('Cards', 'Recipe cards'),
+  shelf('Shelf', 'Bookshelf'),
+  journal('Journal', 'Recipe journal');
 
-/// The Recipes tab: a bookshelf of recipe books, or the recipe journal
-/// opened to one of them.
+  final String label;
+  final String tooltip;
+  const LibraryView(this.label, this.tooltip);
+
+  IconData get icon => switch (this) {
+        LibraryView.cards => LucideIcons.layoutGrid,
+        LibraryView.shelf => LucideIcons.libraryBig,
+        LibraryView.journal => LucideIcons.bookOpen,
+      };
+
+  static LibraryView? fromName(String? name) => LibraryView.values.where((v) => v.name == name).firstOrNull;
+}
+
+/// The Recipes tab: photo cards, a bookshelf of recipe books, or the recipe
+/// journal opened to one of them.
 class LibraryScreen extends ConsumerStatefulWidget {
-  final LibraryView initialView;
+  /// Forces a view (deep links); otherwise the remembered one is used.
+  final LibraryView? initialView;
   final String? initialRecipeId;
   final bool startDecorating;
 
   const LibraryScreen({
     super.key,
-    this.initialView = LibraryView.shelf,
+    this.initialView,
     this.initialRecipeId,
     this.startDecorating = false,
   });
@@ -66,7 +85,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   String _query = '';
   String _filterId = 'all';
   _Sort _sort = _Sort.recent;
-  late LibraryView _view = widget.initialView;
+  LibraryView? _view;
+
+  /// Where Back returns to after opening a book in the journal.
+  LibraryView _browseView = LibraryView.shelf;
   late String? _journalRecipeId = widget.initialRecipeId;
   final _journalKey = GlobalKey<JournalViewState>();
 
@@ -74,13 +96,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     audioChime.playPageFlip();
     setState(() {
       _journalRecipeId = recipe.id;
+      if (_view != LibraryView.journal) _browseView = _view ?? LibraryView.shelf;
       _view = LibraryView.journal;
     });
   }
 
-  void _setView(LibraryView view) {
+  /// A choice made with the view switch: remembered for next time.
+  void _chooseView(LibraryView view) {
     if (view == _view) return;
-    setState(() => _view = view);
+    setState(() {
+      if (view != LibraryView.journal) _browseView = view;
+      _view = view;
+    });
+    unawaited(ref.read(preferencesRepositoryProvider).writeJson(libraryViewKey, view.name));
   }
 
   Future<void> _showBookActions(Recipe recipe) async {
@@ -106,23 +134,23 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.auto_stories_outlined),
+              leading: const Icon(LucideIcons.bookOpen),
               title: const Text('Open in journal'),
               onTap: () => Navigator.pop(ctx, 'journal'),
             ),
             ListTile(
-              leading: const Icon(Icons.open_in_new_rounded),
+              leading: const Icon(LucideIcons.notebookText),
               title: const Text('Details & nutrition'),
               onTap: () => Navigator.pop(ctx, 'details'),
             ),
             if (recipe.steps.isNotEmpty)
               ListTile(
-                leading: const Icon(Icons.play_arrow_rounded),
+                leading: const Icon(LucideIcons.chefHat),
                 title: const Text('Start cooking'),
                 onTap: () => Navigator.pop(ctx, 'cook'),
               ),
             ListTile(
-              leading: Icon(recipe.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded),
+              leading: Icon(recipe.isFavorite ? LucideIcons.heartOff : LucideIcons.heart),
               title: Text(recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'),
               onTap: () => Navigator.pop(ctx, 'favorite'),
             ),
@@ -176,13 +204,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   List<_Filter> _filtersFor(List<Recipe> recipes) {
     final filters = <_Filter>[
       _Filter('all', 'All', (_) => true),
-      _Filter('fav', 'Favorites', (r) => r.isFavorite, icon: Icons.favorite_rounded),
-      _Filter('quick', 'Under 30 min', (r) => r.totalMinutes > 0 && r.totalMinutes <= 30, icon: Icons.bolt_rounded),
-      _Filter('easy', 'Easy', (r) => r.difficulty == RecipeDifficulty.easy),
+      _Filter('fav', 'Favorites', (r) => r.isFavorite, icon: LucideIcons.heart),
+      _Filter('quick', 'Under 30 min', (r) => r.totalMinutes > 0 && r.totalMinutes <= 30, icon: LucideIcons.zap),
+      _Filter('easy', 'Easy', (r) => r.difficulty == RecipeDifficulty.easy, icon: LucideIcons.smile),
       _Filter('veg', 'Vegetarian', (r) {
         final diet = RecipeInsights.of(r).diet;
         return diet.isComplete && diet.isVegetarian;
-      }, icon: Icons.eco_outlined),
+      }, icon: LucideIcons.leaf),
     ];
 
     final counts = <String, ({String name, int count})>{};
@@ -239,6 +267,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final recipesAsync = ref.watch(allRecipesProvider);
+    final remembered = ref.watch(libraryViewPrefProvider);
+    if (_view == null && !remembered.isLoading) {
+      _view = widget.initialView ?? LibraryView.fromName(remembered.valueOrNull) ?? LibraryView.shelf;
+      if (_view != LibraryView.journal) _browseView = _view!;
+    }
+    final view = _view;
 
     return CallbackShortcuts(
       bindings: {
@@ -246,40 +280,44 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         const SingleActivator(LogicalKeyboardKey.keyK, control: true): _searchFocus.requestFocus,
       },
       child: PopScope(
-        canPop: _view == LibraryView.shelf,
+        canPop: view != LibraryView.journal,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           final journal = _journalKey.currentState;
-          if (journal != null && journal.isDecorating) return;
-          _setView(LibraryView.shelf);
+          if (journal != null && journal.isDecorating) {
+            journal.stopDecorating();
+            return;
+          }
+          setState(() => _view = _browseView);
         },
         child: Scaffold(
-          floatingActionButton: _view == LibraryView.journal
+          floatingActionButton: view == LibraryView.journal || view == null
               ? null
               : FloatingActionButton.extended(
                   heroTag: 'library-fab',
                   onPressed: () => showAddRecipeSheet(context, ref),
-                  icon: const Icon(Icons.add_rounded),
+                  icon: const Icon(LucideIcons.plus),
                   label: const Text('New recipe'),
                 ),
           body: SafeArea(
             bottom: false,
-            child: recipesAsync.when(
-              loading: () => const LoadingView(),
-              error: (e, _) => ErrorView(
-                message: 'Your recipes could not be loaded.',
-                onRetry: () => ref.invalidate(allRecipesProvider),
-              ),
-              data: (all) => _view == LibraryView.journal ? _buildJournal(context, all) : _buildContent(context, all),
-            ),
+            child: view == null
+                ? const LoadingView()
+                : recipesAsync.when(
+                    loading: () => const LoadingView(),
+                    error: (e, _) => ErrorView(
+                      message: 'Your recipes could not be loaded.',
+                      onRetry: () => ref.invalidate(allRecipesProvider),
+                    ),
+                    data: (all) =>
+                        view == LibraryView.journal ? _buildJournal(context, all) : _buildContent(context, all, view),
+                  ),
           ),
         ),
       ),
     );
   }
 
-  /// All recipes in the shelf's sort order — the journal is the whole book,
-  /// whatever the shelf is filtered to.
   /// The journal is a book: recipes stay in the order they were added, so
   /// editing or decorating one never shuffles the pages.
   List<Recipe> _bookOrder(List<Recipe> all) => [...all]
@@ -300,15 +338,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               Expanded(
                 child: Semantics(header: true, child: Text('Recipe journal', style: t.titleLarge)),
               ),
-              _ViewToggle(view: _view, onChanged: _setView),
+              _ViewToggle(view: LibraryView.journal, onChanged: _chooseView),
             ],
           ),
         ),
         Expanded(
           child: recipes.isEmpty
               ? EmptyStateScene(
-                  icon: Icons.auto_stories_outlined,
-                  illustration: const DoodleCluster(ids: ['food-sourdough', 'food-whisk', 'food-basil']),
+                  icon: LucideIcons.bookOpen,
                   title: 'Your journal is empty',
                   message: 'Every recipe you add gets its own keepsake spread here.',
                   actionLabel: 'Add a recipe',
@@ -326,7 +363,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
   }
 
-  Widget _buildContent(BuildContext context, List<Recipe> all) {
+  Widget _buildContent(BuildContext context, List<Recipe> all, LibraryView view) {
     final c = context.chefColors;
     final t = context.chefText;
     final filters = _filtersFor(all);
@@ -354,7 +391,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                         ],
                       ),
                     ),
-                    if (all.isNotEmpty) _ViewToggle(view: _view, onChanged: _setView),
+                    if (all.isNotEmpty) _ViewToggle(view: view, onChanged: _chooseView),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -375,12 +412,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
                             hintText: 'Search recipes, ingredients, tags',
-                            prefixIcon: const Icon(Icons.search_rounded),
+                            prefixIcon: const Icon(LucideIcons.search, size: 20),
                             suffixIcon: _searchController.text.isEmpty
                                 ? null
                                 : IconButton(
                                     tooltip: 'Clear search',
-                                    icon: const Icon(Icons.close_rounded),
+                                    icon: const Icon(LucideIcons.x, size: 20),
                                     onPressed: () {
                                       _searchController.clear();
                                       _onSearchChanged('');
@@ -398,7 +435,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           for (final s in _Sort.values)
                             CheckedPopupMenuItem(value: s, checked: s == _sort, child: Text(s.label)),
                         ],
-                        icon: const Icon(Icons.sort_rounded),
+                        icon: const Icon(LucideIcons.arrowUpDown, size: 20),
                       ),
                     ],
                   ),
@@ -422,7 +459,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   return FilterChip(
                     selected: _filterId == f.id,
                     showCheckmark: false,
-                    avatar: f.icon == null ? null : Icon(f.icon, size: 18),
+                    avatar: f.icon == null ? null : Icon(f.icon, size: 16),
                     label: Text(f.label),
                     onSelected: (_) => setState(() => _filterId = f.id),
                   );
@@ -444,8 +481,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyStateScene(
-              icon: Icons.menu_book_rounded,
-              illustration: const DoodleCluster(ids: ['food-bread-loaf', 'food-tomato', 'food-whisk']),
+              icon: LucideIcons.bookHeart,
               title: 'Your cookbook is empty',
               message: 'Create a recipe with AI, scan a cookbook page, import from a website, or write your own.',
               actionLabel: 'Add your first recipe',
@@ -456,8 +492,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           SliverFillRemaining(
             hasScrollBody: false,
             child: EmptyStateScene(
-              icon: Icons.search_off_rounded,
-              illustration: const DoodleCluster(ids: ['food-mushroom', 'food-garlic', 'food-chili']),
+              icon: LucideIcons.searchX,
               title: 'No matching recipes',
               message: 'Try a different search or filter.',
               actionLabel: 'Clear filters',
@@ -471,10 +506,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ),
           )
         else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            sliver: BookshelfSliver(recipes: visible, onOpen: _openInJournal, onLongPress: _showBookActions),
-          ),
+          if (view == LibraryView.cards)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: RecipeGrid(
+                recipes: visible,
+                onOpen: (r) => context.push('/recipe/${r.id}'),
+                onToggleFavorite: _toggleFavorite,
+                onLongPress: _showBookActions,
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              sliver: BookshelfSliver(recipes: visible, onOpen: _openInJournal, onLongPress: _showBookActions),
+            ),
         const SliverToBoxAdapter(child: SizedBox(height: 104)),
       ],
     );
@@ -519,11 +565,11 @@ class _QuickActions extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          action(Icons.auto_awesome_rounded, 'AI recipe', 'Describe any dish', c.accentTomato, onCreate),
+          action(LucideIcons.sparkles, 'AI recipe', 'Describe any dish', c.accentTomato, onCreate),
           const SizedBox(width: 10),
-          action(Icons.photo_camera_outlined, 'Scan food', 'Calories & macros', c.accentHerb, onScan),
+          action(LucideIcons.scanLine, 'Scan food', 'Calories & macros', c.accentHerb, onScan),
           const SizedBox(width: 10),
-          action(Icons.download_rounded, 'Import', 'Link, text or photo', c.macroCarbs, onImport),
+          action(LucideIcons.download, 'Import', 'Link, text or photo', c.macroCarbs, onImport),
         ],
       ),
     );
@@ -537,23 +583,18 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < 400;
+    final roomy = MediaQuery.sizeOf(context).width >= 600;
     return SegmentedButton<LibraryView>(
       showSelectedIcon: false,
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
       segments: [
-        ButtonSegment(
-          value: LibraryView.shelf,
-          icon: const Icon(Icons.shelves, size: 18),
-          label: narrow ? null : const Text('Shelf'),
-          tooltip: 'Bookshelf',
-        ),
-        ButtonSegment(
-          value: LibraryView.journal,
-          icon: const Icon(Icons.auto_stories_outlined, size: 18),
-          label: narrow ? null : const Text('Journal'),
-          tooltip: 'Recipe journal',
-        ),
+        for (final v in LibraryView.values)
+          ButtonSegment(
+            value: v,
+            icon: Icon(v.icon, size: 18),
+            label: roomy ? Text(v.label) : null,
+            tooltip: v.tooltip,
+          ),
       ],
       selected: {view},
       onSelectionChanged: (s) => onChanged(s.first),
