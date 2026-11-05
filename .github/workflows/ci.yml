@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.4
+          channel: stable
+          cache: true
+
+      - name: Native SQLite for in-memory database tests
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generated database code is up to date
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib/data/db/app_database.g.dart
+
+      - name: Analyze app
+        run: flutter analyze
+
+      - name: Test app
+        run: flutter test
+
+      - name: recipe_domain
+        working-directory: packages/recipe_domain
+        run: dart pub get && dart analyze && dart test
+
+      - name: app_contracts
+        working-directory: packages/app_contracts
+        run: dart pub get && dart analyze && dart test
+
+      - name: design_tokens
+        working-directory: packages/design_tokens
+        run: flutter pub get && flutter analyze && flutter test

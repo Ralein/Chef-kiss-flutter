@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required in release builds for AI features and web recipe import. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Chef's Kiss"
         android:name="${applicationName}"

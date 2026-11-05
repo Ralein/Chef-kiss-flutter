@@ -83,11 +83,10 @@ class ChefTheme {
           side: BorderSide(color: c.outlineSubtle),
         ),
       ),
+      // Colors come from the scheme (primary / secondaryContainer), so both
+      // FilledButton and FilledButton.tonal keep their distinct looks.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: c.accentTomato,
-          foregroundColor: c.onAccent,
-          disabledBackgroundColor: c.outlineSubtle,
           minimumSize: const Size(64, 48),
           padding: const EdgeInsets.symmetric(horizontal: 20),
           shape: pill,

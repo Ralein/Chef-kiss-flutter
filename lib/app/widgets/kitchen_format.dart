@@ -65,7 +65,11 @@ class KitchenFormat {
 
   static String kcal(double value) => _thousands(value.round());
 
-  static String grams(double value) => value >= 10 ? '${value.round()} g' : '${value.toStringAsFixed(1)} g';
+  static String grams(double value) {
+    if (value >= 10 || value == 0) return '${value.round()} g';
+    final s = value.toStringAsFixed(1);
+    return '${s.endsWith('.0') ? s.substring(0, s.length - 2) : s} g';
+  }
 
   static String milligrams(double value) => '${_thousands(value.round())} mg';
 

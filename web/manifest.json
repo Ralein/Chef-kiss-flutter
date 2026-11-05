@@ -1,12 +1,12 @@
 {
-    "name": "chefs_kiss",
-    "short_name": "chefs_kiss",
+    "name": "Chef’s Kiss",
+    "short_name": "Chef’s Kiss",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#FAF7F2",
+    "theme_color": "#C2552F",
+    "description": "Your recipe keepsake: cook step by step, scan meals for nutrition, and keep a food log.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

@@ -1,335 +1,662 @@
+import 'package:app_contracts/app_contracts.dart';
+import 'package:design_tokens/design_tokens.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
-import 'package:design_tokens/design_tokens.dart';
+
+import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
+import '../../../app/widgets/common_widgets.dart';
+import '../../../app/widgets/kitchen_format.dart';
+import '../../../core/ai/ai_connection.dart';
 import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
-import '../../sync/presentation/cloud_sync_section.dart';
 import '../../illustrations/presentation/illustration_approval_screen.dart';
+import '../../sync/presentation/cloud_sync_section.dart';
 
-class SettingsScreen extends ConsumerWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends ConsumerStatefulWidget {
+  /// `ai` opens the API-key sheet directly (used by "Set up AI" prompts).
+  final String? initialSection;
+  const SettingsScreen({super.key, this.initialSection});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.chefColors;
-    final textTheme = context.chefText;
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
 
-    final profileAsync = ref.watch(userProfileProvider);
-    final capabilitiesAsync = ref.watch(capabilitiesProvider);
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialSection == 'ai') {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final state = await ref.read(aiConnectionProvider.future);
+        if (mounted && state.canEditKey && !state.isAvailable) showApiKeySheet(context);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    final env = ref.watch(appEnvironmentProvider);
 
     return Scaffold(
-      backgroundColor: colors.surfaceCanvas,
-      appBar: AppBar(
-        title: Text('Settings & Data', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(ChefSpacing.space4),
-        children: [
-          // 1. Preferences Card
-          _buildCard(
-            context,
-            title: 'Cooking Preferences',
-            children: [
-              profileAsync.when(
-                data: (profile) {
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Default Unit System'),
-                    subtitle: Text(
-                      profile.unitSystem == UnitSystem.metric
-                          ? 'Metric (grams, ml, °C)'
-                          : 'US Customary (cups, tbsp, oz, °F)',
-                    ),
-                    trailing: SegmentedButton<UnitSystem>(
-                      segments: const [
-                        ButtonSegment(value: UnitSystem.metric, label: Text('Metric')),
-                        ButtonSegment(value: UnitSystem.usCustomary, label: Text('US')),
-                      ],
-                      selected: {profile.unitSystem},
-                      onSelectionChanged: (selection) {
-                        ref.read(settingsRepositoryProvider).updateProfile(
-                              profile.copyWith(unitSystem: selection.first),
-                            );
-                      },
-                    ),
-                  );
-                },
-                loading: () => const LinearProgressIndicator(),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
-            ],
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+              children: [
+                Semantics(header: true, child: Text('Settings', style: t.headlineMedium)),
+                const SizedBox(height: 16),
+                const _AiSection(),
+                const SizedBox(height: 16),
+                const _GoalsSection(),
+                const SizedBox(height: 16),
+                const _DataSection(),
+                if (env.flags.cloudSyncPreviewEnabled || env.flags.illustrationGovernanceEnabled) ...[
+                  const SizedBox(height: 16),
+                  _DeveloperSection(env: env),
+                ],
+                const SizedBox(height: 16),
+                _AboutSection(env: env),
+              ],
+            ),
           ),
-          const SizedBox(height: ChefSpacing.space4),
-
-          // 2. Cloud Sync & Vault Section
-          const CloudSyncSection(),
-          const SizedBox(height: ChefSpacing.space4),
-
-          // 3. Data & Local Backup Card
-          _buildCard(
-            context,
-            title: 'Data & Backup',
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.download_outlined, color: colors.accentTomato),
-                title: const Text('Export JSON Backup Package'),
-                subtitle: const Text('Save a portable backup of all your recipes and collections.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const BackupExportDialog(),
-                  );
-                },
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.restore_outlined, color: colors.accentHerb),
-                title: const Text('Restore from Backup'),
-                subtitle: const Text('Import recipes and collections from a JSON backup file.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const BackupRestoreDialog(),
-                  );
-                },
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.restore_from_trash_outlined, color: colors.contentSecondary),
-                title: const Text('Recently Deleted Recipes'),
-                subtitle: const Text('View or restore soft-deleted recipes.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showRecentlyDeletedSheet(context, ref),
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.palette_outlined, color: colors.accentTomato),
-                title: const Text('Illustration Asset Governance'),
-                subtitle: const Text('Review and moderate candidate artwork before library inclusion.'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const IllustrationApprovalScreen()),
-                  );
-                },
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.delete_forever, color: colors.stateDanger),
-                title: Text('Reset All Local Data', style: TextStyle(color: colors.stateDanger, fontWeight: FontWeight.w600)),
-                subtitle: const Text('Permanently erase all local recipes, cooking history, and collections.'),
-                onTap: () => _showResetAllDataDialog(context, ref),
-              ),
-            ],
-          ),
-          const SizedBox(height: ChefSpacing.space4),
-
-          // 3. Privacy, Food Safety & Legal
-          _buildCard(
-            context,
-            title: 'Privacy & Legal Readiness',
-            children: [
-              capabilitiesAsync.when(
-                data: (caps) {
-                  return Column(
-                    children: [
-                      _buildCapabilityRow('Local Notifications', caps.notifications.isGranted ? 'Active' : 'Optional'),
-                      _buildCapabilityRow('Screen Keep-Awake', caps.screenAwake.isGranted ? 'Active in Cook Mode' : 'Disabled'),
-                      _buildCapabilityRow('Speech & Voice Guide', caps.speechRecognition.isGranted ? 'Ready' : 'Manual / Push-to-talk'),
-                    ],
-                  );
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
-              const SizedBox(height: ChefSpacing.space3),
-              Container(
-                padding: const EdgeInsets.all(ChefSpacing.space3),
-                decoration: BoxDecoration(
-                  color: colors.surfaceRaised,
-                  borderRadius: BorderRadius.circular(ChefRadius.tile),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.shield_outlined, color: colors.accentHerb, size: 20),
-                        const SizedBox(width: ChefSpacing.space2),
-                        Text('Local-First Privacy Guarantee', style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'All private recipes, photo scans, and cooking diaries stay on your device by default. No cloud account or external telemetry tracking required.',
-                      style: textTheme.bodyMedium?.copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: ChefSpacing.space2),
-              Container(
-                padding: const EdgeInsets.all(ChefSpacing.space3),
-                decoration: BoxDecoration(
-                  color: colors.stateWarning.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(ChefRadius.tile),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.warning_amber_rounded, color: colors.stateWarning, size: 20),
-                        const SizedBox(width: ChefSpacing.space2),
-                        Text('Food & Allergen Safety Disclaimer', style: textTheme.labelSmall?.copyWith(color: colors.stateWarning, fontWeight: FontWeight.w700)),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Recipe information, internal temperature guidelines, and allergen alerts are informational only. Always check ingredient labels and practice safe food handling.',
-                      style: textTheme.bodyMedium?.copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: ChefSpacing.space2),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Open Source Licenses & Attributions'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showLicensePage(
-                  context: context,
-                  applicationName: "Chef's Kiss",
-                  applicationVersion: '1.0.0+1 (Phase 3 Production Launch)',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 60),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _buildCard(BuildContext context, {required String title, required List<Widget> children}) {
-    final colors = context.chefColors;
-    final textTheme = context.chefText;
+class _Section extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  const _Section({required this.title, required this.icon, required this.children});
 
-    return Container(
-      padding: const EdgeInsets.all(ChefSpacing.space4),
-      decoration: BoxDecoration(
-        color: colors.surfacePaper,
-        borderRadius: BorderRadius.circular(ChefRadius.card),
-        border: Border.all(color: colors.outlineSubtle),
-      ),
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    return ChefCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: ChefSpacing.space2),
+          Row(
+            children: [
+              Icon(icon, size: 20, color: c.accentTomato),
+              const SizedBox(width: 10),
+              Expanded(child: Semantics(header: true, child: Text(title, style: context.chefText.titleMedium))),
+            ],
+          ),
+          const SizedBox(height: 8),
           ...children,
         ],
       ),
     );
   }
+}
 
-  Widget _buildCapabilityRow(String label, String status) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(status, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+// --- AI -----------------------------------------------------------------------
+
+class _AiSection extends ConsumerWidget {
+  const _AiSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final async = ref.watch(aiConnectionProvider);
+    final state = async.valueOrNull;
+
+    final (IconData icon, Color color, String status) = switch (state?.mode) {
+      AiConnectionMode.proxy => (Icons.verified_rounded, c.stateSuccess, 'Connected · managed by Chef’s Kiss'),
+      AiConnectionMode.userKey => (Icons.verified_rounded, c.stateSuccess, 'Connected with your API key'),
+      _ => (Icons.cloud_off_rounded, c.contentSecondary, 'Not set up'),
+    };
+
+    return _Section(
+      title: 'AI & Scanning',
+      icon: Icons.auto_awesome_rounded,
+      children: [
+        if (async.isLoading) const LinearProgressIndicator(),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(icon, color: color),
+          title: Text(status),
+          subtitle: Text(
+            state?.mode == AiConnectionMode.userKey
+                ? '${state!.maskedKey} · ${state.config?.model ?? AiEnvironment.model}'
+                    '${state.persistentStorage ? '' : '\nCould not use the device keychain — the key will be forgotten when the app closes.'}'
+                : 'Powers food scanning, recipe photos, AI recipe creation and nutrition gap-filling.',
+          ),
+        ),
+        if (state?.mode == AiConnectionMode.userKey) ...[
+          Wrap(
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                onPressed: () async {
+                  final res = await ref.read(aiConnectionProvider.notifier).testConnection();
+                  ChefToastService.show(
+                    title: res.isSuccess ? 'Connection works' : res.error!.message,
+                    description: res.isSuccess ? null : res.error!.recoveryAction,
+                    type: res.isSuccess ? ChefToastType.success : ChefToastType.error,
+                  );
+                },
+                icon: const Icon(Icons.network_check_rounded),
+                label: const Text('Test'),
+              ),
+              TextButton.icon(
+                onPressed: () => showApiKeySheet(context),
+                icon: const Icon(Icons.key_rounded),
+                label: const Text('Replace key'),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Remove API key?'),
+                      content: const Text('AI features will stop working until you add a key again.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) await ref.read(aiConnectionProvider.notifier).removeApiKey();
+                },
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Remove'),
+              ),
+            ],
+          ),
+        ] else if (state?.canEditKey ?? false) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: () => showApiKeySheet(context),
+              icon: const Icon(Icons.key_rounded),
+              label: const Text('Add Anthropic API key'),
+            ),
+          ),
+          const SizedBox(height: 8),
         ],
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            'Photos and text you choose to analyze are sent to Anthropic’s Claude API. '
+            'Everything else — your recipes and food log — stays on this device.',
+            style: t.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> showApiKeySheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => const _ApiKeySheet(),
+  );
+}
+
+class _ApiKeySheet extends ConsumerStatefulWidget {
+  const _ApiKeySheet();
+
+  @override
+  ConsumerState<_ApiKeySheet> createState() => _ApiKeySheetState();
+}
+
+class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
+  final _key = TextEditingController();
+  final _workspace = TextEditingController();
+  bool _obscure = true;
+  bool _saving = false;
+  bool _advanced = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _key.dispose();
+    _workspace.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final navigator = Navigator.of(context);
+    final res = await ref
+        .read(aiConnectionProvider.notifier)
+        .saveApiKey(_key.text, workspaceId: _workspace.text.trim().isEmpty ? null : _workspace.text);
+    if (!mounted) return;
+    if (res.isSuccess) {
+      navigator.pop();
+      ChefToastService.show(title: 'AI is ready', description: 'Scanning and AI recipes are now on.', type: ChefToastType.success);
+    } else {
+      setState(() {
+        _saving = false;
+        _error = [res.error!.message, if (res.error!.recoveryAction != null) res.error!.recoveryAction!].join(' ');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    final c = context.chefColors;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Connect Claude', style: t.headlineSmall),
+            const SizedBox(height: 6),
+            Text(
+              'Create an API key in the Claude Console (platform.claude.com → Settings → API keys) and paste it here. '
+              'It is checked with Anthropic before it is saved.',
+              style: t.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _key,
+              autofocus: true,
+              obscureText: _obscure,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.visiblePassword,
+              decoration: InputDecoration(
+                labelText: 'API key',
+                hintText: 'sk-ant-…',
+                errorText: _error,
+                errorMaxLines: 3,
+                suffixIcon: IconButton(
+                  tooltip: _obscure ? 'Show key' : 'Hide key',
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                ),
+              ),
+              onSubmitted: (_) => _saving ? null : _save(),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() => _advanced = !_advanced),
+                child: Text(_advanced ? 'Hide advanced' : 'Advanced'),
+              ),
+            ),
+            if (_advanced)
+              TextField(
+                controller: _workspace,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Workspace ID (optional)',
+                  hintText: 'wrkspc_…',
+                  helperText: 'Only needed for organization-level keys that are not tied to one workspace.',
+                  helperMaxLines: 2,
+                ),
+              ),
+            if (kIsWeb) ...[
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16, color: c.stateWarning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'In a browser the key is stored in this browser’s storage. '
+                      'For better protection use the mobile or desktop app.',
+                      style: t.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.verified_outlined),
+              label: Text(_saving ? 'Checking…' : 'Save & verify'),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  void _showRecentlyDeletedSheet(BuildContext context, WidgetRef ref) {
-    final colors = context.chefColors;
-    final textTheme = context.chefText;
+// --- Nutrition goals -------------------------------------------------------------
 
-    showModalBottomSheet(
+class _GoalsSection extends ConsumerWidget {
+  const _GoalsSection();
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, NutritionGoals goals, String label, double current, String unit,
+      NutritionGoals Function(double) apply) async {
+    final value = await showDialog<double>(
       context: context,
-      backgroundColor: colors.surfacePaper,
-      shape: const RoundedRectangleBorder(borderRadius: ChefRadius.sheetBorder),
-      builder: (ctx) {
-        return StreamBuilder<List<Recipe>>(
-          stream: ref.watch(recipeRepositoryProvider).watchDeletedRecipes(),
-          builder: (context, snapshot) {
-            final deleted = snapshot.data ?? [];
-            return Padding(
-              padding: const EdgeInsets.all(ChefSpacing.space4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Recently Deleted', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: ChefSpacing.space3),
-                  if (deleted.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: ChefSpacing.space4),
-                      child: Center(child: Text('Trash is empty.')),
-                    )
-                  else
-                    ...deleted.map((r) => ListTile(
-                          title: Text(r.title),
-                          trailing: TextButton(
-                            child: const Text('Restore'),
-                            onPressed: () {
-                              ref.read(recipeRepositoryProvider).restoreRecipe(r.id);
-                              Navigator.pop(ctx);
-                            },
-                          ),
-                        )),
-                ],
+      builder: (_) => _NumberDialog(title: label, initial: current, unit: unit),
+    );
+    if (value == null) return;
+    await ref.read(preferencesRepositoryProvider).writeJson(nutritionGoalsKey, apply(value).toJson());
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goals = ref.watch(nutritionGoalsProvider).valueOrNull ?? NutritionGoals.standard;
+    Widget row(String label, double value, String unit, NutritionGoals Function(double) apply) => ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(label),
+          trailing: Text('${KitchenFormat.kcal(value)} $unit', style: context.chefText.labelLarge),
+          onTap: () => _edit(context, ref, goals, label, value, unit, apply),
+        );
+
+    return _Section(
+      title: 'Daily nutrition goals',
+      icon: Icons.flag_outlined,
+      children: [
+        row('Calories', goals.calories, 'kcal', (v) => goals.copyWith(calories: v)),
+        row('Protein', goals.proteinG, 'g', (v) => goals.copyWith(proteinG: v)),
+        row('Carbohydrates', goals.carbsG, 'g', (v) => goals.copyWith(carbsG: v)),
+        row('Fat', goals.fatG, 'g', (v) => goals.copyWith(fatG: v)),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Defaults follow the FDA Daily Values for a 2,000 kcal diet. Adjust them to your needs.',
+                  style: context.chefText.bodySmall,
+                ),
               ),
-            );
-          },
+              TextButton(
+                onPressed: () => ref.read(preferencesRepositoryProvider).writeJson(nutritionGoalsKey, NutritionGoals.standard.toJson()),
+                child: const Text('Reset'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NumberDialog extends StatefulWidget {
+  final String title;
+  final double initial;
+  final String unit;
+  const _NumberDialog({required this.title, required this.initial, required this.unit});
+
+  @override
+  State<_NumberDialog> createState() => _NumberDialogState();
+}
+
+class _NumberDialogState extends State<_NumberDialog> {
+  late final _controller = TextEditingController(text: widget.initial.round().toString());
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final v = double.tryParse(_controller.text.trim());
+    if (v == null || v <= 0 || v > 20000) {
+      setState(() => _error = 'Enter a number between 1 and 20,000');
+      return;
+    }
+    Navigator.pop(context, v);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(suffixText: widget.unit, errorText: _error),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: _submit, child: const Text('Save')),
+        ],
+      );
+}
+
+// --- Data -----------------------------------------------------------------------
+
+class _DataSection extends ConsumerWidget {
+  const _DataSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.chefColors;
+    return _Section(
+      title: 'Your data',
+      icon: Icons.storage_rounded,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.upload_rounded),
+          title: const Text('Export backup'),
+          subtitle: const Text('Copy all recipes and collections as a JSON backup'),
+          onTap: () => showDialog<void>(context: context, builder: (_) => const BackupExportDialog()),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.restore_rounded),
+          title: const Text('Restore from backup'),
+          subtitle: const Text('Import recipes from a JSON backup'),
+          onTap: () => showDialog<void>(context: context, builder: (_) => const BackupRestoreDialog()),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.delete_sweep_outlined),
+          title: const Text('Recently deleted'),
+          subtitle: const Text('Restore or permanently remove deleted recipes'),
+          onTap: () => _showTrash(context),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.warning_amber_rounded, color: c.stateDanger),
+          title: Text('Erase all data', style: TextStyle(color: c.stateDanger)),
+          subtitle: const Text('Permanently delete recipes, collections and your food log'),
+          onTap: () => _confirmReset(context, ref),
+        ),
+      ],
+    );
+  }
+
+  void _showTrash(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (_) => const _TrashSheet(),
+    );
+  }
+
+  Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
+    final backup = ref.read(backupRepositoryProvider);
+    final router = GoRouter.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Erase all data?'),
+        content: const Text(
+          'This permanently deletes every recipe, collection, cooking session and food log entry on this device. '
+          'Export a backup first if you might want them back.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ctx.chefColors.stateDanger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Erase everything'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final res = await backup.resetAllData(profileId: 'default');
+    router.go('/');
+    ChefToastService.show(
+      title: res.isSuccess ? 'All data erased' : 'Could not erase data',
+      type: res.isSuccess ? ChefToastType.info : ChefToastType.error,
+    );
+  }
+}
+
+class _TrashSheet extends ConsumerWidget {
+  const _TrashSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.chefText;
+    final repo = ref.read(recipeRepositoryProvider);
+    return StreamBuilder<List<Recipe>>(
+      stream: repo.watchDeletedRecipes(),
+      builder: (context, snapshot) {
+        final deleted = snapshot.data ?? const <Recipe>[];
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Recently deleted', style: t.headlineSmall),
+                ),
+                const SizedBox(height: 8),
+                if (deleted.isEmpty)
+                  const Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Nothing here.')))
+                else
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final r in deleted)
+                          ListTile(
+                            title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextButton(onPressed: () => repo.restoreRecipe(r.id), child: const Text('Restore')),
+                                IconButton(
+                                  tooltip: 'Delete forever',
+                                  icon: const Icon(Icons.delete_forever_outlined),
+                                  onPressed: () => repo.purgeRecipe(r.id),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
+}
 
-  void _showResetAllDataDialog(BuildContext context, WidgetRef ref) {
-    final colors = context.chefColors;
+// --- Developer preview -------------------------------------------------------------
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Reset All Local Data?', style: TextStyle(color: colors.stateDanger, fontWeight: FontWeight.w800)),
-        content: const Text(
-          'This action is irreversible. All recipes, collections, and cooking diaries stored on this device will be permanently erased. Please ensure you have exported a JSON backup first.',
+class _DeveloperSection extends StatelessWidget {
+  final AppEnvironment env;
+  const _DeveloperSection({required this.env});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    return _Section(
+      title: 'Developer preview',
+      icon: Icons.science_outlined,
+      children: [
+        Text(
+          'Visible in ${env.flavor.name} builds only. Cloud sync runs against an in-memory demo server — '
+          'nothing here is persisted or backed up.',
+          style: t.bodySmall,
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: colors.stateDanger),
-            onPressed: () async {
-              await ref.read(backupRepositoryProvider).resetAllData(profileId: 'default');
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              context.go('/');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All local data has been reset.')),
-              );
-            },
-            child: const Text('Erase All Data'),
+        const SizedBox(height: 8),
+        if (env.flags.cloudSyncPreviewEnabled) const CloudSyncSection(),
+        if (env.flags.illustrationGovernanceEnabled)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('Illustration moderation'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const IllustrationApprovalScreen())),
           ),
-        ],
-      ),
+      ],
+    );
+  }
+}
+
+// --- About ------------------------------------------------------------------------
+
+class _AboutSection extends StatelessWidget {
+  final AppEnvironment env;
+  const _AboutSection({required this.env});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    return _Section(
+      title: 'About',
+      icon: Icons.info_outline_rounded,
+      children: [
+        Text(
+          'Your recipes, collections and food log are stored only on this device. Chef’s Kiss has no account, '
+          'ads or tracking. AI requests you start are processed by Anthropic under its commercial terms.',
+          style: t.bodyMedium,
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Nutrition, allergen and food-safety information is approximate and for general guidance only — '
+          'always check labels, and follow safe cooking temperatures.',
+          style: t.bodySmall,
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.description_outlined),
+          title: const Text('Open-source licenses'),
+          onTap: () => showLicensePage(
+            context: context,
+            applicationName: 'Chef’s Kiss',
+            applicationVersion: '${env.version}${env.flavor.isProduction ? '' : ' (${env.flavor.name})'}',
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Version ${env.version}', style: t.bodySmall),
+        ),
+      ],
     );
   }
 }

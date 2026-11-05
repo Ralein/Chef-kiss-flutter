@@ -1,435 +1,464 @@
-import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:app_contracts/app_contracts.dart';
+import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
-import 'package:design_tokens/design_tokens.dart';
-import '../../../app/providers.dart';
+
 import '../../../app/audio_chime_service.dart';
 import '../../../app/chef_toast_service.dart';
+import '../../../app/providers.dart';
+import '../../../app/widgets/common_widgets.dart';
+import '../../../app/widgets/kitchen_format.dart';
+import '../../../app/widgets/step_timer_button.dart';
+import '../../recipe_detail/presentation/widgets/recipe_sections.dart';
 
+/// Distraction-free, step-by-step cooking.
+///
+/// Keeps the screen awake, shares timers with the rest of the app, records
+/// progress in a cooking session (so leaving and returning resumes at the
+/// same step), and lets you log what you ate when you're done.
 class CookModeScreen extends ConsumerStatefulWidget {
   final String recipeId;
+  final double? servings;
 
-  const CookModeScreen({super.key, required this.recipeId});
+  const CookModeScreen({super.key, required this.recipeId, this.servings});
 
   @override
   ConsumerState<CookModeScreen> createState() => _CookModeScreenState();
 }
 
 class _CookModeScreenState extends ConsumerState<CookModeScreen> {
-  int _currentStepIndex = 0;
-  bool _isKitchenDarkMode = false;
-  bool _isFinished = false;
-
-  // Step Timers
-  final Map<String, int> _activeTimers = {};
-  final Set<String> _runningTimers = {};
-  Timer? _timerTicker;
+  final PageController _pages = PageController();
+  int _index = 0;
+  bool _finished = false;
+  bool _night = false;
+  String? _sessionId;
+  late final ScreenAwakeService _awake = ref.read(screenAwakeServiceProvider);
+  late final CookingSessionRepository _sessions = ref.read(cookingSessionRepositoryProvider);
 
   @override
   void initState() {
     super.initState();
-    _startTimerTicker();
+    _awake.enable();
+    _resumeOrStartSession();
   }
 
   @override
   void dispose() {
-    _timerTicker?.cancel();
+    _awake.disable();
+    if (_sessionId != null && !_finished) _sessions.pauseSession(_sessionId!);
+    _pages.dispose();
     super.dispose();
   }
 
-  void _startTimerTicker() {
-    _timerTicker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_runningTimers.isEmpty) return;
-      setState(() {
-        for (final tId in _runningTimers.toList()) {
-          if ((_activeTimers[tId] ?? 0) > 0) {
-            _activeTimers[tId] = _activeTimers[tId]! - 1;
-            if (_activeTimers[tId] == 0) {
-              _runningTimers.remove(tId);
-              audioChime.playTimerComplete();
-              ChefToastService.show(
-                context: context,
-                title: 'Step Timer Finished!',
-                description: 'Check your food and kitchen timing.',
-                type: ChefToastType.alarm,
-                duration: const Duration(seconds: 6),
-              );
+  Future<void> _resumeOrStartSession() async {
+    final existing = (await _sessions.getSessionByRecipeId(widget.recipeId)).orNull;
+    if (!mounted) return;
+    if (existing != null) {
+      _sessionId = existing.id;
+      final resumeAt = math.max(0, existing.activeStepPosition - 1);
+      if (resumeAt > 0) {
+        setState(() => _index = resumeAt);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_pages.hasClients) _pages.jumpToPage(resumeAt);
+        });
+        ChefToastService.show(context: context, title: 'Picking up at step ${resumeAt + 1}', duration: const Duration(seconds: 2));
+      }
+      return;
+    }
+    final started = await _sessions.startSession(
+      profileId: 'default',
+      recipeId: widget.recipeId,
+      selectedServings: Rational.fromDouble(widget.servings ?? 2, 0.001),
+    );
+    _sessionId = started.orNull?.id;
+  }
+
+  void _goTo(int index, int total) {
+    if (index < 0 || index >= total) return;
+    audioChime.playPageFlip();
+    _pages.animateToPage(index, duration: ChefMotion.standard, curve: ChefMotion.easeStandard);
+  }
+
+  void _onPageChanged(int index) {
+    setState(() => _index = index);
+    if (_sessionId != null) _sessions.updateActiveStep(sessionId: _sessionId!, stepPosition: index + 1);
+  }
+
+  void _finish() {
+    audioChime.playSuccessFanfare();
+    setState(() => _finished = true);
+    if (_sessionId != null) _sessions.completeSession(_sessionId!);
+  }
+
+  void _close() => context.canPop() ? context.pop() : context.go('/recipe/${widget.recipeId}');
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(singleRecipeProvider(widget.recipeId));
+    final theme = _night ? ChefTheme.dark() : Theme.of(context);
+
+    return Theme(
+      data: theme,
+      child: Builder(builder: (context) {
+        return async.when(
+          loading: () => const Scaffold(body: LoadingView()),
+          error: (e, _) => Scaffold(appBar: AppBar(), body: const ErrorView(message: 'This recipe could not be loaded.')),
+          data: (recipe) {
+            if (recipe == null) {
+              return Scaffold(appBar: AppBar(), body: const ErrorView(title: 'Recipe not found', message: 'It may have been deleted.'));
             }
-          }
-        }
-      });
-    });
+            return _buildCooking(context, recipe);
+          },
+        );
+      }),
+    );
   }
 
-  void _toggleTimer(String timerId, int durationSeconds) {
-    audioChime.playTap();
-    setState(() {
-      if (!_activeTimers.containsKey(timerId)) {
-        _activeTimers[timerId] = durationSeconds;
-      }
-      if (_runningTimers.contains(timerId)) {
-        _runningTimers.remove(timerId);
-      } else {
-        _runningTimers.add(timerId);
-        audioChime.playTimerStart();
-      }
-    });
+  Widget _buildCooking(BuildContext context, Recipe recipe) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final steps = recipe.steps;
+    final total = steps.length;
+    final servings = widget.servings ?? recipe.baseServings.toDouble();
+
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _index < total - 1 ? _goTo(_index + 1, total) : _finish(),
+        const SingleActivator(LogicalKeyboardKey.space): () => _index < total - 1 ? _goTo(_index + 1, total) : _finish(),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _goTo(_index - 1, total),
+        const SingleActivator(LogicalKeyboardKey.escape): _close,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(tooltip: 'Exit cook mode', icon: const Icon(Icons.close_rounded), onPressed: _close),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _finished ? 'All done' : (total == 0 ? 'Cook mode' : 'Step ${_index + 1} of $total'),
+                  style: t.titleMedium,
+                ),
+                Text(recipe.title, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+            actions: [
+              IconButton(
+                tooltip: 'Ingredients',
+                icon: const Icon(Icons.format_list_bulleted_rounded),
+                onPressed: () => _showIngredients(context, recipe, servings),
+              ),
+              IconButton(
+                tooltip: _night ? 'Light kitchen mode' : 'Night kitchen mode',
+                icon: Icon(_night ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                onPressed: () => setState(() => _night = !_night),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          body: SafeArea(
+            child: total == 0
+                ? EmptyStateScene(
+                    icon: Icons.format_list_numbered_rounded,
+                    title: 'No steps yet',
+                    message: 'Add the method to this recipe to cook it step by step.',
+                    actionLabel: 'Edit recipe',
+                    onAction: () => context.pushReplacement('/editor/${recipe.id}'),
+                  )
+                : _finished
+                    ? _FinishView(recipe: recipe, servings: servings, onDone: _close, onAgain: () {
+                        setState(() => _finished = false);
+                        _goTo(0, total);
+                      })
+                    : Column(
+                        children: [
+                          Semantics(
+                            label: 'Progress: step ${_index + 1} of $total',
+                            child: LinearProgressIndicator(value: (_index + 1) / total, minHeight: 4),
+                          ),
+                          Expanded(
+                            child: PageView.builder(
+                              controller: _pages,
+                              onPageChanged: _onPageChanged,
+                              itemCount: total,
+                              itemBuilder: (context, i) => _StepPage(
+                                recipe: recipe,
+                                step: steps[i],
+                                number: i + 1,
+                                total: total,
+                                servings: servings,
+                              ),
+                            ),
+                          ),
+                          _NavBar(
+                            isFirst: _index == 0,
+                            isLast: _index == total - 1,
+                            onPrev: () => _goTo(_index - 1, total),
+                            onNext: () => _index == total - 1 ? _finish() : _goTo(_index + 1, total),
+                            background: c.surfacePaper,
+                          ),
+                        ],
+                      ),
+          ),
+        ),
+      ),
+    );
   }
 
-  void _resetTimer(String timerId, int durationSeconds) {
-    audioChime.playTap();
-    setState(() {
-      _runningTimers.remove(timerId);
-      _activeTimers[timerId] = durationSeconds;
-    });
+  void _showIngredients(BuildContext context, Recipe recipe, double servings) {
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        builder: (ctx, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          children: [
+            Text('Ingredients', style: ctx.chefText.headlineSmall),
+            Text('For ${KitchenFormat.quantity(servings, null)} servings', style: ctx.chefText.bodySmall),
+            const SizedBox(height: 12),
+            for (final ing in recipe.ingredients)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(
+                    text: '${ingredientAmount(scaleFor(recipe, ing, servings))}  ',
+                    style: ctx.chefText.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  TextSpan(text: ing.displayName, style: ctx.chefText.bodyLarge),
+                  if (ing.prepText?.isNotEmpty ?? false)
+                    TextSpan(text: ', ${ing.prepText}', style: ctx.chefText.bodyMedium?.copyWith(color: ctx.chefColors.contentSecondary)),
+                ])),
+              ),
+          ],
+        ),
+      ),
+    );
   }
+}
 
-  void _nextStep(int totalSteps) {
-    audioChime.playTap();
-    if (_currentStepIndex < totalSteps - 1) {
-      setState(() => _currentStepIndex++);
-    } else {
-      setState(() => _isFinished = true);
-      audioChime.playSuccessFanfare();
-    }
-  }
+class _StepPage extends StatelessWidget {
+  final Recipe recipe;
+  final RecipeStep step;
+  final int number;
+  final int total;
+  final double servings;
 
-  void _prevStep() {
-    audioChime.playTap();
-    if (_currentStepIndex > 0) {
-      setState(() => _currentStepIndex--);
-    }
+  const _StepPage({required this.recipe, required this.step, required this.number, required this.total, required this.servings});
+
+  /// Ingredients whose head noun appears in this step's text.
+  List<RecipeIngredient> _mentioned() {
+    final text = ' ${FoodMatcher.normalizeWords('${step.instructionShort} ${step.instructionDetail ?? ''}').join(' ')} ';
+    return recipe.ingredients.where((ing) {
+      final words = FoodMatcher.normalizeWords(ing.displayName);
+      return words.isNotEmpty && text.contains(' ${words.last} ');
+    }).take(6).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.chefColors;
-    final recipeAsync = ref.watch(singleRecipeProvider(widget.recipeId));
+    final c = context.chefColors;
+    final t = context.chefText;
+    final mentioned = _mentioned();
+    final temp = step.temperatureC != null
+        ? '${step.temperatureC}°C / ${step.temperatureF ?? (step.temperatureC! * 9 / 5 + 32).round()}°F'
+        : null;
 
-    return recipeAsync.when(
-      data: (recipe) {
-        if (recipe == null) {
-          return const Scaffold(body: Center(child: Text('Recipe not found.')));
-        }
-
-        final steps = recipe.steps;
-        final totalSteps = steps.length;
-        final currentStep = steps.isNotEmpty ? steps[_currentStepIndex] : null;
-
-        final bgColor = _isKitchenDarkMode ? const Color(0xFF161514) : colors.surfaceCanvas;
-        final cardColor = _isKitchenDarkMode ? const Color(0xFF22201E) : Colors.white;
-        final textColor = _isKitchenDarkMode ? Colors.white : const Color(0xFF1E1A18);
-        final subTextColor = _isKitchenDarkMode ? const Color(0xFFABA196) : colors.contentSecondary;
-
-        return CallbackShortcuts(
-          bindings: <ShortcutActivator, VoidCallback>{
-            const SingleActivator(LogicalKeyboardKey.arrowRight): () => _nextStep(totalSteps),
-            const SingleActivator(LogicalKeyboardKey.space): () => _nextStep(totalSteps),
-            const SingleActivator(LogicalKeyboardKey.arrowLeft): _prevStep,
-            const SingleActivator(LogicalKeyboardKey.escape): () => context.pop(),
-          },
-          child: Scaffold(
-            backgroundColor: bgColor,
-            appBar: AppBar(
-              backgroundColor: cardColor,
-              elevation: 0,
-              leading: IconButton(
-                icon: Icon(Icons.close, color: textColor),
-                onPressed: () {
-                  audioChime.playTap();
-                  context.pop();
-                },
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                [
+                  'STEP $number',
+                  if (step.actionKey != null && step.actionKey!.isNotEmpty) step.actionKey!.toUpperCase(),
+                ].join(' · '),
+                style: t.labelLarge?.copyWith(color: c.accentTomato, letterSpacing: 1.2),
               ),
-              title: Text(
-                _isFinished ? 'Cooking Completed!' : 'Step ${_currentStepIndex + 1} of $totalSteps',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: textColor),
+              const SizedBox(height: 12),
+              Semantics(
+                header: true,
+                child: Text(step.instructionShort, style: t.headlineLarge?.copyWith(height: 1.3)),
               ),
-              actions: [
-                IconButton(
-                  icon: Icon(_isKitchenDarkMode ? Icons.light_mode : Icons.dark_mode_outlined, color: textColor),
-                  tooltip: 'Kitchen Night Mode',
-                  onPressed: () {
-                    audioChime.playTap();
-                    setState(() => _isKitchenDarkMode = !_isKitchenDarkMode);
-                  },
-                ),
-                const SizedBox(width: 8),
+              if (step.instructionDetail != null && step.instructionDetail!.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(step.instructionDetail!, style: t.bodyLarge?.copyWith(fontSize: 18, color: c.contentSecondary)),
               ],
-            ),
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(ChefSpacing.space4),
-                child: _isFinished
-                    ? _buildVictoryScreen(context, recipe, cardColor, textColor, subTextColor)
-                    : _buildStepScreen(context, recipe, currentStep, totalSteps, cardColor, textColor, subTextColor),
-              ),
-            ),
+              if (temp != null) ...[
+                const SizedBox(height: 18),
+                Chip(avatar: Icon(Icons.thermostat_rounded, color: c.accentTomato), label: Text(temp)),
+              ],
+              if (mentioned.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Text('You’ll need', style: t.labelLarge),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final ing in mentioned)
+                      Chip(
+                        label: Text(
+                          [ingredientAmount(scaleFor(recipe, ing, servings)), ing.displayName]
+                              .where((s) => s.isNotEmpty)
+                              .join(' '),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+              if (step.timers.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final timer in step.timers)
+                      StepTimerButton(timer: timer, recipeId: recipe.id, recipeTitle: recipe.title, large: true),
+                  ],
+                ),
+              ],
+            ],
           ),
-        );
-      },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, _) => Scaffold(body: Center(child: Text('Error: $err'))),
+        ),
+      ),
     );
   }
+}
 
-  Widget _buildStepScreen(
-    BuildContext context,
-    Recipe recipe,
-    RecipeStep? step,
-    int totalSteps,
-    Color cardColor,
-    Color textColor,
-    Color subTextColor,
-  ) {
-    final colors = context.chefColors;
-    final progress = (_currentStepIndex + 1) / totalSteps;
+class _NavBar extends StatelessWidget {
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final Color background;
 
-    return Column(
-      children: [
-        // Progress Bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(ChefRadius.pill),
-          child: LinearProgressIndicator(
-            value: progress,
-            backgroundColor: colors.outlineSubtle,
-            valueColor: AlwaysStoppedAnimation<Color>(colors.accentTomato),
-            minHeight: 6,
-          ),
-        ),
-        const SizedBox(height: ChefSpacing.space4),
+  const _NavBar({required this.isFirst, required this.isLast, required this.onPrev, required this.onNext, required this.background});
 
-        // Active Step Card
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(ChefSpacing.space5),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(ChefRadius.modal),
-              border: Border.all(color: const Color(0xFFE8E0D2).withValues(alpha: 0.5)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (step?.actionKey != null && step!.actionKey!.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Icon(Icons.restaurant_menu, size: 18, color: colors.accentTomato),
-                      const SizedBox(width: 6),
-                      Text(
-                        step.actionKey!.toUpperCase(),
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: colors.accentTomato, letterSpacing: 1),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: ChefSpacing.space3),
-                ],
-
-                Text(
-                  step?.instructionShort ?? '',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: textColor,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: ChefSpacing.space3),
-
-                if (step?.instructionDetail != null && step!.instructionDetail!.isNotEmpty)
-                  Text(
-                    step.instructionDetail!,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: subTextColor,
-                      height: 1.5,
-                    ),
-                  ),
-                const Spacer(),
-
-                // Live Visual Timer Rings
-                if (step != null && step.timers.isNotEmpty) ...[
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  ...step.timers.map((timer) {
-                    final timeLeft = _activeTimers[timer.id] ?? timer.durationSeconds;
-                    final isRunning = _runningTimers.contains(timer.id);
-                    final timerProgress = timer.durationSeconds > 0 ? (timeLeft / timer.durationSeconds) : 0.0;
-
-                    final mins = timeLeft ~/ 60;
-                    final secs = timeLeft % 60;
-                    final timeStr = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isRunning ? colors.accentTomato.withValues(alpha: 0.12) : colors.surfaceRaised,
-                        borderRadius: BorderRadius.circular(ChefRadius.card),
-                        border: Border.all(color: isRunning ? colors.accentTomato : colors.outlineSubtle),
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 32,
-                            height: 32,
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                CircularProgressIndicator(
-                                  value: timerProgress,
-                                  strokeWidth: 3,
-                                  backgroundColor: colors.outlineSubtle,
-                                  valueColor: AlwaysStoppedAnimation<Color>(colors.accentTomato),
-                                ),
-                                Center(
-                                  child: Icon(Icons.timer_outlined, size: 16, color: colors.accentTomato),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(timer.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor)),
-                                Text(timeStr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: colors.accentTomato)),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isRunning ? const Color(0xFFC7382B) : colors.accentTomato,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ChefRadius.pill)),
-                            ),
-                            icon: Icon(isRunning ? Icons.pause : Icons.play_arrow, size: 16),
-                            label: Text(isRunning ? 'Pause' : 'Start'),
-                            onPressed: () => _toggleTimer(timer.id, timer.durationSeconds),
-                          ),
-                          const SizedBox(width: 6),
-                          IconButton(
-                            icon: const Icon(Icons.refresh, size: 18),
-                            onPressed: () => _resetTimer(timer.id, timer.durationSeconds),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: ChefSpacing.space4),
-
-        // Step Navigation Bar
-        Row(
-          children: [
-            if (_currentStepIndex > 0)
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    return Container(
+      decoration: BoxDecoration(color: background, border: Border(top: BorderSide(color: c.outlineSubtle))),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Row(
+            children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: textColor,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: BorderSide(color: colors.outlineSubtle),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ChefRadius.card)),
-                  ),
-                  icon: const Icon(Icons.arrow_back_ios, size: 14),
-                  label: const Text('Previous Step', style: TextStyle(fontWeight: FontWeight.w800)),
-                  onPressed: _prevStep,
+                  onPressed: isFirst ? null : onPrev,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Back'),
                 ),
               ),
-            if (_currentStepIndex > 0) const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colors.accentTomato,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ChefRadius.card)),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: onNext,
+                  icon: Icon(isLast ? Icons.check_rounded : Icons.arrow_forward_rounded),
+                  label: Text(isLast ? 'Finish' : 'Next step'),
                 ),
-                icon: Icon(_currentStepIndex == totalSteps - 1 ? Icons.check_circle : Icons.arrow_forward_ios, size: 16),
-                label: Text(
-                  _currentStepIndex == totalSteps - 1 ? 'Finish & Celebrate' : 'Next Step',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
-                ),
-                onPressed: () => _nextStep(totalSteps),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
+}
 
-  Widget _buildVictoryScreen(
-    BuildContext context,
-    Recipe recipe,
-    Color cardColor,
-    Color textColor,
-    Color subTextColor,
-  ) {
-    final colors = context.chefColors;
+class _FinishView extends ConsumerWidget {
+  final Recipe recipe;
+  final double servings;
+  final VoidCallback onDone;
+  final VoidCallback onAgain;
+
+  const _FinishView({required this.recipe, required this.servings, required this.onDone, required this.onAgain});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.chefText;
+    final c = context.chefColors;
+    final report = ref.watch(recipeNutritionProvider(recipe.id));
+    final canLog = report != null && report.hasData && report.coverage >= 0.5;
+
+    Future<void> log() async {
+      final repo = ref.read(foodLogRepositoryProvider);
+      final now = DateTime.now();
+      final entry = FoodLogEntry(
+        id: '${recipe.id}-${now.microsecondsSinceEpoch}',
+        dayKey: dayKeyFor(now),
+        mealSlot: MealSlot.forTime(now),
+        title: recipe.title,
+        source: FoodLogSource.recipe,
+        recipeId: recipe.id,
+        imagePath: recipe.coverImage,
+        nutrition: report!.perServing,
+        loggedAt: now.toUtc().millisecondsSinceEpoch,
+      );
+      final res = await repo.saveEntry(entry);
+      ChefToastService.show(
+        title: res.isSuccess ? 'Logged to ${entry.mealSlot.label}' : 'Could not log this meal',
+        description: res.isSuccess ? '${KitchenFormat.kcal(entry.nutrition.calories)} kcal · 1 serving' : null,
+        type: res.isSuccess ? ChefToastType.success : ChefToastType.error,
+        actionLabel: res.isSuccess ? 'Undo' : null,
+        onAction: res.isSuccess ? () => repo.deleteEntry(entry.id) : null,
+      );
+    }
 
     return Center(
-      child: Container(
-        padding: const EdgeInsets.all(ChefSpacing.space6),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(ChefRadius.modal),
-          border: Border.all(color: colors.outlineSubtle),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SvgWaxSealWidget(id: 'seal-chef-kiss', size: 80),
-            const SizedBox(height: ChefSpacing.space4),
-            Text(
-              "Chef's Kiss! Bon Appétit",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: textColor),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You successfully cooked "${recipe.title}".',
-              style: TextStyle(fontSize: 14, color: subTextColor, fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: ChefSpacing.space5),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colors.accentTomato,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(ChefRadius.pill)),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SvgWaxSealWidget(id: 'seal-chef-kiss', size: 96),
+              const SizedBox(height: 20),
+              Text('Chef’s kiss!', style: t.displaySmall, textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text(
+                'You cooked ${recipe.title}. Enjoy every bite.',
+                style: t.bodyLarge?.copyWith(color: c.contentSecondary),
+                textAlign: TextAlign.center,
               ),
-              icon: const Icon(Icons.menu_book, size: 18),
-              label: const Text('Return to Cookbook Journal', style: TextStyle(fontWeight: FontWeight.w900)),
-              onPressed: () {
-                audioChime.playTap();
-                context.pop();
-              },
-            ),
-          ],
+              const SizedBox(height: 28),
+              if (canLog) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: log,
+                    icon: const Icon(Icons.add_task_rounded),
+                    label: Text('Log a serving (${KitchenFormat.kcal(report.perServing.calories)} kcal)'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(onPressed: onDone, child: const Text('Back to recipe')),
+              ),
+              TextButton(onPressed: onAgain, child: const Text('Start over')),
+            ],
+          ),
         ),
       ),
     );

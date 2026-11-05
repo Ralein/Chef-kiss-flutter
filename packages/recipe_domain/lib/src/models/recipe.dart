@@ -729,6 +729,7 @@ class Recipe {
     List<RecipeLabel>? labels,
     List<RecipeNote>? notes,
     bool? isFavorite,
+    bool clearCoverImage = false,
   }) {
     return Recipe(
       id: id ?? this.id,
@@ -741,7 +742,7 @@ class Recipe {
       difficulty: difficulty ?? this.difficulty,
       totalMinutes: totalMinutes ?? this.totalMinutes,
       coverMediaId: coverMediaId ?? this.coverMediaId,
-      coverImage: coverImage ?? this.coverImage,
+      coverImage: clearCoverImage ? null : (coverImage ?? this.coverImage),
       polaroidCaption: polaroidCaption ?? this.polaroidCaption,
       polaroidRotation: polaroidRotation ?? this.polaroidRotation,
       polaroidX: polaroidX ?? this.polaroidX,

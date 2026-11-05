@@ -1,0 +1,435 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+import 'package:design_tokens/design_tokens.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:recipe_domain/recipe_domain.dart';
+import 'package:uuid/uuid.dart';
+
+import '../../../app/chef_toast_service.dart';
+import '../../../app/providers.dart';
+import '../../../app/widgets/common_widgets.dart';
+import '../../../core/ai/ai_connection.dart';
+import '../../../core/media/photo_picker.dart';
+
+/// Creates an import job and opens its review screen.
+///
+/// [context] and [ref] must belong to a long-lived widget (a screen), not a
+/// sheet that is closing: both are captured before the first await.
+Future<void> startImport(BuildContext context, WidgetRef ref, ImportSource source) async {
+  final router = GoRouter.of(context);
+  final repo = ref.read(importRepositoryProvider);
+  final res = await repo.createJob(profileId: 'default', source: source);
+  res.when(
+    ok: (job) => router.push('/import/review/${job.id}'),
+    err: (f) => ChefToastService.show(title: f.message, type: ChefToastType.error),
+  );
+}
+
+ImportSource buildSource(ImportSourceKind kind, {String? text, String? url, Uint8List? bytes, String? mediaType}) {
+  final payload = bytes ?? utf8.encode(text ?? url ?? '');
+  return ImportSource(
+    id: const Uuid().v4(),
+    kind: kind,
+    rawText: text,
+    sourceUrl: url,
+    inlineData: bytes,
+    mediaType: mediaType,
+    sha256Checksum: sha256.convert(payload).toString(),
+    byteSize: payload.length,
+    createdAt: DateTime.now().toUtc().millisecondsSinceEpoch,
+  );
+}
+
+/// Photo of a cookbook page or handwritten card → AI transcription.
+Future<void> importRecipePhoto(BuildContext context, WidgetRef ref, ImageSource source) async {
+  if (ref.read(aiConnectionProvider).valueOrNull?.isAvailable != true) {
+    await showAiRequiredSheet(context, feature: 'recipe photo import');
+    return;
+  }
+  final picked = await PhotoPicker.pick(source);
+  if (!context.mounted) return;
+  if (picked.isFailure) {
+    ChefToastService.show(context: context, title: picked.error!.message, description: picked.error!.recoveryAction, type: ChefToastType.error);
+    return;
+  }
+  final bytes = picked.orNull;
+  if (bytes == null) return;
+  await startImport(context, ref, buildSource(ImportSourceKind.image, bytes: bytes));
+}
+
+Future<void> showAiRequiredSheet(BuildContext context, {required String feature}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    builder: (_) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      child: AiSetupCard(feature: feature),
+    ),
+  );
+}
+
+enum _AddChoice { ai, photo, url, text, manual }
+
+/// Entry point for every way of adding a recipe. The sheet only returns the
+/// user's choice; the follow-up runs on the caller's (still mounted) context.
+Future<void> showAddRecipeSheet(BuildContext context, WidgetRef ref) async {
+  final choice = await showModalBottomSheet<_AddChoice>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => const _AddRecipeSheet(),
+  );
+  if (choice == null || !context.mounted) return;
+  switch (choice) {
+    case _AddChoice.ai:
+      await showAiStudioSheet(context, ref);
+    case _AddChoice.photo:
+      final source = PhotoPicker.cameraAvailable ? await _chooseSource(context) : ImageSource.gallery;
+      if (source != null && context.mounted) await importRecipePhoto(context, ref, source);
+    case _AddChoice.url:
+      await showUrlImportSheet(context, ref);
+    case _AddChoice.text:
+      await showPasteTextSheet(context, ref);
+    case _AddChoice.manual:
+      context.push('/editor');
+  }
+}
+
+class _AddRecipeSheet extends ConsumerWidget {
+  const _AddRecipeSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final aiReady = ref.watch(aiConnectionProvider).valueOrNull?.isAvailable == true;
+
+    Widget option({
+      required IconData icon,
+      required Color tint,
+      required String title,
+      required String subtitle,
+      required VoidCallback onTap,
+      bool needsAi = false,
+    }) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(color: c.meterTrack(tint), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: tint),
+        ),
+        title: Text(title),
+        subtitle: Text(needsAi && !aiReady ? '$subtitle · needs AI setup' : subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      );
+    }
+
+    void choose(_AddChoice choice) => Navigator.of(context).pop(choice);
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Add a recipe', style: t.headlineSmall),
+          ),
+          option(
+            icon: Icons.auto_awesome_rounded,
+            tint: c.accentTomato,
+            title: 'Create with AI',
+            subtitle: 'Describe a dish and get a complete recipe',
+            needsAi: true,
+            onTap: () => choose(_AddChoice.ai),
+          ),
+          option(
+            icon: Icons.document_scanner_outlined,
+            tint: c.accentHerb,
+            title: 'Scan a recipe',
+            subtitle: 'Photo of a cookbook page or handwritten card',
+            needsAi: true,
+            onTap: () => choose(_AddChoice.photo),
+          ),
+          option(
+            icon: Icons.link_rounded,
+            tint: c.accentYolk,
+            title: 'Import from a website',
+            subtitle: 'Paste a link to any recipe page',
+            onTap: () => choose(_AddChoice.url),
+          ),
+          option(
+            icon: Icons.content_paste_rounded,
+            tint: c.macroCarbs,
+            title: 'Paste recipe text',
+            subtitle: 'From notes, messages or email',
+            onTap: () => choose(_AddChoice.text),
+          ),
+          option(
+            icon: Icons.edit_note_rounded,
+            tint: c.contentSecondary,
+            title: 'Write it myself',
+            subtitle: 'Start from a blank recipe',
+            onTap: () => choose(_AddChoice.manual),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+Future<ImageSource?> _chooseSource(BuildContext context) {
+  return showModalBottomSheet<ImageSource>(
+    context: context,
+    useRootNavigator: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from photos'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> showUrlImportSheet(BuildContext context, WidgetRef ref) async {
+  final source = await showModalBottomSheet<ImportSource>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => const _TextEntrySheet(
+      title: 'Import from a website',
+      hint: 'https://…',
+      helper: 'Most recipe sites publish structured recipe data, which is read exactly. '
+          'For other pages, AI reads the page text.',
+      kind: ImportSourceKind.url,
+      keyboardType: TextInputType.url,
+      maxLines: 1,
+    ),
+  );
+  if (source != null && context.mounted) await startImport(context, ref, source);
+}
+
+Future<void> showPasteTextSheet(BuildContext context, WidgetRef ref) async {
+  final source = await showModalBottomSheet<ImportSource>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => const _TextEntrySheet(
+      title: 'Paste recipe text',
+      hint: 'Paste the title, ingredients and steps…',
+      helper: 'Works offline. With AI set up, messy text is cleaned up more accurately.',
+      kind: ImportSourceKind.text,
+      keyboardType: TextInputType.multiline,
+      maxLines: 12,
+    ),
+  );
+  if (source != null && context.mounted) await startImport(context, ref, source);
+}
+
+class _TextEntrySheet extends StatefulWidget {
+  final String title;
+  final String hint;
+  final String helper;
+  final ImportSourceKind kind;
+  final TextInputType keyboardType;
+  final int maxLines;
+
+  const _TextEntrySheet({
+    required this.title,
+    required this.hint,
+    required this.helper,
+    required this.kind,
+    required this.keyboardType,
+    required this.maxLines,
+  });
+
+  @override
+  State<_TextEntrySheet> createState() => _TextEntrySheetState();
+}
+
+class _TextEntrySheetState extends State<_TextEntrySheet> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (widget.kind == ImportSourceKind.url) {
+      final uri = Uri.tryParse(value);
+      if (uri == null || !(uri.isScheme('http') || uri.isScheme('https')) || uri.host.isEmpty) {
+        setState(() => _error = 'Enter a full web address, starting with https://');
+        return;
+      }
+    } else if (value.length < 20) {
+      setState(() => _error = 'Paste the whole recipe, including ingredients and steps.');
+      return;
+    }
+    Navigator.of(context).pop(
+      widget.kind == ImportSourceKind.url
+          ? buildSource(ImportSourceKind.url, url: value)
+          : buildSource(ImportSourceKind.text, text: value),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.title, style: t.headlineSmall),
+          const SizedBox(height: 6),
+          Text(widget.helper, style: t.bodySmall),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: widget.keyboardType,
+            minLines: widget.maxLines > 1 ? 6 : 1,
+            maxLines: widget.maxLines,
+            textInputAction: widget.maxLines == 1 ? TextInputAction.go : TextInputAction.newline,
+            onSubmitted: widget.maxLines == 1 ? (_) => _submit() : null,
+            decoration: InputDecoration(hintText: widget.hint, errorText: _error),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(onPressed: _submit, icon: const Icon(Icons.download_rounded), label: const Text('Import')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Real AI recipe generation (replaces the former keyword-matching mock).
+Future<void> showAiStudioSheet(BuildContext context, WidgetRef ref, {String? initialPrompt}) async {
+  final prompt = await showModalBottomSheet<String>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => _AiStudioSheet(initialPrompt: initialPrompt),
+  );
+  if (prompt != null && prompt.isNotEmpty && context.mounted) {
+    await startImport(context, ref, buildSource(ImportSourceKind.prompt, text: prompt));
+  }
+}
+
+class _AiStudioSheet extends ConsumerStatefulWidget {
+  final String? initialPrompt;
+  const _AiStudioSheet({this.initialPrompt});
+
+  @override
+  ConsumerState<_AiStudioSheet> createState() => _AiStudioSheetState();
+}
+
+class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
+  late final TextEditingController _controller = TextEditingController(text: widget.initialPrompt);
+
+  static const _ideas = [
+    'A cozy weeknight pasta with what’s in a typical pantry',
+    'High-protein vegetarian lunch bowl, ready in 20 minutes',
+    'Crispy sheet-pan chicken thighs with lemon and potatoes',
+    'Classic French crêpes for four, sweet and savory fillings',
+    'Beginner sourdough boule with a simple schedule',
+    'Shoyu ramen with jammy eggs, from scratch',
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _generate() {
+    final prompt = _controller.text.trim();
+    if (prompt.isNotEmpty) Navigator.of(context).pop(prompt);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final ai = ref.watch(aiConnectionProvider).valueOrNull;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, color: c.accentTomato),
+              const SizedBox(width: 8),
+              Text('Create with AI', style: t.headlineSmall),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('Describe what you’d like to cook. You’ll review the recipe before it’s saved.', style: t.bodySmall),
+          const SizedBox(height: 16),
+          if (ai?.isAvailable != true) ...[
+            const AiSetupCard(feature: 'recipe generation'),
+          ] else ...[
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              minLines: 3,
+              maxLines: 6,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'e.g. Saffron risotto with roasted mushrooms for 4, no wine',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Need inspiration?', style: t.labelLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final idea in _ideas)
+                  ActionChip(
+                    label: Text(idea, overflow: TextOverflow.ellipsis),
+                    onPressed: () => setState(() => _controller.text = idea),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _generate,
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: const Text('Create recipe'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

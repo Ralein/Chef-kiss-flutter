@@ -10,32 +10,44 @@ class DriftCollectionRepository implements CollectionRepository {
 
   DriftCollectionRepository(this.db);
 
+  /// One join query that reads from both the collections and membership
+  /// tables, so adding/removing a recipe re-emits (previously only edits to
+  /// the collection row itself did).
   @override
   Stream<List<RecipeCollection>> watchCollections() {
-    return (db.select(db.collectionsTable)
-          ..where((c) => c.deletedAt.isNull())
-          ..orderBy([(c) => OrderingTerm.asc(c.sortOrder)]))
-        .watch()
-        .asyncMap((rows) async {
-      final list = <RecipeCollection>[];
+    final query = db.select(db.collectionsTable).join([
+      leftOuterJoin(db.collectionRecipesTable, db.collectionRecipesTable.collectionId.equalsExp(db.collectionsTable.id)),
+    ])
+      ..where(db.collectionsTable.deletedAt.isNull())
+      ..orderBy([
+        OrderingTerm.asc(db.collectionsTable.sortOrder),
+        OrderingTerm.asc(db.collectionsTable.createdAt),
+        OrderingTerm.asc(db.collectionRecipesTable.position),
+      ]);
+
+    return query.watch().map((rows) {
+      final byId = <String, CollectionsTableData>{};
+      final members = <String, List<String>>{};
       for (final row in rows) {
-        final rels = await (db.select(db.collectionRecipesTable)
-              ..where((cr) => cr.collectionId.equals(row.id))
-              ..orderBy([(cr) => OrderingTerm.asc(cr.position)]))
-            .get();
-        list.add(RecipeCollection(
-          id: row.id,
-          profileId: row.profileId,
-          name: row.name,
-          colorToken: row.colorToken,
-          description: row.description,
-          sortOrder: row.sortOrder,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          recipeIds: rels.map((r) => r.recipeId).toList(),
-        ));
+        final col = row.readTable(db.collectionsTable);
+        byId.putIfAbsent(col.id, () => col);
+        final link = row.readTableOrNull(db.collectionRecipesTable);
+        final list = members.putIfAbsent(col.id, () => []);
+        if (link != null && !list.contains(link.recipeId)) list.add(link.recipeId);
       }
-      return list;
+      return byId.values
+          .map((row) => RecipeCollection(
+                id: row.id,
+                profileId: row.profileId,
+                name: row.name,
+                colorToken: row.colorToken,
+                description: row.description,
+                sortOrder: row.sortOrder,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+                recipeIds: members[row.id] ?? const [],
+              ))
+          .toList(growable: false);
     });
   }
 
