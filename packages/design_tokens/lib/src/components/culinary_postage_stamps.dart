@@ -35,101 +35,21 @@ class SvgPostageStampWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The artwork carries its own title, price and origin text (exactly as in
+    // the web app); drawing them again on top doubled every label.
     final rawSvg = rawPostageStampSvgMap[id] ?? rawPostageStampSvgMap['postage-tomato'] ?? rawPostageStampSvgMap.values.first;
-    final meta = _stampMetadata[id] ?? const ('SPECIAL EDITION', '50¢', 'CHEF', Color(0xFFC85A32));
-
     final w = size;
     final h = size * 1.2;
-
     return Transform.rotate(
       angle: rotation * (math.pi / 180),
       child: SizedBox(
         width: w,
         height: h,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            SvgPicture.string(
-              rawSvg,
-              width: w,
-              height: h,
-              fit: BoxFit.contain,
-            ),
-            // Crisp Top Banner Title
-            Positioned(
-              top: h * 0.14,
-              left: w * 0.12,
-              right: w * 0.12,
-              child: Text(
-                meta.$1,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: meta.$4,
-                  fontSize: size * 0.082,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.0,
-                  height: 1.0,
-                ),
-              ),
-            ),
-            // Crisp Bottom Left Denomination Price
-            Positioned(
-              bottom: h * 0.11,
-              left: w * 0.16,
-              child: Text(
-                meta.$2,
-                style: TextStyle(
-                  color: const Color(0xFF1E1A18),
-                  fontSize: size * 0.10,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'serif',
-                  height: 1.0,
-                ),
-              ),
-            ),
-            // Crisp Bottom Right Origin Label
-            Positioned(
-              bottom: h * 0.12,
-              right: w * 0.16,
-              child: Text(
-                meta.$3,
-                style: TextStyle(
-                  color: meta.$4,
-                  fontSize: size * 0.075,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                  height: 1.0,
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: SvgPicture.string(rawSvg, width: w, height: h, fit: BoxFit.contain),
       ),
     );
   }
 }
-
-const Map<String, (String, String, String, Color)> _stampMetadata = {
-  'postage-tomato': ('SAN MARZANO', '50¢', 'ITALIA', Color(0xFFC85A32)),
-  'postage-basil': ('FRESH BASIL', '25¢', 'HERBIER', Color(0xFF4A6B53)),
-  'postage-pizza': ('NAPOLETANA', '80¢', 'NAPOLI', Color(0xFFC85A32)),
-  'postage-strawberry': ('FRAGOLE', '45¢', 'GIARDINO', Color(0xFFD94B58)),
-  'postage-sushi': ('EDOMAE SUSHI', '¥120', 'TOKYO', Color(0xFF2C2623)),
-  'postage-taco': ('CALLEJERO', '15¢', 'MEXICO', Color(0xFFD9822B)),
-  'postage-baguette': ('FOURNIL', '€1.20', 'FRANCE', Color(0xFF8C7355)),
-  'postage-ramen': ('RAMEN-YA', '¥850', 'KYOTO', Color(0xFF2C2623)),
-  'postage-cheese': ('PARMIGIANO', '€2.50', 'REGGIANO', Color(0xFFD9822B)),
-  'postage-croissant': ('CROISSANT', '€1.50', 'PARIS', Color(0xFF8C7355)),
-  'postage-egg': ('FERMIER', '30¢', 'CAMPAGNE', Color(0xFFD9822B)),
-  'postage-berry': ('MYRTILLES', '60¢', 'FOREST', Color(0xFF4B306B)),
-  'postage-garlic': ('AIL ROSE', '20¢', 'PROVENCE', Color(0xFF4A6B53)),
-  'postage-espresso': ('ESPRESSO', '€1.00', 'ROMA', Color(0xFF5C3A21)),
-  'postage-avocado': ('AGUACATE', '75¢', 'ORGANIC', Color(0xFF4A6B53)),
-  'postage-honey': ('WILDFLOWER', '90¢', 'APIARY', Color(0xFFD9822B)),
-  'postage-parmigiano': ('STAGIONATO', '€3.00', 'DOP', Color(0xFF8C7355)),
-  'postage-lemon': ('LIMONE', '35¢', 'SORRENTO', Color(0xFFD9822B)),
-  'postage-whisk': ('PATISSERIE', '50¢', 'ATELIER', Color(0xFF4A6B53)),
-};
 
 final List<CulinaryStampDef> postageStampDefs = [
   CulinaryStampDef(

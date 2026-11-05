@@ -11,13 +11,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../core/media/recipe_art.dart';
+import '../features/voice/read_aloud_controller.dart';
+import '../features/voice/spoken_text.dart';
 import 'audio_chime_service.dart';
 import 'chef_toast_service.dart';
 import 'providers.dart';
 import 'router.dart';
 
 /// Bump when the bundled starter recipes change, to offer new ones once.
-const _starterSeedVersion = 1;
+/// v2: starter recipes come with journal decorations.
+const _starterSeedVersion = 2;
 const _starterSeedKey = 'seed.starter_version';
 
 Future<void> bootstrapAndRun() async {
@@ -25,6 +28,10 @@ Future<void> bootstrapAndRun() async {
   final container = ProviderContainer();
   final logger = container.read(appLoggerProvider);
   _installErrorHandlers(logger);
+
+  // Keep voice preferences loaded so a finishing timer can check them
+  // synchronously.
+  container.listen(voiceSettingsProvider, (_, __) {});
 
   // Timer alarms surface from anywhere in the app, not just the recipe page.
   container.read(kitchenTimersProvider).onFinished = (timer) {
@@ -35,6 +42,12 @@ Future<void> bootstrapAndRun() async {
       type: ChefToastType.alarm,
       duration: const Duration(seconds: 8),
     );
+    final voice = container.read(voiceSettingsProvider).valueOrNull ?? const VoiceSettings();
+    if (voice.announceTimers) {
+      unawaited(container
+          .read(readAloudProvider)
+          .say('timer:${timer.id}', SpokenRecipe.timerDone(timer.label, recipeTitle: timer.recipeTitle)));
+    }
   };
 
   runApp(UncontrolledProviderScope(container: container, child: const ChefApp()));
@@ -70,19 +83,38 @@ Future<void> _seedStarterRecipesOnce(ProviderContainer container, AppLogger logg
   try {
     final prefs = container.read(preferencesRepositoryProvider);
     final seeded = await prefs.readJson(_starterSeedKey);
-    if (seeded is int && seeded >= _starterSeedVersion) return;
+    final previous = seeded is int ? seeded : 0;
+    if (previous >= _starterSeedVersion) return;
 
     final raw = await rootBundle.loadString('assets/seed/starter_recipes.json');
     final parsed = jsonDecode(raw);
     if (parsed is! List) return;
     final recipes = parsed.whereType<Map<String, dynamic>>().map(parseStarterRecipe).toList();
-    final res = await container.read(recipeRepositoryProvider).seedStarterRecipes(recipes);
+    final repo = container.read(recipeRepositoryProvider);
+    final res = await repo.seedStarterRecipes(recipes);
+    if (previous >= 1) await decorateStarterRecipes(repo, recipes);
     if (res.isSuccess) await prefs.writeJson(_starterSeedKey, _starterSeedVersion);
     logger.info('Starter recipes seeded', feature: 'bootstrap', metadata: {'count': res.orNull});
   } catch (e, st) {
     // Never block launch on optional sample content.
     logger.error('Starter seeding failed', feature: 'bootstrap', error: e, stackTrace: st);
   }
+}
+
+/// Adds the bundled stickers to starter recipes from an older install —
+/// only to ones the user hasn't decorated (or deleted) themselves.
+@visibleForTesting
+Future<int> decorateStarterRecipes(RecipeRepository repo, List<Recipe> starters) async {
+  var count = 0;
+  for (final starter in starters) {
+    if (starter.stickers.isEmpty && starter.washiTapes.isEmpty) continue;
+    final existing = (await repo.getRecipeById(starter.id)).orNull;
+    if (existing == null || existing.isDeleted) continue;
+    if (existing.stickers.isNotEmpty || existing.washiTapes.isNotEmpty) continue;
+    final saved = await repo.saveRecipe(existing.copyWith(stickers: starter.stickers, washiTapes: starter.washiTapes));
+    if (saved.isSuccess) count++;
+  }
+  return count;
 }
 
 class ChefApp extends ConsumerWidget {

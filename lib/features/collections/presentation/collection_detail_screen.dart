@@ -7,7 +7,8 @@ import 'package:recipe_domain/recipe_domain.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/recipe_image.dart';
-import '../../library/presentation/widgets/recipe_card.dart';
+import '../../../app/widgets/food_art.dart';
+import '../../library/presentation/widgets/bookshelf.dart';
 import 'collections_screen.dart';
 
 class CollectionDetailScreen extends ConsumerWidget {
@@ -68,6 +69,7 @@ class CollectionDetailScreen extends ConsumerWidget {
           body: inCollection.isEmpty
               ? EmptyStateScene(
                   icon: Icons.playlist_add_rounded,
+                  illustration: const DoodleCluster(ids: ['food-paella', 'food-lemon', 'food-chili']),
                   title: 'No recipes here yet',
                   message: 'Add recipes from your cookbook to this collection.',
                   actionLabel: 'Add recipes',
@@ -83,10 +85,9 @@ class CollectionDetailScreen extends ConsumerWidget {
                     ),
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      sliver: RecipeGrid(
+                      sliver: BookshelfSliver(
                         recipes: inCollection,
                         onOpen: (r) => context.push('/recipe/${r.id}'),
-                        onToggleFavorite: (r) => ref.read(recipeRepositoryProvider).toggleFavorite(r.id),
                       ),
                     ),
                     const SliverToBoxAdapter(child: SizedBox(height: 40)),

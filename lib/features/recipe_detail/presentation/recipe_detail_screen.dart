@@ -12,11 +12,12 @@ import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/recipe_image.dart';
-import 'widgets/keepsake_board.dart';
 import 'widgets/recipe_sections.dart';
 import 'widgets/recipe_sheets.dart';
+import '../../voice/listen_button.dart';
+import '../../../app/widgets/food_art.dart';
 
-enum _MenuAction { collection, decorate, cover, tip, copy, delete }
+enum _MenuAction { collection, journal, decorate, cover, tip, copy, delete }
 
 class RecipeDetailScreen extends ConsumerStatefulWidget {
   final String recipeId;
@@ -29,7 +30,6 @@ class RecipeDetailScreen extends ConsumerStatefulWidget {
 class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   int? _servings;
   final Set<String> _checked = {};
-  bool _decorating = false;
 
   int _servingsFor(Recipe r) => _servings ?? math.max(1, r.baseServings.toDouble().round());
 
@@ -52,15 +52,15 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
     switch (action) {
       case _MenuAction.collection:
         await showAddToCollectionSheet(context, recipe);
+      case _MenuAction.journal:
+        context.go('/?view=journal&recipe=${recipe.id}');
       case _MenuAction.decorate:
-        setState(() => _decorating = true);
+        context.go('/?view=journal&recipe=${recipe.id}&decorate=1');
       case _MenuAction.cover:
         final choice = await showCoverPhotoSheet(context, theme: recipe.theme);
         if (choice == null || !mounted) return;
         await _save(
-          choice.source == null
-              ? recipe.copyWith(clearCoverImage: true)
-              : recipe.copyWith(coverImage: choice.source),
+          choice.source == null ? recipe.copyWith(clearCoverImage: true) : recipe.copyWith(coverImage: choice.source),
           'Cover updated',
         );
       case _MenuAction.tip:
@@ -74,7 +74,9 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
         if (tip != null && mounted) await _save(recipe.copyWith(chefTip: tip.trim()), 'Tip saved');
       case _MenuAction.copy:
         await Clipboard.setData(ClipboardData(text: _asPlainText(recipe)));
-        if (mounted) ChefToastService.show(context: context, title: 'Recipe copied to clipboard', type: ChefToastType.success);
+        if (mounted) {
+          ChefToastService.show(context: context, title: 'Recipe copied to clipboard', type: ChefToastType.success);
+        }
       case _MenuAction.delete:
         await _confirmDelete(recipe);
     }
@@ -131,7 +133,11 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
       b.writeln('${s + 1}. ${r.steps[s].instructionShort}');
       if (r.steps[s].instructionDetail?.isNotEmpty ?? false) b.writeln('   ${r.steps[s].instructionDetail}');
     }
-    if (r.chefTip != null && r.chefTip!.isNotEmpty) b..writeln()..writeln('Tip: ${r.chefTip}');
+    if (r.chefTip != null && r.chefTip!.isNotEmpty) {
+      b
+        ..writeln()
+        ..writeln('Tip: ${r.chefTip}');
+    }
     return b.toString();
   }
 
@@ -178,67 +184,77 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
       onToggle: (id) => setState(() => _checked.contains(id) ? _checked.remove(id) : _checked.add(id)),
       onClearChecks: () => setState(_checked.clear),
     );
-    final overview = _Overview(recipe: recipe, onEditTip: () => _onMenu(_MenuAction.tip, recipe), decorating: _decorating);
+    final overview = _Overview(recipe: recipe, servings: servings, onEditTip: () => _onMenu(_MenuAction.tip, recipe));
     final nutrition = NutritionSection(recipe: recipe, report: report);
     final method = MethodSection(recipe: recipe);
-    final keepsake = KeepsakeBoard(recipe: recipe, editing: _decorating, onDone: () => setState(() => _decorating = false));
+    final keepsake = _KeepsakeCard(
+      recipe: recipe,
+      onOpen: () => _onMenu(_MenuAction.journal, recipe),
+      onDecorate: () => _onMenu(_MenuAction.decorate, recipe),
+    );
     final notes = recipe.notes.isEmpty ? null : _NotesCard(notes: recipe.notes);
 
     return Scaffold(
-      body: LayoutBuilder(builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 980;
-        const gap = SizedBox(height: 16);
-        final body = wide
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: Column(children: [overview, gap, nutrition, gap, ingredients]),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    flex: 6,
-                    child: Column(children: [method, if (notes != null) ...[gap, notes], gap, keepsake]),
-                  ),
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  overview,
-                  gap,
-                  ingredients,
-                  gap,
-                  method,
-                  gap,
-                  nutrition,
-                  if (notes != null) ...[gap, notes],
-                  gap,
-                  keepsake,
-                ],
-              );
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 980;
+          const gap = SizedBox(height: 16);
+          final body = wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 5, child: Column(children: [overview, gap, nutrition, gap, ingredients])),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      flex: 6,
+                      child: Column(
+                        children: [
+                          method,
+                          if (notes != null) ...[gap, notes],
+                          gap,
+                          keepsake,
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    overview,
+                    gap,
+                    ingredients,
+                    gap,
+                    method,
+                    gap,
+                    nutrition,
+                    if (notes != null) ...[gap, notes],
+                    gap,
+                    keepsake,
+                  ],
+                );
 
-        return CustomScrollView(
-          slivers: [
-            _HeroAppBar(
-              recipe: recipe,
-              expandedHeight: wide ? 360 : 280,
-              onFavorite: () => _toggleFavorite(recipe),
-              onEdit: () => context.push('/editor/${recipe.id}'),
-              onMenu: (a) => _onMenu(a, recipe),
-            ),
-            SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 120), child: body),
+          return CustomScrollView(
+            slivers: [
+              _HeroAppBar(
+                recipe: recipe,
+                expandedHeight: wide ? 360 : 280,
+                onFavorite: () => _toggleFavorite(recipe),
+                onEdit: () => context.push('/editor/${recipe.id}'),
+                onMenu: (a) => _onMenu(a, recipe),
+              ),
+              SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1200),
+                    child: Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 120), child: body),
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      }),
+            ],
+          );
+        },
+      ),
       bottomNavigationBar: _CookBar(
         enabled: recipe.steps.isNotEmpty,
         onCook: () => context.push('/cook/${recipe.id}?servings=$servings'),
@@ -267,9 +283,9 @@ class _HeroAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.chefColors;
     Widget circle(Widget child) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Material(color: c.surfacePaper.withValues(alpha: 0.9), shape: const CircleBorder(), child: child),
-        );
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Material(color: c.surfacePaper.withValues(alpha: 0.9), shape: const CircleBorder(), child: child),
+    );
 
     return SliverAppBar(
       pinned: true,
@@ -280,27 +296,56 @@ class _HeroAppBar extends StatelessWidget {
       leading: circle(BackButton(onPressed: () => context.canPop() ? context.pop() : context.go('/'))),
       title: _CollapsedTitle(title: recipe.title),
       actions: [
-        circle(IconButton(
-          tooltip: recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites',
-          onPressed: onFavorite,
-          icon: Icon(
-            recipe.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: recipe.isFavorite ? c.accentTomato : c.contentPrimary,
+        circle(
+          IconButton(
+            tooltip: recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites',
+            onPressed: onFavorite,
+            icon: Icon(
+              recipe.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: recipe.isFavorite ? c.accentTomato : c.contentPrimary,
+            ),
           ),
-        )),
+        ),
+        circle(
+          IconButton(
+            tooltip: 'Open in journal',
+            onPressed: () => onMenu(_MenuAction.journal),
+            icon: const Icon(Icons.auto_stories_outlined),
+          ),
+        ),
         circle(IconButton(tooltip: 'Edit recipe', onPressed: onEdit, icon: const Icon(Icons.edit_outlined))),
-        circle(PopupMenuButton<_MenuAction>(
-          tooltip: 'More options',
-          onSelected: onMenu,
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: _MenuAction.collection, child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Save to collection'))),
-            PopupMenuItem(value: _MenuAction.cover, child: ListTile(leading: Icon(Icons.image_outlined), title: Text('Change cover photo'))),
-            PopupMenuItem(value: _MenuAction.tip, child: ListTile(leading: Icon(Icons.lightbulb_outline_rounded), title: Text('Edit chef’s tip'))),
-            PopupMenuItem(value: _MenuAction.decorate, child: ListTile(leading: Icon(Icons.auto_fix_high_outlined), title: Text('Decorate page'))),
-            PopupMenuItem(value: _MenuAction.copy, child: ListTile(leading: Icon(Icons.copy_rounded), title: Text('Copy as text'))),
-            PopupMenuItem(value: _MenuAction.delete, child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Delete'))),
-          ],
-        )),
+        circle(
+          PopupMenuButton<_MenuAction>(
+            tooltip: 'More options',
+            onSelected: onMenu,
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _MenuAction.collection,
+                child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Save to collection')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.cover,
+                child: ListTile(leading: Icon(Icons.image_outlined), title: Text('Change cover photo')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.tip,
+                child: ListTile(leading: Icon(Icons.lightbulb_outline_rounded), title: Text('Edit chef’s tip')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.decorate,
+                child: ListTile(leading: Icon(Icons.auto_fix_high_outlined), title: Text('Decorate in journal')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.copy,
+                child: ListTile(leading: Icon(Icons.copy_rounded), title: Text('Copy as text')),
+              ),
+              PopupMenuItem(
+                value: _MenuAction.delete,
+                child: ListTile(leading: Icon(Icons.delete_outline_rounded), title: Text('Delete')),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(width: 8),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -334,9 +379,9 @@ class _CollapsedTitle extends StatelessWidget {
 
 class _Overview extends StatelessWidget {
   final Recipe recipe;
+  final int servings;
   final VoidCallback onEditTip;
-  final bool decorating;
-  const _Overview({required this.recipe, required this.onEditTip, required this.decorating});
+  const _Overview({required this.recipe, required this.servings, required this.onEditTip});
 
   @override
   Widget build(BuildContext context) {
@@ -366,6 +411,16 @@ class _Overview extends StatelessWidget {
             if (recipe.status == RecipeStatus.draft) const _MetaChip(icon: Icons.edit_note_rounded, label: 'Draft'),
           ],
         ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ListenButton(
+            sessionId: 'recipe:${recipe.id}',
+            label: 'Read recipe aloud',
+            tonal: true,
+            script: () => recipeScript(recipe, servings: servings.toDouble()),
+          ),
+        ),
         if (recipe.moodStamps.isNotEmpty) ...[
           const SizedBox(height: 10),
           Wrap(
@@ -384,7 +439,7 @@ class _Overview extends StatelessWidget {
             ],
           ),
         ],
-        if ((recipe.chefTip?.trim().isNotEmpty ?? false) || decorating) ...[
+        if (recipe.chefTip?.trim().isNotEmpty ?? false) ...[
           const SizedBox(height: 16),
           ChefCard(
             color: c.yolkSoft,
@@ -416,10 +471,10 @@ class _Overview extends StatelessWidget {
   }
 
   static String _difficulty(RecipeDifficulty d) => switch (d) {
-        RecipeDifficulty.easy => 'Easy',
-        RecipeDifficulty.medium => 'Medium',
-        RecipeDifficulty.hard => 'Challenging',
-      };
+    RecipeDifficulty.easy => 'Easy',
+    RecipeDifficulty.medium => 'Medium',
+    RecipeDifficulty.hard => 'Challenging',
+  };
 }
 
 class _MetaChip extends StatelessWidget {
@@ -438,7 +493,9 @@ class _MetaChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: c.contentSecondary),
           const SizedBox(width: 6),
-          Flexible(child: Text(label, style: context.chefText.labelMedium, overflow: TextOverflow.ellipsis)),
+          Flexible(
+            child: Text(label, style: context.chefText.labelMedium, overflow: TextOverflow.ellipsis),
+          ),
         ],
       ),
     );
@@ -482,7 +539,9 @@ class _CookBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.outlineSubtle))),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: c.outlineSubtle)),
+          ),
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
           // heightFactor: 1 — as a bottomNavigationBar this gets loose
           // full-screen constraints; a plain Center would take them all.
@@ -501,6 +560,65 @@ class _CookBar extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Preview of the recipe's journal pages with a way in.
+class _KeepsakeCard extends StatelessWidget {
+  final Recipe recipe;
+  final VoidCallback onOpen;
+  final VoidCallback onDecorate;
+  const _KeepsakeCard({required this.recipe, required this.onOpen, required this.onDecorate});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final count = recipe.stickers.length + recipe.washiTapes.length;
+    final doodle =
+        FoodArt.doodleFor([recipe.title, ...recipe.ingredients.map((i) => i.displayName)]) ??
+        FoodArt.fallbackDoodle(recipe.id);
+    return ChefCard(
+      onTap: onOpen,
+      child: Row(
+        children: [
+          FoodDoodle(id: doodle, size: 64, rotation: -6),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Keepsake pages', style: t.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  count == 0
+                      ? 'See this recipe as a journal spread, and decorate it with stamps and washi tape.'
+                      : '$count decoration${count == 1 ? '' : 's'} on this recipe’s journal pages.',
+                  style: t.bodySmall?.copyWith(color: c.contentSecondary),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: onOpen,
+                      icon: const Icon(Icons.auto_stories_outlined, size: 18),
+                      label: const Text('Open journal'),
+                    ),
+                    TextButton.icon(
+                      onPressed: onDecorate,
+                      icon: const Icon(Icons.auto_fix_high_outlined, size: 18),
+                      label: const Text('Decorate'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

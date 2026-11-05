@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
+import '../../../app/widgets/food_art.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/nutrition_widgets.dart';
 import '../../../core/media/image_prep.dart';
@@ -332,11 +333,32 @@ class _MealResultState extends ConsumerState<_MealResult> {
                 children: [
                   _Photo(request: widget.request),
                   const SizedBox(height: 16),
-                  Text(a.title, style: t.headlineSmall),
-                  if (a.description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(a.description, style: t.bodyMedium?.copyWith(color: c.contentSecondary)),
-                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(a.title, style: t.headlineSmall),
+                            if (a.description.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(a.description, style: t.bodyMedium?.copyWith(color: c.contentSecondary)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ExcludeSemantics(
+                        child: renderCulinaryStampById(
+                              FoodArt.stampFor([a.title, ...a.items.map((i) => i.name)]),
+                              size: 58,
+                              rotation: 6,
+                            ) ??
+                            const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -632,6 +654,10 @@ class _IngredientsResultState extends ConsumerState<_IngredientsResult> {
               children: [
                 for (final ing in a.detectedIngredients)
                   FilterChip(
+                    avatar: switch (FoodArt.doodleFor([ing])) {
+                      final String id => FoodDoodle(id: id, size: 22),
+                      null => null,
+                    },
                     label: Text(ing),
                     selected: _selected.contains(ing),
                     onSelected: (v) => setState(() => v ? _selected.add(ing) : _selected.remove(ing)),

@@ -69,7 +69,7 @@ void main() {
       expect(find.text(tab), findsWidgets, reason: '$tab tab');
     }
 
-    // Recipe detail: ingredients scale with servings.
+    // Opening a book shows its journal spread; ingredients scale with servings.
     await tester.tap(find.text('Heirloom Tomato Salad'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 1');
@@ -95,9 +95,12 @@ void main() {
     await tester.tap(find.text('Back to recipe'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 5');
-    await tester.pageBack();
+    // Back in the journal; return to the bookshelf.
+    expect(find.text('Mise en place'), findsOneWidget);
+    await tester.tap(find.byTooltip('Bookshelf'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 6');
+    expect(find.text('Your recipes'), findsOneWidget);
 
     // Scan without AI configured explains how to enable it.
     await tester.tap(find.text('Scan').last);
@@ -120,12 +123,21 @@ void main() {
     await _teardown(tester, db);
   });
 
-  testWidgets('desktop: navigation rail and two-column recipe layout render without overflow', (tester) async {
+  testWidgets('desktop: navigation rail, journal spread and two-column recipe layout render without overflow', (tester) async {
     final db = await _pumpApp(tester, const Size(1366, 900));
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
 
+    // The journal opens as a two-page spread with index tabs.
     await tester.tap(find.text('Heirloom Tomato Salad'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'journal spread');
+    expect(find.text('Mise en place'), findsOneWidget);
+    expect(find.text('METHOD & TIMERS'), findsOneWidget);
+    expect(find.text('Recipe 1 of 1'), findsOneWidget);
+
+    // Details: two-column recipe page with nutrition.
+    await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
     expect(find.text('Method'), findsOneWidget);
     expect(find.text('Nutrition'), findsOneWidget);

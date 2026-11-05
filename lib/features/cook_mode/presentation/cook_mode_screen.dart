@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:app_contracts/app_contracts.dart';
@@ -15,6 +16,9 @@ import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/step_timer_button.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sections.dart';
+import '../../voice/listen_button.dart';
+import '../../voice/read_aloud_controller.dart';
+import '../../voice/spoken_text.dart';
 
 /// Distraction-free, step-by-step cooking.
 ///
@@ -39,6 +43,21 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   String? _sessionId;
   late final ScreenAwakeService _awake = ref.read(screenAwakeServiceProvider);
   late final CookingSessionRepository _sessions = ref.read(cookingSessionRepositoryProvider);
+  late final ReadAloudController _voice = ref.read(readAloudProvider);
+  Recipe? _recipe;
+  bool _sessionReady = false;
+  bool _initialReadDone = false;
+  bool _voiceFailureShown = false;
+
+  String get _voicePrefix => 'cook:${widget.recipeId}';
+  String _stepSession(int index) => '$_voicePrefix:step:$index';
+
+  /// Set as soon as the toggle is tapped, so the next page turn already
+  /// speaks even before the saved preference streams back.
+  bool? _autoReadOverride;
+
+  bool get _autoRead =>
+      _autoReadOverride ?? (ref.read(voiceSettingsProvider).valueOrNull ?? const VoiceSettings()).readStepsInCookMode;
 
   @override
   void initState() {
@@ -50,6 +69,7 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   @override
   void dispose() {
     _awake.disable();
+    unawaited(_voice.stopIfReadingPrefix(_voicePrefix));
     if (_sessionId != null && !_finished) _sessions.pauseSession(_sessionId!);
     _pages.dispose();
     super.dispose();
@@ -68,6 +88,7 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
         });
         ChefToastService.show(context: context, title: 'Picking up at step ${resumeAt + 1}', duration: const Duration(seconds: 2));
       }
+      setState(() => _sessionReady = true);
       return;
     }
     final started = await _sessions.startSession(
@@ -76,6 +97,43 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
       selectedServings: Rational.fromDouble(widget.servings ?? 2, 0.001),
     );
     _sessionId = started.orNull?.id;
+    if (mounted) setState(() => _sessionReady = true);
+  }
+
+  /// Reads step [index] aloud. Failures are reported once per visit, so a
+  /// device without a voice doesn't toast on every page turn.
+  Future<void> _readStep(int index) async {
+    final recipe = _recipe;
+    if (recipe == null || index < 0 || index >= recipe.steps.length) return;
+    final step = recipe.steps[index];
+    final failure = await _voice.read(_stepSession(index), [
+      SpokenSegment(SpokenRecipe.stepId(step), SpokenRecipe.step(step, number: index + 1, total: recipe.steps.length)),
+    ]);
+    if (failure != null && mounted && !_voiceFailureShown) {
+      _voiceFailureShown = true;
+      ChefToastService.show(
+        context: context,
+        title: failure.message,
+        description: failure.recoveryAction,
+        type: ChefToastType.error,
+      );
+    }
+  }
+
+  Future<void> _toggleAutoRead() async {
+    final current = ref.read(voiceSettingsProvider).valueOrNull ?? const VoiceSettings();
+    final enable = !_autoRead;
+    setState(() => _autoReadOverride = enable);
+    await saveVoiceSettings(ref, current.copyWith(readStepsInCookMode: enable));
+    if (!mounted) return;
+    // No toast: it would cover the step buttons. The toggle's icon and the
+    // voice itself are the feedback.
+    if (enable) {
+      _voiceFailureShown = false;
+      unawaited(_readStep(_index));
+    } else {
+      unawaited(_voice.stopIfReadingPrefix(_voicePrefix));
+    }
   }
 
   void _goTo(int index, int total) {
@@ -87,12 +145,19 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   void _onPageChanged(int index) {
     setState(() => _index = index);
     if (_sessionId != null) _sessions.updateActiveStep(sessionId: _sessionId!, stepPosition: index + 1);
+    if (_autoRead && _initialReadDone) unawaited(_readStep(index));
   }
 
   void _finish() {
     audioChime.playSuccessFanfare();
     setState(() => _finished = true);
     if (_sessionId != null) _sessions.completeSession(_sessionId!);
+    if (_autoRead) {
+      final title = _recipe?.title ?? 'your dish';
+      unawaited(_voice.say('$_voicePrefix:finish', SpokenText.normalize('Chef’s kiss! Enjoy your $title.')));
+    } else {
+      unawaited(_voice.stopIfReadingPrefix(_voicePrefix));
+    }
   }
 
   void _close() => context.canPop() ? context.pop() : context.go('/recipe/${widget.recipeId}');
@@ -125,6 +190,17 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
     final steps = recipe.steps;
     final total = steps.length;
     final servings = widget.servings ?? recipe.baseServings.toDouble();
+    _recipe = recipe;
+    if (_sessionReady && !_initialReadDone) {
+      _initialReadDone = true;
+      if (_autoRead && total > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_readStep(_index));
+        });
+      }
+    }
+    final voiceOn =
+        _autoReadOverride ?? (ref.watch(voiceSettingsProvider).valueOrNull ?? const VoiceSettings()).readStepsInCookMode;
 
     return CallbackShortcuts(
       bindings: {
@@ -149,6 +225,12 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
               ],
             ),
             actions: [
+              IconButton(
+                tooltip: voiceOn ? 'Stop reading steps aloud' : 'Read steps aloud',
+                isSelected: voiceOn,
+                icon: Icon(voiceOn ? Icons.record_voice_over_rounded : Icons.voice_over_off_rounded),
+                onPressed: total == 0 ? null : _toggleAutoRead,
+              ),
               IconButton(
                 tooltip: 'Ingredients',
                 icon: const Icon(Icons.format_list_bulleted_rounded),
@@ -193,6 +275,7 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
                                 number: i + 1,
                                 total: total,
                                 servings: servings,
+                                voiceSession: _stepSession(i),
                               ),
                             ),
                           ),
@@ -224,8 +307,24 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            Text('Ingredients', style: ctx.chefText.headlineSmall),
-            Text('For ${KitchenFormat.quantity(servings, null)} servings', style: ctx.chefText.bodySmall),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ingredients', style: ctx.chefText.headlineSmall),
+                      Text('For ${KitchenFormat.quantity(servings, null)} servings', style: ctx.chefText.bodySmall),
+                    ],
+                  ),
+                ),
+                ListenButton(
+                  sessionId: '$_voicePrefix:ingredients',
+                  script: () => ingredientsScript(recipe, servings: servings),
+                  label: 'Read',
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             for (final ing in recipe.ingredients)
               Padding(
@@ -253,8 +352,16 @@ class _StepPage extends StatelessWidget {
   final int number;
   final int total;
   final double servings;
+  final String voiceSession;
 
-  const _StepPage({required this.recipe, required this.step, required this.number, required this.total, required this.servings});
+  const _StepPage({
+    required this.recipe,
+    required this.step,
+    required this.number,
+    required this.total,
+    required this.servings,
+    required this.voiceSession,
+  });
 
   /// Ingredients whose head noun appears in this step's text.
   List<RecipeIngredient> _mentioned() {
@@ -293,6 +400,15 @@ class _StepPage extends StatelessWidget {
               Semantics(
                 header: true,
                 child: Text(step.instructionShort, style: t.headlineLarge?.copyWith(height: 1.3)),
+              ),
+              const SizedBox(height: 12),
+              ListenButton(
+                sessionId: voiceSession,
+                label: 'Read step',
+                tonal: true,
+                script: () => [
+                  SpokenSegment(SpokenRecipe.stepId(step), SpokenRecipe.step(step, number: number, total: total)),
+                ],
               ),
               if (step.instructionDetail != null && step.instructionDetail!.isNotEmpty) ...[
                 const SizedBox(height: 14),

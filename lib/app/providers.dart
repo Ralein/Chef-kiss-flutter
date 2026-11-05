@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../core/ai/ai_connection.dart';
+import '../core/platform/flutter_tts_speech_service.dart';
 import '../core/platform/wakelock_screen_awake_service.dart';
 import '../core/timers/kitchen_timers.dart';
 import '../data/db/app_database.dart';
@@ -26,6 +27,7 @@ import '../features/sync/data/in_memory_cloud_sync_server.dart';
 import '../features/sync/data/local_auth_repository.dart';
 import '../features/sync/data/remote_backup_repository_impl.dart';
 import '../features/sync/services/cloud_encryption_service.dart';
+import '../features/voice/read_aloud_controller.dart';
 
 // --- Environment & infrastructure ------------------------------------------
 
@@ -45,7 +47,13 @@ final screenAwakeServiceProvider = Provider<ScreenAwakeService>((ref) => Wakeloc
 
 final localAlertServiceProvider = Provider<LocalAlertService>((ref) => FakeLocalAlertService());
 
-final speechOutputServiceProvider = Provider<SpeechOutputService>((ref) => FakeSpeechOutputService());
+/// The device's text-to-speech voice. Tests override this with
+/// [FakeSpeechOutputService].
+final speechOutputServiceProvider = Provider<SpeechOutputService>((ref) {
+  final service = FlutterTtsSpeechService();
+  ref.onDispose(service.stop);
+  return service;
+});
 
 final speechCommandServiceProvider = Provider<SpeechCommandService>((ref) => FakeSpeechCommandService());
 
@@ -56,6 +64,26 @@ final voiceCookAssistantProvider = Provider<VoiceCookAssistant>((ref) {
     logger: ref.watch(appLoggerProvider),
   );
 });
+
+// --- Read aloud -----------------------------------------------------------------
+
+const voiceSettingsKey = 'voice.settings';
+
+final voiceSettingsProvider = StreamProvider<VoiceSettings>((ref) {
+  return ref.watch(preferencesRepositoryProvider).watchJson(voiceSettingsKey).map(VoiceSettings.fromJson);
+});
+
+/// One shared voice for the whole app, so starting to read something new
+/// always stops what was playing.
+final readAloudProvider = ChangeNotifierProvider<ReadAloudController>((ref) {
+  return ReadAloudController(
+    ref.watch(speechOutputServiceProvider),
+    settings: () => ref.read(voiceSettingsProvider).valueOrNull ?? const VoiceSettings(),
+  );
+});
+
+Future<void> saveVoiceSettings(WidgetRef ref, VoiceSettings settings) =>
+    ref.read(preferencesRepositoryProvider).writeJson(voiceSettingsKey, settings.toJson());
 
 /// Shared countdowns for the recipe page and Cook Mode.
 final kitchenTimersProvider = ChangeNotifierProvider<KitchenTimersController>((ref) => KitchenTimersController());

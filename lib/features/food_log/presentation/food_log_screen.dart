@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
+import '../../../app/widgets/food_art.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/nutrition_widgets.dart';
 import '../../../app/widgets/recipe_image.dart';
@@ -178,7 +179,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Column(
                           children: [
-                            Icon(Icons.restaurant_rounded, size: 40, color: c.contentSecondary),
+                            const DoodleCluster(ids: ['food-breakfast-plate', 'food-coffee-cup', 'food-apple'], size: 96),
                             const SizedBox(height: 10),
                             Text(isToday ? 'Nothing logged yet today' : 'Nothing logged this day', style: t.titleMedium),
                             const SizedBox(height: 4),
@@ -352,12 +353,13 @@ class _EntryTile extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: RecipeImage(source: entry.imagePath, placeholderIcon: Icons.restaurant_rounded),
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: FoodPicture(
+              imagePath: entry.imagePath,
+              title: entry.title,
+              homeCooked: entry.source == FoodLogSource.recipe,
             ),
           ),
           const SizedBox(width: 12),

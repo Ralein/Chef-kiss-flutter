@@ -35,7 +35,19 @@ GoRouter createRouter({String initialLocation = '/'}) {
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(path: '/', builder: (context, state) => const LibraryScreen()),
+            GoRoute(
+              path: '/',
+              // `/?view=journal&recipe=<id>[&decorate=1]` opens the journal at a recipe.
+              builder: (context, state) {
+                final q = state.uri.queryParameters;
+                return LibraryScreen(
+                  key: ValueKey('library:${state.uri.query}'),
+                  initialView: q['view'] == 'journal' ? LibraryView.journal : LibraryView.shelf,
+                  initialRecipeId: q['recipe'],
+                  startDecorating: q['decorate'] == '1',
+                );
+              },
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(path: '/scan', builder: (context, state) => const ScanScreen()),

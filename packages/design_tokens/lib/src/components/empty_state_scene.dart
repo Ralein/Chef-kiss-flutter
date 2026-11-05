@@ -9,6 +9,9 @@ class EmptyStateScene extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
+  /// Artwork shown instead of [icon] (for example a cluster of doodles).
+  final Widget? illustration;
+
   const EmptyStateScene({
     super.key,
     required this.icon,
@@ -16,6 +19,7 @@ class EmptyStateScene extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.illustration,
   });
 
   @override
@@ -29,21 +33,24 @@ class EmptyStateScene extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: colors.accentTomato.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Icon(
-                  icon,
-                  size: 44,
-                  color: colors.accentTomato,
+            if (illustration != null)
+              illustration!
+            else
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: colors.accentTomato.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Icon(
+                    icon,
+                    size: 44,
+                    color: colors.accentTomato,
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: ChefSpacing.space4),
             Text(
               title,

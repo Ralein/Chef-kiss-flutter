@@ -16,6 +16,9 @@ import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
 import '../../illustrations/presentation/illustration_approval_screen.dart';
 import '../../sync/presentation/cloud_sync_section.dart';
+import '../../voice/listen_button.dart';
+import '../../voice/read_aloud_controller.dart';
+import '../../voice/spoken_text.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   /// `ai` opens the API-key sheet directly (used by "Set up AI" prompts).
@@ -55,6 +58,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Semantics(header: true, child: Text('Settings', style: t.headlineMedium)),
                 const SizedBox(height: 16),
                 const _AiSection(),
+                const SizedBox(height: 16),
+                const _VoiceSection(),
                 const SizedBox(height: 16),
                 const _GoalsSection(),
                 const SizedBox(height: 16),
@@ -344,6 +349,71 @@ class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
 }
 
 // --- Nutrition goals -------------------------------------------------------------
+
+// --- Read aloud -----------------------------------------------------------------
+
+class _VoiceSection extends ConsumerWidget {
+  const _VoiceSection();
+
+  static const _sample = 'Step 1 of 4. Bring a large pot of salted water to a boil, '
+      'then add 200 g of spaghetti and cook for 10–12 min, until al dente.';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(voiceSettingsProvider).valueOrNull ?? const VoiceSettings();
+    final t = context.chefText;
+    Future<void> save(VoiceSettings next) => saveVoiceSettings(ref, next);
+
+    return _Section(
+      title: 'Read aloud',
+      icon: Icons.record_voice_over_outlined,
+      children: [
+        Text(
+          'Hear recipes and Cook Mode steps read out loud, so your hands can stay in the dough. '
+          'Uses your device’s built-in voice — nothing is sent online.',
+          style: t.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Text('Speaking speed', style: t.labelLarge),
+        const SizedBox(height: 8),
+        SegmentedButton<SpeechPace>(
+          showSelectedIcon: false,
+          segments: [
+            for (final pace in SpeechPace.values) ButtonSegment(value: pace, label: Text(pace.label)),
+          ],
+          selected: {settings.pace},
+          onSelectionChanged: (s) => save(settings.copyWith(pace: s.first)),
+        ),
+        const SizedBox(height: 4),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Read steps in Cook Mode'),
+          subtitle: const Text('Each step is read when you turn to it'),
+          value: settings.readStepsInCookMode,
+          onChanged: (v) => save(settings.copyWith(readStepsInCookMode: v)),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Announce finished timers'),
+          subtitle: const Text('“Your pasta timer is done”'),
+          value: settings.announceTimers,
+          onChanged: (v) => save(settings.copyWith(announceTimers: v)),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ListenButton(
+              sessionId: 'settings:sample',
+              label: 'Play a sample',
+              script: () => [SpokenSegment('sample', SpokenText.normalize(_sample))],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _GoalsSection extends ConsumerWidget {
   const _GoalsSection();

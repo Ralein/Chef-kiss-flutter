@@ -10,8 +10,8 @@ import 'package:recipe_domain/recipe_domain.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
+import '../../../app/widgets/food_art.dart';
 import '../../../app/widgets/kitchen_format.dart';
-import '../../../app/widgets/recipe_image.dart';
 import '../../../core/ai/ai_connection.dart';
 import '../../../core/media/photo_picker.dart';
 import '../../imports/presentation/import_flows.dart';
@@ -192,7 +192,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                SizedBox(height: 84, child: RecipeImage(source: e.imagePath, placeholderIcon: Icons.restaurant_rounded)),
+                                SizedBox(height: 84, child: FoodPicture(imagePath: e.imagePath, title: e.title, radius: 0)),
                                 Padding(
                                   padding: const EdgeInsets.all(8),
                                   child: Column(
