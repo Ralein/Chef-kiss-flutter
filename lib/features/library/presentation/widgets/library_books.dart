@@ -616,7 +616,7 @@ class BookCoverFace extends StatelessWidget {
     final title = Text(
       recipe.title,
       textAlign: TextAlign.center,
-      maxLines: hasArt ? 2 : 5,
+      maxLines: hasArt ? 2 : (look.printed ? 3 : 5),
       overflow: TextOverflow.ellipsis,
       style: TextStyle(fontFamily: kSerifFamily, color: look.ink, fontSize: hasArt ? 11 : 13, height: 1.15),
     );
@@ -651,8 +651,30 @@ class BookCoverFace extends StatelessWidget {
                       ),
                     ],
                   )
+                : look.printed
+                // The print shows all round a label in the middle.
+                ? Center(
+                    child: FractionallySizedBox(
+                      widthFactor: 0.82,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: look.cloth,
+                          borderRadius: BorderRadius.circular(3),
+                          border: frame,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12), child: title),
+                      ),
+                    ),
+                  )
                 : DecoratedBox(
-                    decoration: BoxDecoration(color: look.printed ? look.cloth : null, border: frame),
+                    decoration: BoxDecoration(border: frame),
                     child: Center(
                       child: Padding(padding: const EdgeInsets.all(6), child: title),
                     ),
