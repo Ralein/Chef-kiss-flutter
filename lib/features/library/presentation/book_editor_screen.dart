@@ -166,14 +166,18 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
       children: [
         // Pinned, so the way out never scrolls away with the options.
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: IconButton.outlined(
-              tooltip: 'Close',
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: const Icon(LucideIcons.x),
-            ),
+          padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Semantics(header: true, child: Text('Edit book', style: t.headlineSmall)),
+              ),
+              IconButton.outlined(
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(LucideIcons.x),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -183,24 +187,7 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 children: [
-                  Center(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          const TextSpan(text: 'Edit your '),
-                          TextSpan(
-                            text: 'book',
-                            style: TextStyle(
-                              fontStyle: FontStyle.italic,
-                              color: c.isDark ? const Color(0xFFE3C77F) : c.accentTomato,
-                            ),
-                          ),
-                        ],
-                      ),
-                      style: TextStyle(fontFamily: kSerifFamily, fontSize: 32, color: c.contentPrimary),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   _Preview(recipe: draft, shelf: shelf),
                   const SizedBox(height: 18),
                   TextField(
@@ -209,12 +196,7 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
                     onChanged: (_) => setState(() {}),
                     maxLines: 2,
                     minLines: 1,
-                    style: TextStyle(
-                      fontFamily: kSerifFamily,
-                      fontStyle: FontStyle.italic,
-                      fontSize: 24,
-                      color: c.contentPrimary,
-                    ),
+                    style: t.headlineSmall,
                     decoration: InputDecoration(
                       filled: false,
                       hintText: 'Title',
@@ -474,21 +456,7 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(LucideIcons.sparkle, size: 14, color: c.isDark ? const Color(0xFFE3C77F) : c.accentTomato),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: kSerifFamily,
-                  fontStyle: FontStyle.italic,
-                  fontSize: 19,
-                  color: c.contentPrimary,
-                ),
-              ),
-            ],
-          ),
+          Semantics(header: true, child: Text(label, style: context.chefText.titleMedium)),
           const SizedBox(height: 10),
           child,
           if (hint != null) ...[

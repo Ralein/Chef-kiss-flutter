@@ -90,64 +90,143 @@ const _coverGap = 8.0;
 /// Books keep this clear of decorations, standing or hanging.
 const _clearance = 8.0;
 
-/// Fills the shelves with [recipes] in order, flowing around [decor]: books
-/// take the gaps left to right, never standing under or behind a decoration.
-/// A small library spreads over [ShelfMetrics.minShelves] shelves rather
-/// than crowding the first, and there are always enough shelves for every
-/// decoration.
-List<ShelfRowPlan> layoutShelves(List<Recipe> recipes, List<PlacedDecor> decor, ShelfMetrics m) {
-  final rows = <ShelfRowPlan>[];
+/// Fills the shelves with [recipes], flowing around [decor]: books take the
+/// gaps left to right, never standing under or behind a decoration.
+///
+/// With [arranged] — books put on shelves by hand, as recipe ids — each shelf
+/// takes its own books in their order; any that don't fit move on to the
+/// start of the next shelf, and books never arranged follow the last arranged
+/// one. Otherwise books stand in [recipes] order, a small library spread over
+/// [ShelfMetrics.minShelves] shelves rather than crowding the first. Either
+/// way there are enough shelves for every book and decoration.
+List<ShelfRowPlan> layoutShelves(
+  List<Recipe> recipes,
+  List<PlacedDecor> decor,
+  ShelfMetrics m, {
+  List<List<String>>? arranged,
+}) {
+  final shelves = arranged == null ? null : _arrangedShelves(recipes, arranged);
+  final lastArranged = shelves?.lastIndexWhere((s) => s.isNotEmpty) ?? -1;
   final lastDecorated = decor.fold(-1, (last, d) => math.max(last, d.shelf));
-  var next = 0;
-  for (var r = 0; next < recipes.length || r < ShelfMetrics.minShelves || r <= lastDecorated; r++) {
+  final rows = <ShelfRowPlan>[];
+  var next = 0; // Unarranged: the next recipe to place.
+  var carry = <Recipe>[]; // Arranged: books pushed on from the shelf above.
+  bool booksLeft(int r) => shelves == null ? next < recipes.length : carry.isNotEmpty || r <= lastArranged;
+  for (var r = 0; booksLeft(r) || r < ShelfMetrics.minShelves || r <= lastDecorated; r++) {
     final spots = [
       for (final d in decor)
         if (d.shelf == r) DecorSpot(d, left: m.leftOf(d), size: m.sizeOf(d)),
     ];
     final free = _gaps([for (final s in spots) (s.left - _clearance, s.right + _clearance)], m.inner);
-
-    final remaining = recipes.length - next;
-    final cap = r < ShelfMetrics.minShelves ? (remaining / (ShelfMetrics.minShelves - r)).ceil() : remaining;
-    final books = <BookSpot>[];
-    var faceOutUsed = false;
-    for (final (start, end) in free) {
-      var x = start;
-      BookSpot? previous;
-      while (next < recipes.length && books.length < cap) {
-        final recipe = recipes[next];
-        final display = recipe.bookStyle.display;
-        // Automatic covers: one favorite with art, on every other shelf.
-        final faceOut =
-            display == BookDisplay.cover ||
-            (display == BookDisplay.auto &&
-                r.isEven &&
-                !faceOutUsed &&
-                recipe.isFavorite &&
-                (recipe.coverImage?.isNotEmpty ?? false));
-        final width = faceOut ? BookMetrics.coverWidth(m.shelfHeight) : BookMetrics.spineWidth(recipe, m.scale);
-        final gap = previous == null ? 0.0 : (previous.faceOut || faceOut ? _coverGap : _bookGap);
-        // A shelf with nothing on it takes the next book even if it's too
-        // wide, so there is always a shelf for every book.
-        final bare = spots.isEmpty && books.isEmpty;
-        if (x + gap + width > end && !bare) break;
-        final spot = BookSpot(
-          recipe,
-          faceOut: faceOut,
-          left: x + gap,
-          width: width,
-          height: faceOut ? BookMetrics.coverHeight(m.shelfHeight) : BookMetrics.spineHeight(recipe, m.shelfHeight),
-        );
-        books.add(spot);
-        previous = spot;
-        x = spot.left + width;
-        next++;
-        if (faceOut && display == BookDisplay.auto) faceOutUsed = true;
-      }
-      if (next >= recipes.length || books.length >= cap) break;
+    final List<Recipe> wanted;
+    if (shelves == null) {
+      final remaining = recipes.length - next;
+      final cap = r < ShelfMetrics.minShelves ? (remaining / (ShelfMetrics.minShelves - r)).ceil() : remaining;
+      wanted = recipes.sublist(next, next + cap);
+    } else {
+      wanted = [...carry, if (r < shelves.length) ...shelves[r]];
+    }
+    final books = _fill(wanted, free, row: r, bare: spots.isEmpty, m: m);
+    if (shelves == null) {
+      next += books.length;
+    } else {
+      carry = wanted.sublist(books.length);
     }
     rows.add(ShelfRowPlan(r, books: books, decor: spots));
   }
   return rows;
+}
+
+/// The arranged books that still exist, shelf by shelf, with books never
+/// arranged added after the last arranged one.
+List<List<Recipe>> _arrangedShelves(List<Recipe> recipes, List<List<String>> arranged) {
+  final byId = {for (final r in recipes) r.id: r};
+  final seen = <String>{};
+  final shelves = <List<Recipe>>[];
+  for (final ids in arranged) {
+    final shelf = <Recipe>[];
+    for (final id in ids) {
+      final recipe = byId[id];
+      if (recipe != null && seen.add(id)) shelf.add(recipe);
+    }
+    shelves.add(shelf);
+  }
+  final rest = [
+    for (final r in recipes)
+      if (!seen.contains(r.id)) r,
+  ];
+  final last = shelves.lastIndexWhere((s) => s.isNotEmpty);
+  if (last < 0) return [rest];
+  shelves[last].addAll(rest);
+  return shelves;
+}
+
+/// Stands as many of [wanted] as fit, in order, in the [free] stretches of
+/// shelf [row]. A [bare] shelf (no decorations) always takes the first book,
+/// even one too wide for it, so every book finds a shelf.
+List<BookSpot> _fill(
+  List<Recipe> wanted,
+  List<(double, double)> free, {
+  required int row,
+  required bool bare,
+  required ShelfMetrics m,
+}) {
+  final books = <BookSpot>[];
+  var faceOutUsed = false;
+  var i = 0;
+  for (final (start, end) in free) {
+    var x = start;
+    BookSpot? previous;
+    while (i < wanted.length) {
+      final recipe = wanted[i];
+      final display = recipe.bookStyle.display;
+      // Automatic covers: one favorite with art, on every other shelf.
+      final faceOut =
+          display == BookDisplay.cover ||
+          (display == BookDisplay.auto &&
+              row.isEven &&
+              !faceOutUsed &&
+              recipe.isFavorite &&
+              (recipe.coverImage?.isNotEmpty ?? false));
+      final width = faceOut ? BookMetrics.coverWidth(m.shelfHeight) : BookMetrics.spineWidth(recipe, m.scale);
+      final gap = previous == null ? 0.0 : (previous.faceOut || faceOut ? _coverGap : _bookGap);
+      if (x + gap + width > end && !(bare && books.isEmpty)) break;
+      final spot = BookSpot(
+        recipe,
+        faceOut: faceOut,
+        left: x + gap,
+        width: width,
+        height: faceOut ? BookMetrics.coverHeight(m.shelfHeight) : BookMetrics.spineHeight(recipe, m.shelfHeight),
+      );
+      books.add(spot);
+      previous = spot;
+      x = spot.left + width;
+      i++;
+      if (faceOut && display == BookDisplay.auto) faceOutUsed = true;
+    }
+    if (i >= wanted.length) break;
+  }
+  return books;
+}
+
+/// [shelves] with book [id] taken from wherever it stands and put on
+/// [shelf] at [index].
+List<List<String>> moveBook(List<List<String>> shelves, String id, int shelf, int index) {
+  final moved = [
+    for (final s in shelves)
+      [
+        for (final b in s)
+          if (b != id) b,
+      ],
+  ];
+  while (moved.length <= shelf) {
+    moved.add([]);
+  }
+  moved[shelf].insert(index.clamp(0, moved[shelf].length), id);
+  while (moved.isNotEmpty && moved.last.isEmpty) {
+    moved.removeLast();
+  }
+  return moved;
 }
 
 /// The stretches of [0, length] not covered by [taken].

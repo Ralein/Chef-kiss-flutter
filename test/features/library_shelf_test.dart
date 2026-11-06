@@ -124,6 +124,24 @@ Future<void> _openEditor(WidgetTester tester) async {
 /// One shelf down, on a phone: the space above a plank, the plank, its shadow.
 const _shelf = 190.0 + 14 + 3;
 
+/// Italic text inside [scope].
+Finder _italic(Finder scope) =>
+    find.descendant(of: scope, matching: find.byWidgetPredicate((w) => w is RichText && _anyItalic(w.text)));
+
+bool _anyItalic(InlineSpan span) {
+  if (span.style?.fontStyle == FontStyle.italic) return true;
+  return span is TextSpan && (span.children ?? const []).any(_anyItalic);
+}
+
+/// Which shelf a book stands on: books stand on top of their shelf's plank.
+int _shelfOf(WidgetTester tester, Finder book) {
+  final planks = find.descendant(of: find.byType(LibraryBookcase), matching: find.byType(ShelfPlank));
+  final tops = [for (final e in planks.evaluate()) tester.getRect(find.byWidget(e.widget)).top]..sort();
+  final bottom = tester.getRect(book).bottom;
+  // The first plank is the top edge, above every shelf.
+  return tops.skip(1).toList().indexWhere((t) => (t - bottom).abs() < 1.5);
+}
+
 void main() {
   group('ShelfStyle', () {
     test('round-trips through JSON and tolerates junk', () {
@@ -135,6 +153,11 @@ void main() {
         decor: [
           PlacedDecor(id: 'a', piece: DecorPiece.kettle, shelf: 2, x: 0.4, size: 1.2, flipped: true, seed: 3),
           PlacedDecor(id: 'b', piece: DecorPiece.ivy, shelf: 0, x: 1),
+        ],
+        books: [
+          ['r2', 'r1'],
+          [],
+          ['r3'],
         ],
       );
       expect(ShelfStyle.fromJson(jsonDecode(jsonEncode(style.toJson()))), style);
@@ -211,6 +234,90 @@ void main() {
       expect(rows, hasLength(6));
       expect(rows.last.decor.single.decor, kettle);
     });
+
+    List<List<String>> shelvesOf(List<ShelfRowPlan> rows) => [
+      for (final r in rows) [for (final b in r.books) b.recipe.id],
+    ];
+
+    test('arranged books keep their shelves; books never arranged follow the last one', () {
+      final rows = layoutShelves(
+        library(6),
+        const [],
+        phone,
+        arranged: [
+          ['r3'],
+          [],
+          ['r0', 'r1', 'gone'],
+        ],
+      );
+      expect(shelvesOf(rows), [
+        ['r3'],
+        [],
+        ['r0', 'r1', 'r2', 'r4', 'r5'],
+      ]);
+    });
+
+    test('books that no longer fit move on to the start of the next shelf', () {
+      final recipes = library(16);
+      final rows = layoutShelves(
+        recipes,
+        const [],
+        phone,
+        arranged: [
+          [for (final r in recipes.take(15)) r.id],
+          ['r15'],
+        ],
+      );
+      final first = rows[0].books.length;
+      expect(first, lessThan(15));
+      expect(shelvesOf(rows)[1], [for (final r in recipes.skip(first)) r.id]);
+    });
+
+    test('moving a book takes it off its shelf and puts it where it was dropped', () {
+      expect(
+        moveBook(
+          [
+            ['a', 'b'],
+            ['c'],
+          ],
+          'a',
+          1,
+          1,
+        ),
+        [
+          ['b'],
+          ['c', 'a'],
+        ],
+      );
+      expect(
+        moveBook(
+          [
+            ['a', 'b'],
+          ],
+          'b',
+          0,
+          0,
+        ),
+        [
+          ['b', 'a'],
+        ],
+      );
+      expect(
+        moveBook(
+          [
+            ['a'],
+          ],
+          'a',
+          2,
+          0,
+        ),
+        [
+          [],
+          [],
+          ['a'],
+        ],
+      );
+    });
   });
 
   test('the edit controller adds, duplicates, flips, resizes, moves and removes pieces', () {
@@ -246,6 +353,16 @@ void main() {
     expect(edit.style, shelfLooks[2].style);
     edit.clearDecor();
     expect(edit.pieces, isEmpty);
+
+    // Books stay where they were put, whatever the look.
+    edit.arrangeBooks([
+      ['x'],
+    ]);
+    edit.applyLook(shelfLooks[1]);
+    expect(edit.style.books, [
+      ['x'],
+    ]);
+    expect(edit.style.wall, shelfLooks[1].style.wall);
   });
 
   testWidgets('style editor: looks, walls and decorations preview live; Save keeps them, ✕ discards', (tester) async {
@@ -258,6 +375,7 @@ void main() {
     expect(tester.state(find.byType(ShelfBook)), same(book), reason: 'books stay put, covers and all');
     expect(find.byType(FloatingActionButton), findsNothing, reason: 'nothing competes with the editor');
     expect(find.byType(NavigationBar), findsNothing, reason: 'it takes the whole screen');
+    expect(_italic(find.byType(ShelfStyleEditor)), findsNothing, reason: 'the app\'s own type, no italics');
 
     await _pick(tester, _option('Bistro'));
     expect(_sceneWall(), WallStyle.steel, reason: 'a look sets the wall');
@@ -339,6 +457,67 @@ void main() {
     await _teardown(tester, db);
   });
 
+  testWidgets('books can be held and moved to another shelf, and stay there', (tester) async {
+    final titles = ['Apple pie', 'Banana bread', 'Carrot cake', 'Date squares', 'Eggplant parmesan'];
+    final (db, container) = await _pumpApp(
+      tester,
+      size: const Size(390, 1100),
+      recipes: [for (final (i, t) in titles.indexed) _recipe('r$i', t)],
+    );
+    // From the book's own menu: the editor opens with its panel tucked away.
+    await tester.longPress(_book('Apple pie'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move on the shelves'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ShelfStyleEditor), findsOneWidget);
+    expect(find.text('Looks'), findsNothing, reason: 'the shelves stay in view');
+
+    final from = _shelfOf(tester, _book('Apple pie'));
+    final to = from == 0 ? 1 : from - 1;
+    final hold = await tester.startGesture(tester.getRect(_book('Apple pie')).center);
+    await tester.pump(const Duration(milliseconds: 500));
+    for (var i = 0; i < 2; i++) {
+      await hold.moveBy(Offset(0, (to - from) * _shelf / 2));
+      await tester.pump();
+    }
+    await hold.up();
+    await tester.pumpAndSettle();
+    expect(_shelfOf(tester, _book('Apple pie')), to, reason: 'it lands on the shelf it was dropped on');
+    expect(find.byType(ShelfBook), findsNWidgets(5));
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final stored = await _storedShelf(tester, container);
+    expect(stored.books![to], contains('r0'));
+    expect(_shelfOf(tester, _book('Apple pie')), to, reason: 'the library shows it where it was put');
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('the hanging utensil rail moves like everything else', (tester) async {
+    final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
+    await _openEditor(tester);
+    await tester.tap(find.byTooltip('Hide'));
+    await tester.pumpAndSettle();
+
+    final rail = _inScene(HangingUtensils);
+    final hold = await tester.startGesture(tester.getCenter(rail));
+    await tester.pump(const Duration(milliseconds: 500));
+    for (var i = 0; i < 2; i++) {
+      await hold.moveBy(const Offset(-60, -_shelf / 2));
+      await tester.pump();
+    }
+    await hold.up();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final saved = (await _storedShelf(tester, container)).pieces.singleWhere((d) => d.piece == DecorPiece.rail);
+    expect(saved.shelf, 0, reason: 'up one shelf from where it hung');
+    expect(saved.x, lessThan(1));
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
   testWidgets('pieces drag in from the palette; Back puts the selection down, then closes', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
     await _openEditor(tester);
@@ -372,10 +551,17 @@ void main() {
     await tester.tap(find.text('Edit book'));
     await tester.pumpAndSettle();
     expect(find.byType(BookEditorScreen), findsOneWidget);
+    expect(find.descendant(of: find.byType(BookEditorScreen), matching: find.text('Edit book')), findsOneWidget);
+    expect(_italic(find.byType(BookEditorScreen)), findsNothing, reason: "the app's own type, no italics");
 
     await tester.enterText(find.byType(TextField), 'Grandma’s apple pie');
     await _pick(tester, find.widgetWithText(ChoiceChip, 'Cover'));
     await _pick(tester, find.text('Spine').first);
+    expect(
+      _italic(find.byType(BookEditorScreen)),
+      findsOneWidget,
+      reason: 'italic only to show the "Italic serif" lettering',
+    );
     await _pick(tester, find.text('Italic serif'));
     await _pick(tester, find.bySemanticsLabel('Forest'));
     await _pick(tester, find.text('Raised ribs'));

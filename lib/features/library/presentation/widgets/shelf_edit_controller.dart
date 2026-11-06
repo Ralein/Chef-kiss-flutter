@@ -20,6 +20,17 @@ class DecorDrag {
   DecorDrag.move(PlacedDecor this.placed, this.size) : piece = placed.piece;
 }
 
+/// A book being carried to another spot on the shelves.
+@immutable
+class BookDrag {
+  final String recipeId;
+
+  /// The book's size on screen.
+  final Size size;
+
+  const BookDrag(this.recipeId, this.size);
+}
+
 /// The bookcase being dressed: a working copy of its style, the selected
 /// decoration, and any drag in progress. Shared by the style editor's panels
 /// and the bookcase previewing them.
@@ -45,11 +56,16 @@ class ShelfEditController extends ChangeNotifier {
   String? _selectedId;
   String? _reveal;
   bool _dragging = false;
+  bool _booksMoved = false;
   int _ids = 0;
 
   ShelfStyle get style => _style;
   List<PlacedDecor> get pieces => _style.pieces;
   bool get dragging => _dragging;
+
+  /// Whether a book was moved since the editor opened: the shelves then show
+  /// the books as arranged, whatever order the library is sorted in.
+  bool get booksMoved => _booksMoved;
   PlacedDecor? get selected => _selectedId == null ? null : pieces.where((p) => p.id == _selectedId).firstOrNull;
 
   set style(ShelfStyle style) {
@@ -150,8 +166,17 @@ class ShelfEditController extends ChangeNotifier {
     return (shelf: from, x: near ?? 0.5);
   }
 
+  /// Puts the books on the shelves as [shelves] lists them (recipe ids).
+  void arrangeBooks(List<List<String>> shelves) {
+    _style = _style.copyWith(books: shelves);
+    _booksMoved = true;
+    _selectedId = null;
+    notifyListeners();
+  }
+
+  /// A ready-made room; the books stay where they were put.
   void applyLook(ShelfLook look) {
-    _style = look.style;
+    _style = _style.withLook(look.style);
     _selectedId = null;
     notifyListeners();
   }

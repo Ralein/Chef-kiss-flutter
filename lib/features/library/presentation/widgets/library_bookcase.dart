@@ -16,14 +16,15 @@ import 'shelf_layout.dart';
 /// utensils, pantry jars, pots, candles, plants and flowers — with LED strips
 /// glowing under each shelf and ivy or a utensil rail hanging below.
 ///
-/// With [edit], the bookcase is being dressed: books step back, and every
-/// decoration can be selected, dragged to another spot or shelf, or dropped
-/// in from the editor's palette.
+/// Books stand in [recipes] order, or as [arranged] by hand. With [edit],
+/// the bookcase is being dressed: books and decorations can be picked up and
+/// moved, and decorations dropped in from the editor's palette.
 ///
 /// The wall itself is painted by the screen behind the scroll view.
 class LibraryBookcase extends StatelessWidget {
   final List<Recipe> recipes;
   final ShelfStyle style;
+  final List<List<String>>? arranged;
   final ValueChanged<Recipe> onOpen;
   final ValueChanged<Recipe>? onLongPress;
   final ShelfEditController? edit;
@@ -32,6 +33,7 @@ class LibraryBookcase extends StatelessWidget {
     super.key,
     required this.recipes,
     required this.style,
+    this.arranged,
     required this.onOpen,
     this.onLongPress,
     this.edit,
@@ -42,7 +44,11 @@ class LibraryBookcase extends StatelessWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final metrics = ShelfMetrics.forWidth(constraints.crossAxisExtent);
-        final rows = layoutShelves(recipes, style.pieces, metrics);
+        final rows = layoutShelves(recipes, style.pieces, metrics, arranged: arranged);
+        // The books as they stand now: where a moved book is taken from.
+        final shelves = [
+          for (final r in rows) [for (final b in r.books) b.recipe.id],
+        ];
         if (edit case final edit?) {
           edit.metrics = metrics;
           edit.shelfCount = rows.length;
@@ -59,6 +65,7 @@ class LibraryBookcase extends StatelessWidget {
             }
             return _ShelfRow(
               row: rows[i - 1],
+              shelves: shelves,
               style: style,
               metrics: metrics,
               onOpen: onOpen,
@@ -74,6 +81,7 @@ class LibraryBookcase extends StatelessWidget {
 
 class _ShelfRow extends StatefulWidget {
   final ShelfRowPlan row;
+  final List<List<String>> shelves;
   final ShelfStyle style;
   final ShelfMetrics metrics;
   final ValueChanged<Recipe> onOpen;
@@ -82,6 +90,7 @@ class _ShelfRow extends StatefulWidget {
 
   const _ShelfRow({
     required this.row,
+    required this.shelves,
     required this.style,
     required this.metrics,
     required this.onOpen,
@@ -94,8 +103,9 @@ class _ShelfRow extends StatefulWidget {
 }
 
 class _ShelfRowState extends State<_ShelfRow> {
-  /// Where a piece being dragged over this shelf would land.
-  Rect? _landing;
+  /// Where something dragged over this shelf would land: a box for a
+  /// decoration, a bar between books for a book.
+  ({Rect rect, bool between})? _landing;
 
   ShelfMetrics get _m => widget.metrics;
   static const _inset = ShelfMetrics.inset;
@@ -128,7 +138,11 @@ class _ShelfRowState extends State<_ShelfRow> {
             if (!d.hangs) _piece(d),
           for (final d in row.decor)
             if (d.hangs) _piece(d),
-          if (_landing case final landing?) Positioned.fromRect(rect: landing, child: const _LandingMarker()),
+          if (_landing case final landing?)
+            Positioned.fromRect(
+              rect: landing.rect,
+              child: _LandingMarker(between: landing.between),
+            ),
           Positioned(
             left: 4,
             right: 4,
@@ -140,8 +154,8 @@ class _ShelfRowState extends State<_ShelfRow> {
     );
     // The same widgets whether or not the shelves are being dressed, so
     // switching keeps every book (and its loaded cover) as it is.
-    return DragTarget<DecorDrag>(
-      onWillAcceptWithDetails: (_) => widget.edit != null,
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (d) => widget.edit != null && (d.data is DecorDrag || d.data is BookDrag),
       onMove: (details) {
         final landing = _landingFor(details);
         if (landing != _landing) setState(() => _landing = landing);
@@ -149,29 +163,58 @@ class _ShelfRowState extends State<_ShelfRow> {
       onLeave: (_) => setState(() => _landing = null),
       onAcceptWithDetails: (details) {
         setState(() => _landing = null);
-        final x = _xFor(details);
-        if (details.data.placed case final placed?) {
-          edit?.move(placed.id, shelf: row.index, x: x);
-        } else {
-          edit?.add(details.data.piece, shelf: row.index, x: x);
+        switch (details.data) {
+          case final DecorDrag drag:
+            final x = _m.xFor(_left(details.offset), drag.size.width);
+            if (drag.placed case final placed?) {
+              edit?.move(placed.id, shelf: row.index, x: x);
+            } else {
+              edit?.add(drag.piece, shelf: row.index, x: x);
+            }
+          case final BookDrag drag:
+            final index = _bookIndex(drag, _left(details.offset) + drag.size.width / 2);
+            edit?.arrangeBooks(moveBook(widget.shelves, drag.recipeId, row.index, index));
         }
       },
       builder: (context, _, _) => scene,
     );
   }
 
-  /// The dragged art's left edge, as an x position on this shelf.
-  double _xFor(DragTargetDetails<DecorDrag> details) {
+  /// Where the dragged thing's left edge is, from the left end of this shelf.
+  double _left(Offset globalTopLeft) {
     final box = context.findRenderObject()! as RenderBox;
-    final topLeft = box.globalToLocal(details.offset);
-    return _m.xFor(topLeft.dx - _inset, details.data.size.width);
+    return box.globalToLocal(globalTopLeft).dx - _inset;
   }
 
-  Rect _landingFor(DragTargetDetails<DecorDrag> details) {
-    final size = details.data.size;
-    final left = _inset + _xFor(details) * (_m.inner - size.width).clamp(0.0, double.infinity);
-    final top = details.data.piece.hangs ? 0.0 : _m.room - size.height;
-    return Rect.fromLTWH(left, top, size.width, size.height);
+  /// Where on this shelf a book dropped with its middle at [center] goes:
+  /// before the first book whose middle is further right.
+  int _bookIndex(BookDrag drag, double center) =>
+      widget.row.books.where((b) => b.recipe.id != drag.recipeId && b.left + b.width / 2 < center).length;
+
+  ({Rect rect, bool between})? _landingFor(DragTargetDetails<Object> details) {
+    switch (details.data) {
+      case final DecorDrag drag:
+        final size = drag.size;
+        final x = _m.xFor(_left(details.offset), size.width);
+        final left = _inset + x * (_m.inner - size.width).clamp(0.0, double.infinity);
+        final top = drag.piece.hangs ? 0.0 : _m.room - size.height;
+        return (rect: Rect.fromLTWH(left, top, size.width, size.height), between: false);
+      case final BookDrag drag:
+        final center = _left(details.offset) + drag.size.width / 2;
+        final others = [
+          for (final b in widget.row.books)
+            if (b.recipe.id != drag.recipeId) b,
+        ];
+        final index = _bookIndex(drag, center);
+        final x = others.isEmpty
+            ? center
+            : index < others.length
+            ? others[index].left - 2
+            : others.last.left + others.last.width + 2;
+        final height = drag.size.height;
+        return (rect: Rect.fromLTWH(_inset + x - 1.5, _m.room - height, 3, height), between: true);
+    }
+    return null;
   }
 
   Widget _book(BookSpot b) {
@@ -182,11 +225,12 @@ class _ShelfRowState extends State<_ShelfRow> {
       width: b.width,
       height: b.height,
       scale: _m.scale,
-      onTap: () => widget.onOpen(b.recipe),
-      onLongPress: widget.onLongPress == null ? null : () => widget.onLongPress!(b.recipe),
+      // While dressing the shelves a tap only puts down a selected piece.
+      onTap: edit == null ? () => widget.onOpen(b.recipe) : () => edit.select(null),
+      onLongPress: edit == null && widget.onLongPress != null ? () => widget.onLongPress!(b.recipe) : null,
     );
-    // While the shelves are being dressed, books step back and slide aside
-    // for decorations.
+    // Books slide aside as others (or decorations) move in. Each keeps the
+    // same widgets in and out of the editor, so none reloads its cover.
     return AnimatedPositioned(
       key: ValueKey('book ${b.recipe.id}'),
       duration: edit == null ? Duration.zero : ChefMotion.standard,
@@ -195,9 +239,13 @@ class _ShelfRowState extends State<_ShelfRow> {
       bottom: _m.plank + 3,
       width: b.width,
       height: b.height,
-      child: IgnorePointer(
-        ignoring: edit != null,
-        child: AnimatedOpacity(duration: ChefMotion.quick, opacity: edit == null ? 1 : 0.32, child: book),
+      child: _MovableBook(
+        spot: b,
+        shelf: widget.row.index,
+        shelves: widget.shelves,
+        edit: edit,
+        scale: _m.scale,
+        child: book,
       ),
     );
   }
@@ -213,6 +261,80 @@ class _ShelfRowState extends State<_ShelfRow> {
       width: d.size.width,
       height: d.size.height,
       child: edit == null ? art : _EditablePiece(spot: d, edit: edit, child: art),
+    );
+  }
+}
+
+/// A book that, while the shelves are being dressed ([edit] set), can be
+/// held and carried along the shelf or onto another one.
+class _MovableBook extends StatelessWidget {
+  final BookSpot spot;
+  final int shelf;
+  final List<List<String>> shelves;
+  final ShelfEditController? edit;
+  final double scale;
+  final Widget child;
+
+  const _MovableBook({
+    required this.spot,
+    required this.shelf,
+    required this.shelves,
+    required this.edit,
+    required this.scale,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final edit = this.edit;
+    final id = spot.recipe.id;
+    final onShelf = shelves[shelf];
+    final i = onShelf.indexOf(id);
+    void moveTo(int toShelf, int index) => edit?.arrangeBooks(moveBook(shelves, id, toShelf, index));
+    final size = Size(spot.width, spot.height);
+    final face = spot.faceOut ? BookCoverFace(recipe: spot.recipe) : BookSpine(recipe: spot.recipe, scale: scale);
+    return Semantics(
+      // In the editor a book is something to move rather than to open.
+      excludeSemantics: edit != null,
+      button: edit != null ? true : null,
+      label: edit == null ? null : '${spot.recipe.title}, shelf ${shelf + 1}',
+      hint: edit == null ? null : 'Hold to move it',
+      customSemanticsActions: edit == null
+          ? null
+          : {
+              if (i > 0 || shelf > 0)
+                const CustomSemanticsAction(label: 'Move left'): () =>
+                    i > 0 ? moveTo(shelf, i - 1) : moveTo(shelf - 1, shelves[shelf - 1].length),
+              const CustomSemanticsAction(label: 'Move right'): () =>
+                  i < onShelf.length - 1 ? moveTo(shelf, i + 1) : moveTo(shelf + 1, 0),
+              if (shelf > 0) const CustomSemanticsAction(label: 'Move up a shelf'): () => moveTo(shelf - 1, i),
+              const CustomSemanticsAction(label: 'Move down a shelf'): () => moveTo(shelf + 1, i),
+            },
+      child: LongPressDraggable<Object>(
+        data: BookDrag(id, size),
+        // Only while dressing the shelves.
+        maxSimultaneousDrags: edit == null ? 0 : null,
+        delay: const Duration(milliseconds: 300),
+        feedback: SizedBox.fromSize(
+          size: size,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 14, offset: const Offset(3, 8)),
+              ],
+            ),
+            child: face,
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: child),
+        onDragStarted: () {
+          HapticFeedback.selectionClick();
+          edit?.dragStarted();
+        },
+        onDragUpdate: (u) => edit?.dragMoved(u.globalPosition),
+        onDragEnd: (_) => edit?.dragEnded(),
+        child: child,
+      ),
     );
   }
 }
@@ -254,6 +376,9 @@ class _EditablePiece extends StatelessWidget {
     final feedback = _DragFeedback(size: spot.size, child: child);
     final ghost = Opacity(opacity: 0.25, child: child);
     final data = DecorDrag.move(d, spot.size);
+    // The whole box takes the touch, even for art that ignores touches
+    // itself, like the hanging rail and trailing ivy.
+    final target = ColoredBox(color: const Color(0x00000000), child: shown);
     // A selected piece moves with a plain drag; any other needs a hold, so
     // swiping across the shelves still scrolls them.
     final draggable = selected
@@ -264,7 +389,7 @@ class _EditablePiece extends StatelessWidget {
             onDragStarted: edit.dragStarted,
             onDragUpdate: (u) => edit.dragMoved(u.globalPosition),
             onDragEnd: (_) => edit.dragEnded(),
-            child: shown,
+            child: target,
           )
         : LongPressDraggable<DecorDrag>(
             data: data,
@@ -277,7 +402,7 @@ class _EditablePiece extends StatelessWidget {
             },
             onDragUpdate: (u) => edit.dragMoved(u.globalPosition),
             onDragEnd: (_) => edit.dragEnded(),
-            child: shown,
+            child: target,
           );
 
     return Semantics(
@@ -332,18 +457,25 @@ class _SelectionOutline extends StatelessWidget {
   );
 }
 
-/// Where a dragged piece will land.
+/// Where a dragged decoration will land, or the gap a book will go into.
 class _LandingMarker extends StatelessWidget {
-  const _LandingMarker();
+  final bool between;
+  const _LandingMarker({required this.between});
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.white.withValues(alpha: 0.10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
-      ),
+      decoration: between
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              color: Colors.white.withValues(alpha: 0.85),
+              boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.4), blurRadius: 8)],
+            )
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withValues(alpha: 0.10),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
+            ),
     ),
   );
 }

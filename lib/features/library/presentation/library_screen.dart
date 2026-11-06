@@ -23,10 +23,11 @@ import 'widgets/shelf_edit_controller.dart';
 import 'widgets/shelf_style_editor.dart';
 import 'widgets/recipe_card.dart';
 
-enum _Sort { recent, alphabetical, quickest, fewestIngredients }
+enum _Sort { shelf, recent, alphabetical, quickest, fewestIngredients }
 
 extension on _Sort {
   String get label => switch (this) {
+    _Sort.shelf => 'As on the shelves',
     _Sort.recent => 'Recently updated',
     _Sort.alphabetical => 'A–Z',
     _Sort.quickest => 'Quickest',
@@ -83,7 +84,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Timer? _debounce;
   String _query = '';
   String _filterId = 'all';
-  _Sort _sort = _Sort.recent;
+
+  /// The sort picked from the menu; until then, the shelves' own order once
+  /// books have been arranged there, else most recent first.
+  _Sort? _sortChoice;
   LibraryView? _view;
 
   /// Where Back returns to after opening a book in the journal.
@@ -98,6 +102,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   /// Stands in for [_edit] when nothing is being dressed.
   final _noEdits = ChangeNotifier();
+
+  /// Open the editor with its panel tucked away, to move books.
+  bool _editorCollapsed = false;
+
+  /// The bookcase's style: unsaved while dressing it, else as saved.
+  ShelfStyle get _shelfStyle =>
+      _edit?.style ?? _savedStyle ?? ref.watch(shelfStyleProvider).valueOrNull ?? const ShelfStyle();
+
+  _Sort _sortFor(ShelfStyle style) => _sortChoice ?? (style.books != null ? _Sort.shelf : _Sort.recent);
   late String? _journalRecipeId = widget.initialRecipeId;
   final _journalKey = GlobalKey<JournalViewState>();
 
@@ -125,51 +138,62 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       context: context,
       useRootNavigator: true,
       showDragHandle: true,
+      // As tall as its actions need; scrolls only on a very short screen.
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-              child: Text(recipe.title, style: ctx.chefText.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                '${KitchenFormat.minutes(recipe.totalMinutes)} · serves ${recipe.baseServings.toDisplayString()} · '
-                '${recipe.ingredients.length} ingredients',
-                style: ctx.chefText.bodySmall,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Text(recipe.title, style: ctx.chefText.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
               ),
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.bookOpen),
-              title: const Text('Open in journal'),
-              onTap: () => Navigator.pop(ctx, 'journal'),
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.notebookText),
-              title: const Text('Details & nutrition'),
-              onTap: () => Navigator.pop(ctx, 'details'),
-            ),
-            if (recipe.steps.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  '${KitchenFormat.minutes(recipe.totalMinutes)} · serves ${recipe.baseServings.toDisplayString()} · '
+                  '${recipe.ingredients.length} ingredients',
+                  style: ctx.chefText.bodySmall,
+                ),
+              ),
               ListTile(
-                leading: const Icon(LucideIcons.chefHat),
-                title: const Text('Start cooking'),
-                onTap: () => Navigator.pop(ctx, 'cook'),
+                leading: const Icon(LucideIcons.bookOpen),
+                title: const Text('Open in journal'),
+                onTap: () => Navigator.pop(ctx, 'journal'),
               ),
-            ListTile(
-              leading: const Icon(LucideIcons.paintbrush),
-              title: const Text('Edit book'),
-              subtitle: const Text('Spine colour, lettering, cover or spine'),
-              onTap: () => Navigator.pop(ctx, 'book'),
-            ),
-            ListTile(
-              leading: Icon(recipe.isFavorite ? LucideIcons.heartOff : LucideIcons.heart),
-              title: Text(recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'),
-              onTap: () => Navigator.pop(ctx, 'favorite'),
-            ),
-          ],
+              ListTile(
+                leading: const Icon(LucideIcons.notebookText),
+                title: const Text('Details & nutrition'),
+                onTap: () => Navigator.pop(ctx, 'details'),
+              ),
+              if (recipe.steps.isNotEmpty)
+                ListTile(
+                  leading: const Icon(LucideIcons.chefHat),
+                  title: const Text('Start cooking'),
+                  onTap: () => Navigator.pop(ctx, 'cook'),
+                ),
+              ListTile(
+                leading: const Icon(LucideIcons.paintbrush),
+                title: const Text('Edit book'),
+                subtitle: const Text('Spine colour, lettering, cover or spine'),
+                onTap: () => Navigator.pop(ctx, 'book'),
+              ),
+              if (_view == LibraryView.shelf)
+                ListTile(
+                  leading: const Icon(LucideIcons.move),
+                  title: const Text('Move on the shelves'),
+                  subtitle: const Text('Hold a book, then drag it to a new spot'),
+                  onTap: () => Navigator.pop(ctx, 'move'),
+                ),
+              ListTile(
+                leading: Icon(recipe.isFavorite ? LucideIcons.heartOff : LucideIcons.heart),
+                title: Text(recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'),
+                onTap: () => Navigator.pop(ctx, 'favorite'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -183,6 +207,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         context.push('/cook/${recipe.id}');
       case 'book':
         context.push('/book/${recipe.id}');
+      case 'move':
+        _startStyling(_shelfStyle, collapsed: true);
       case 'favorite':
         _toggleFavorite(recipe);
     }
@@ -205,8 +231,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   /// Dressing the bookcase takes the whole screen, navigation bar included.
-  void _startStyling(ShelfStyle style) {
-    setState(() => _edit = ShelfEditController(style, scroll: _shelfScroll));
+  void _startStyling(ShelfStyle style, {bool collapsed = false}) {
+    setState(() {
+      _edit = ShelfEditController(style, scroll: _shelfScroll);
+      _editorCollapsed = collapsed;
+    });
     ref.read(immersiveModeProvider.notifier).state = true;
   }
 
@@ -268,7 +297,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return filters;
   }
 
-  List<Recipe> _apply(List<Recipe> recipes, List<_Filter> filters, {bool unfiltered = false}) {
+  List<Recipe> _apply(List<Recipe> recipes, List<_Filter> filters, ShelfStyle style, {bool unfiltered = false}) {
     final filterId = unfiltered ? 'all' : _filterId;
     final query = unfiltered ? '' : _query;
     final filter = filters.firstWhere((f) => f.id == filterId, orElse: () => filters.first);
@@ -281,7 +310,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           r.labels.any((l) => l.displayName.toLowerCase().contains(query));
     }).toList();
 
-    switch (_sort) {
+    switch (_sortFor(style)) {
+      case _Sort.shelf:
+        // Shelf by shelf, left to right; books never arranged after them.
+        final place = {for (final (i, id) in (style.books ?? const <List<String>>[]).expand((s) => s).indexed) id: i};
+        out.sort((a, b) {
+          final byShelf = (place[a.id] ?? 1 << 30).compareTo(place[b.id] ?? 1 << 30);
+          return byShelf != 0 ? byShelf : b.updatedAt.compareTo(a.updatedAt);
+        });
       case _Sort.recent:
         out.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       case _Sort.alphabetical:
@@ -485,20 +521,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     const SizedBox(width: 4),
                     PopupMenuButton<_Sort>(
                       tooltip: 'Sort recipes',
-                      initialValue: _sort,
-                      onSelected: (s) => setState(() => _sort = s),
+                      initialValue: _sortFor(_shelfStyle),
+                      onSelected: (s) => setState(() => _sortChoice = s),
                       itemBuilder: (_) => [
                         for (final s in _Sort.values)
-                          CheckedPopupMenuItem(value: s, checked: s == _sort, child: Text(s.label)),
+                          if (s != _Sort.shelf || _shelfStyle.books != null)
+                            CheckedPopupMenuItem(value: s, checked: s == _sortFor(_shelfStyle), child: Text(s.label)),
                       ],
                       icon: const Icon(LucideIcons.arrowUpDown, size: 20),
                     ),
                     if (view == LibraryView.shelf)
                       IconButton(
                         tooltip: 'Style shelves',
-                        onPressed: () => _startStyling(
-                          _savedStyle ?? ref.read(shelfStyleProvider).valueOrNull ?? const ShelfStyle(),
-                        ),
+                        onPressed: () => _startStyling(_shelfStyle),
                         icon: const Icon(LucideIcons.paintbrush, size: 20),
                       ),
                   ],
@@ -568,7 +603,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   Widget _buildCards(BuildContext context, List<Recipe> all) {
     final filters = _filtersFor(all);
-    final visible = _apply(all, filters);
+    final visible = _apply(all, filters, _shelfStyle);
     return CustomScrollView(
       slivers: [
         ..._header(context, all, LibraryView.cards, filters, visible.length),
@@ -605,7 +640,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   Widget _shelfRoom(BuildContext context, List<Recipe> all, ShelfStyle style, ShelfEditController? edit) {
     final filters = _filtersFor(all);
-    final visible = _apply(all, filters);
+    final visible = _apply(all, filters, style);
     final theme = style.isDark ? ChefTheme.dark() : ChefTheme.light();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -638,8 +673,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       // filter, in the order the shelves keep them.
                       LibraryBookcase(
                         key: const ValueKey('bookcase'),
-                        recipes: edit != null ? _apply(all, filters, unfiltered: true) : visible,
+                        recipes: edit != null ? _apply(all, filters, style, unfiltered: true) : visible,
                         style: style,
+                        // Books as arranged, unless sorted some other way (a
+                        // book moved just now always shows where it was put).
+                        arranged: (edit?.booksMoved ?? false) || _sortFor(style) == _Sort.shelf ? style.books : null,
                         onOpen: edit != null ? (_) {} : _openInJournal,
                         onLongPress: edit != null ? null : _showBookActions,
                         edit: edit,
@@ -652,9 +690,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 Positioned.fill(
                   child: ShelfStyleEditor(
                     controller: edit,
+                    startCollapsed: _editorCollapsed,
                     onCancel: _stopStyling,
                     onSave: (s) async {
-                      setState(() => _savedStyle = s);
+                      setState(() {
+                        _savedStyle = s;
+                        // Moved books show where they were put.
+                        if (edit.booksMoved) _sortChoice = null;
+                      });
                       _stopStyling();
                       await saveShelfStyle(ref, s);
                       if (mounted) setState(() => _savedStyle = null);

@@ -181,6 +181,22 @@ class PlacedDecor {
 T _byName<T extends Enum>(List<T> values, Object? name, T fallback) =>
     values.where((v) => v.name == name).firstOrNull ?? fallback;
 
+bool _sameShelves(List<List<String>>? a, List<List<String>>? b) {
+  if (a == null || b == null) return a == b;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (!listEquals(a[i], b[i])) return false;
+  }
+  return true;
+}
+
+List<List<String>>? _shelvesFromJson(Object? json) {
+  if (json is! List) return null;
+  return [
+    for (final shelf in json) [if (shelf is List) ...shelf.whereType<String>()],
+  ];
+}
+
 /// How the library's bookcase is dressed. Stored in app preferences.
 @immutable
 class ShelfStyle {
@@ -193,12 +209,18 @@ class ShelfStyle {
   /// dressed as a cosy kitchen.
   final List<PlacedDecor>? decor;
 
+  /// Books as arranged by hand: recipe ids, shelf by shelf from the top,
+  /// left to right. Null until a book is first moved. Books not listed —
+  /// new recipes — stand after the last arranged one.
+  final List<List<String>>? books;
+
   const ShelfStyle({
     this.wall = WallStyle.subway,
     this.tint = 0,
     this.wood = ShelfWood.walnut,
     this.glow = ShelfGlow.warm,
     this.decor,
+    this.books,
   });
 
   List<PlacedDecor> get pieces => decor ?? cozyKitchenDecor;
@@ -208,14 +230,26 @@ class ShelfStyle {
   /// Dark walls get light text and the dark theme for the controls on them.
   bool get isDark => wallColor.computeLuminance() < 0.25;
 
-  ShelfStyle copyWith({WallStyle? wall, int? tint, ShelfWood? wood, ShelfGlow? glow, List<PlacedDecor>? decor}) =>
-      ShelfStyle(
-        wall: wall ?? this.wall,
-        tint: tint ?? this.tint,
-        wood: wood ?? this.wood,
-        glow: glow ?? this.glow,
-        decor: decor ?? this.decor,
-      );
+  ShelfStyle copyWith({
+    WallStyle? wall,
+    int? tint,
+    ShelfWood? wood,
+    ShelfGlow? glow,
+    List<PlacedDecor>? decor,
+    List<List<String>>? books,
+  }) => ShelfStyle(
+    wall: wall ?? this.wall,
+    tint: tint ?? this.tint,
+    wood: wood ?? this.wood,
+    glow: glow ?? this.glow,
+    decor: decor ?? this.decor,
+    books: books ?? this.books,
+  );
+
+  /// [look]'s wall, shelves and decorations, with the books left where they
+  /// were put.
+  ShelfStyle withLook(ShelfStyle look) =>
+      ShelfStyle(wall: look.wall, tint: look.tint, wood: look.wood, glow: look.glow, decor: look.decor, books: books);
 
   /// Same room, ignoring whether the decorations were ever arranged by hand.
   bool looksLike(ShelfStyle other) =>
@@ -231,6 +265,7 @@ class ShelfStyle {
     'wood': wood.name,
     'glow': glow.name,
     if (decor case final decor?) 'decor': [for (final d in decor) d.toJson()],
+    if (books case final books?) 'books': books,
   };
 
   factory ShelfStyle.fromJson(Object? json) {
@@ -243,6 +278,7 @@ class ShelfStyle {
       wood: _byName(ShelfWood.values, json['wood'], ShelfWood.walnut),
       glow: _byName(ShelfGlow.values, json['glow'], ShelfGlow.warm),
       decor: decor is List ? [...decor.map(PlacedDecor.fromJson).nonNulls] : null,
+      books: _shelvesFromJson(json['books']),
     );
   }
 
@@ -253,10 +289,18 @@ class ShelfStyle {
       other.tint == tint &&
       other.wood == wood &&
       other.glow == glow &&
-      listEquals(other.decor, decor);
+      listEquals(other.decor, decor) &&
+      _sameShelves(other.books, books);
 
   @override
-  int get hashCode => Object.hash(wall, tint, wood, glow, decor == null ? null : Object.hashAll(decor!));
+  int get hashCode => Object.hash(
+    wall,
+    tint,
+    wood,
+    glow,
+    decor == null ? null : Object.hashAll(decor!),
+    books == null ? null : Object.hashAll(books!.map(Object.hashAll)),
+  );
 }
 
 /// The first three shelves of a kitchen: utensils, pantry jars, a pot and a

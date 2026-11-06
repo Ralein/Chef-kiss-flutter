@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../domain/shelf_style.dart';
 import 'decor_art.dart';
-import 'library_books.dart';
 import 'shelf_art.dart';
 import 'shelf_edit_controller.dart';
 import 'shelf_layout.dart';
@@ -41,7 +40,16 @@ class ShelfStyleEditor extends StatefulWidget {
   final ValueChanged<ShelfStyle> onSave;
   final VoidCallback onCancel;
 
-  const ShelfStyleEditor({super.key, required this.controller, required this.onSave, required this.onCancel});
+  /// Opens with the panel tucked away, leaving the shelves in view.
+  final bool startCollapsed;
+
+  const ShelfStyleEditor({
+    super.key,
+    required this.controller,
+    required this.onSave,
+    required this.onCancel,
+    this.startCollapsed = false,
+  });
 
   @override
   State<ShelfStyleEditor> createState() => _ShelfStyleEditorState();
@@ -49,7 +57,7 @@ class ShelfStyleEditor extends StatefulWidget {
 
 class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
   _Category _category = _Category.looks;
-  bool _panelOpen = true;
+  late bool _panelOpen = !widget.startCollapsed;
   final _bottom = GlobalKey();
 
   ShelfEditController get _c => widget.controller;
@@ -194,7 +202,12 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
           for (final c in _Category.values) ...[
             // Room first, then the things to put in it.
             if (c == _Category.kitchen)
-              Container(width: 1, height: 28, color: Colors.white24, margin: const EdgeInsets.symmetric(horizontal: 2)),
+              Container(
+                width: 1,
+                height: 28,
+                color: context.chefColors.outlineSubtle,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+              ),
             Expanded(child: _tab(c)),
           ],
         ],
@@ -225,7 +238,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                     width: d,
                     height: d,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: active ? _cream : Colors.transparent),
-                    child: Icon(c.icon, color: active ? const Color(0xFF1C1A18) : Colors.white70),
+                    child: Icon(c.icon, color: active ? const Color(0xFF1C1A18) : context.chefColors.contentSecondary),
                   ),
                 ),
               );
@@ -238,6 +251,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
 
   Widget _panel(BuildContext context) {
     final t = context.chefText;
+    final c = context.chefColors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 14, 12, 18),
@@ -248,32 +262,35 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
         children: [
           Row(
             children: [
-              Expanded(child: Text(_category.label, style: _serif(24))),
+              Expanded(
+                child: Semantics(header: true, child: Text(_category.label, style: t.titleLarge)),
+              ),
               IconButton(
                 tooltip: 'Hide',
                 onPressed: () => setState(() => _panelOpen = false),
-                icon: const Icon(LucideIcons.chevronDown, color: Colors.white70),
+                icon: Icon(LucideIcons.chevronDown, color: c.contentSecondary),
               ),
             ],
           ),
           const SizedBox(height: 8),
           ..._options(),
           const SizedBox(height: 2),
-          Text(_hint, style: t.bodySmall?.copyWith(color: Colors.white54)),
+          Text(_hint, style: t.bodySmall),
         ],
       ),
     );
   }
 
   String get _hint => switch (_category) {
-    _Category.looks => 'Start from a ready-made kitchen, then make it yours.',
+    _Category.looks => 'Start from a ready-made kitchen. Hold any book or decoration to move it.',
     _Category.wall => 'The wall behind your shelves.',
     _Category.shelf => 'Shelf wood and the light strip underneath.',
-    _ => 'Drag onto a shelf, or tap to add. Hold anything on the shelves to move it.',
+    _ => 'Drag onto a shelf, or tap to add. Hold anything on the shelves, books too, to move it.',
   };
 
   List<Widget> _options() {
     final style = _c.style;
+    final label = context.chefText.labelLarge?.copyWith(color: context.chefColors.contentSecondary);
     if (_category.group case final group?) {
       return [
         _tiles([
@@ -323,7 +340,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
               ),
           ]),
           const SizedBox(height: 12),
-          const Text('Tint', style: TextStyle(color: Colors.white70)),
+          Text('Tint', style: label),
           // One row of equal cells: every swatch gets a full-size tap target.
           Row(
             children: [
@@ -364,7 +381,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
             spacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              const Text('Light strip', style: TextStyle(color: Colors.white70)),
+              Text('Light strip', style: label),
               for (final g in ShelfGlow.values)
                 ChoiceChip(
                   label: Text(g.label),
@@ -383,6 +400,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
   /// The selected piece: its name, its size, and how to move it.
   Widget _piecePanel(BuildContext context, PlacedDecor piece) {
     final t = context.chefText;
+    final label = t.labelLarge?.copyWith(color: context.chefColors.contentSecondary);
     final percent = (piece.size * 100).round();
     return Container(
       width: double.infinity,
@@ -394,13 +412,15 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
         children: [
           Row(
             children: [
-              Expanded(child: Text(piece.piece.label, style: _serif(22))),
+              Expanded(
+                child: Semantics(header: true, child: Text(piece.piece.label, style: t.titleLarge)),
+              ),
               TextButton(onPressed: () => _c.select(null), child: const Text('Done')),
             ],
           ),
           Row(
             children: [
-              const Text('Size', style: TextStyle(color: Colors.white70)),
+              Text('Size', style: label),
               Expanded(
                 child: Semantics(
                   label: 'Size',
@@ -419,12 +439,12 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                 child: Text(
                   '$percent%',
                   textAlign: TextAlign.end,
-                  style: const TextStyle(color: Colors.white70, fontFeatures: [FontFeature.tabularFigures()]),
+                  style: label?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
                 ),
               ),
             ],
           ),
-          Text('Drag it along the shelf or onto another one.', style: t.bodySmall?.copyWith(color: Colors.white54)),
+          Text('Drag it along the shelf or onto another one.', style: t.bodySmall),
         ],
       ),
     );
@@ -440,9 +460,6 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
     ),
   );
 }
-
-TextStyle _serif(double size) =>
-    TextStyle(fontFamily: kSerifFamily, fontStyle: FontStyle.italic, fontSize: size, color: Colors.white);
 
 BoxDecoration _glass({required double radius}) => BoxDecoration(
   color: const Color(0xF0151414),
@@ -564,6 +581,7 @@ class _PieceActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.chefColors;
     return Material(
       type: MaterialType.transparency,
       child: Container(
@@ -573,16 +591,16 @@ class _PieceActions extends StatelessWidget {
         child: Row(
           children: [
             // This package's flipVertical2 is the left-right mirror glyph.
-            _action(LucideIcons.flipVertical2, 'Flip', onFlip),
-            _action(LucideIcons.copy, 'Duplicate', onDuplicate),
-            _action(LucideIcons.trash2, 'Delete', onDelete, color: const Color(0xFFF2A08F)),
+            _action(context, LucideIcons.flipVertical2, 'Flip', onFlip, c.contentPrimary),
+            _action(context, LucideIcons.copy, 'Duplicate', onDuplicate, c.contentPrimary),
+            _action(context, LucideIcons.trash2, 'Delete', onDelete, c.stateDanger),
           ],
         ),
       ),
     );
   }
 
-  Widget _action(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) => Expanded(
+  Widget _action(BuildContext context, IconData icon, String label, VoidCallback onTap, Color color) => Expanded(
     child: InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
@@ -598,7 +616,7 @@ class _PieceActions extends StatelessWidget {
               const SizedBox(height: 3),
               FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text(label, maxLines: 1, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.85))),
+                child: Text(label, maxLines: 1, style: context.chefText.labelSmall?.copyWith(color: color)),
               ),
             ],
           ),
@@ -650,7 +668,9 @@ class _Tile extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: selected ? Colors.white : Colors.white54),
+                style: context.chefText.labelMedium?.copyWith(
+                  color: selected ? context.chefColors.contentPrimary : context.chefColors.contentSecondary,
+                ),
               ),
             ],
           ),
