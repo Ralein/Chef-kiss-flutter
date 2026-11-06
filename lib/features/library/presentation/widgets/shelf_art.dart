@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/shelf_style.dart';
 
-/// Painted art for the library: wall textures (kitchen tiles among them),
+/// Painted art for the library: wall textures (kitchen surfaces among them),
 /// shelf planks with LED glow, candles, potted plants, trailing ivy and vases
 /// of flowers. Kitchen things live in kitchen_art.dart. Everything is
 /// vector so it stays crisp at any size and follows the chosen style.
@@ -30,6 +30,14 @@ class WallPainter extends CustomPainter {
         _subway(canvas, size);
       case WallStyle.zellige:
         _zellige(canvas, size);
+      case WallStyle.steel:
+        _steel(canvas, size);
+      case WallStyle.fridge:
+        _fridge(canvas, size);
+      case WallStyle.pegboard:
+        _pegboard(canvas, size);
+      case WallStyle.chalkboard:
+        _chalkboard(canvas, size);
       case WallStyle.plaster:
         _plaster(canvas, size);
       case WallStyle.brick:
@@ -145,6 +153,242 @@ class WallPainter extends CustomPainter {
           stops: const [0.25, 0.45, 0.65],
         ).createShader(rect),
     );
+  }
+
+  /// Brushed stainless panels, as on a freezer door or a restaurant kitchen
+  /// wall, with screws at the corners.
+  void _steel(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final metal = _dark
+        ? Color.lerp(tint, const Color(0xFF7A8087), 0.26)!
+        : Color.lerp(tint, const Color(0xFFC4C9CE), 0.6)!;
+    canvas.drawRect(rect, Paint()..color = metal);
+    // Brushing: broken horizontal hairlines.
+    final rnd = math.Random(31);
+    final hair = Paint()..strokeWidth = 1;
+    for (var y = 0.5; y < size.height; y += 1.5) {
+      var x = -rnd.nextDouble() * 120;
+      while (x < size.width) {
+        final length = 30 + rnd.nextDouble() * 200;
+        final v = rnd.nextDouble() - 0.5;
+        hair.color = (v > 0 ? Colors.white : Colors.black).withValues(alpha: v.abs() * (_dark ? 0.12 : 0.15));
+        canvas.drawLine(Offset(x, y), Offset(x + length, y), hair);
+        x += length + rnd.nextDouble() * 40;
+      }
+    }
+    // Light sweeping across the metal.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: _dark ? 0.07 : 0.24),
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: _dark ? 0.04 : 0.14),
+            Colors.white.withValues(alpha: 0),
+          ],
+          stops: const [0.04, 0.27, 0.5, 0.74, 0.94],
+        ).createShader(rect),
+    );
+    // Panel seams: a shadow line and a lit edge.
+    const panelW = 168.0, panelH = 300.0;
+    final shadow = Paint()
+      ..color = Colors.black.withValues(alpha: _dark ? 0.55 : 0.24)
+      ..strokeWidth = 1.5;
+    final lit = Paint()
+      ..color = Colors.white.withValues(alpha: _dark ? 0.08 : 0.55)
+      ..strokeWidth = 1;
+    for (var x = panelW; x < size.width; x += panelW) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), shadow);
+      canvas.drawLine(Offset(x + 1.5, 0), Offset(x + 1.5, size.height), lit);
+    }
+    for (var y = panelH; y < size.height; y += panelH) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), shadow);
+      canvas.drawLine(Offset(0, y + 1.5), Offset(size.width, y + 1.5), lit);
+    }
+    for (var left = 0.0; left < size.width; left += panelW) {
+      for (var top = 0.0; top < size.height; top += panelH) {
+        for (final c in [
+          Offset(left + 10, top + 10),
+          Offset(left + panelW - 10, top + 10),
+          Offset(left + 10, top + panelH - 10),
+          Offset(left + panelW - 10, top + panelH - 10),
+        ]) {
+          _screw(canvas, c, metal);
+        }
+      }
+    }
+  }
+
+  void _screw(Canvas canvas, Offset c, Color metal) {
+    const r = 2.6;
+    canvas.drawCircle(c.translate(0.6, 0.8), r, Paint()..color = Colors.black.withValues(alpha: _dark ? 0.45 : 0.2));
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.4, -0.5),
+          colors: [_shade(metal, 0.4), _shade(metal, -0.25)],
+        ).createShader(Rect.fromCircle(center: c, radius: r)),
+    );
+    canvas.drawLine(
+      c.translate(-1.6, 1.1),
+      c.translate(1.6, -1.1),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.4)
+        ..strokeWidth = 0.8,
+    );
+  }
+
+  static const _magnetColors = [
+    Color(0xFFD9483B),
+    Color(0xFFE8B23A),
+    Color(0xFF2F8F8A),
+    Color(0xFF3B6CB5),
+    Color(0xFF5AA05A),
+  ];
+
+  /// A retro fridge door: glossy enamel with a few magnets and notes on it.
+  void _fridge(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(rect, Paint()..color = _shade(tint, _dark ? 0.05 : 0.03));
+    // Gloss: soft vertical reflections in the enamel.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: _dark ? 0.07 : 0.42),
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: _dark ? 0.04 : 0.26),
+            Colors.white.withValues(alpha: 0),
+          ],
+          stops: const [0.06, 0.19, 0.33, 0.68, 0.79, 0.9],
+        ).createShader(rect),
+    );
+    final rnd = math.Random(41);
+    const cellW = 150.0, cellH = 210.0;
+    for (var top = 0.0; top < size.height; top += cellH) {
+      for (var left = 0.0; left < size.width; left += cellW) {
+        final roll = rnd.nextDouble();
+        final at = Offset(left + 22 + rnd.nextDouble() * (cellW - 44), top + 16 + rnd.nextDouble() * (cellH - 70));
+        final color = _magnetColors[rnd.nextInt(_magnetColors.length)];
+        if (roll < 0.3) {
+          _note(canvas, at, color, rnd);
+        } else if (roll < 0.55) {
+          _magnet(canvas, at, color, 6 + rnd.nextDouble() * 2.5);
+        }
+      }
+    }
+  }
+
+  /// A note held up by a magnet: a few lines of a shopping list.
+  void _note(Canvas canvas, Offset at, Color magnet, math.Random rnd) {
+    canvas.save();
+    canvas.translate(at.dx, at.dy);
+    canvas.rotate((rnd.nextDouble() - 0.5) * 0.26);
+    const paper = Rect.fromLTWH(-17, 0, 34, 42);
+    canvas.drawRect(
+      paper.shift(const Offset(1, 2)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: _dark ? 0.4 : 0.14)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    const papers = [Color(0xFFF7F1E3), Color(0xFFF3E6A6), Color(0xFFE3ECF0)];
+    final color = papers[rnd.nextInt(papers.length)];
+    canvas.drawRect(paper, Paint()..color = _dark ? Color.lerp(color, Colors.black, 0.3)! : color);
+    final ink = Paint()
+      ..color = const Color(0xFF5E5145).withValues(alpha: 0.6)
+      ..strokeWidth = 1.3
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < 4; i++) {
+      final y = 12.0 + i * 7;
+      canvas.drawLine(Offset(-11, y), Offset(-11 + 10 + rnd.nextDouble() * 12, y), ink);
+    }
+    _magnet(canvas, const Offset(0, 2), magnet, 5.5);
+    canvas.restore();
+  }
+
+  void _magnet(Canvas canvas, Offset c, Color color, double r) {
+    canvas.drawCircle(
+      c.translate(0.8, 1.8),
+      r,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.32)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5),
+    );
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.4, -0.5),
+          colors: [Color.lerp(color, Colors.white, 0.45)!, color, Color.lerp(color, Colors.black, 0.3)!],
+          stops: const [0, 0.45, 1],
+        ).createShader(Rect.fromCircle(center: c, radius: r)),
+    );
+  }
+
+  /// Perforated hardboard, as hung over a workbench or a stove.
+  void _pegboard(Canvas canvas, Size size) {
+    const pitch = 22.0;
+    canvas.drawRect(Offset.zero & size, Paint()..color = _shade(tint, _dark ? 0.05 : -0.02));
+    final hole = Paint()..color = _shade(tint, _dark ? -0.6 : -0.4);
+    final rim = Paint()
+      ..color = Colors.white.withValues(alpha: _dark ? 0.08 : 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (var y = pitch / 2; y < size.height; y += pitch) {
+      for (var x = pitch / 2; x < size.width; x += pitch) {
+        final c = Offset(x, y);
+        canvas.drawCircle(c, 2.7, hole);
+        // The lower edge of each hole catches the light.
+        canvas.drawArc(Rect.fromCircle(center: c, radius: 3), 0.25, 2.2, false, rim);
+      }
+    }
+  }
+
+  /// A café chalkboard: clouds of chalk dust and the ghosts of old menus.
+  void _chalkboard(Canvas canvas, Size size) {
+    final chalk = _dark ? Colors.white : const Color(0xFF2E2B28);
+    final rnd = math.Random(17);
+    final clouds = (size.width * size.height / 26000).clamp(6, 60).toInt();
+    for (var i = 0; i < clouds; i++) {
+      final c = Offset(rnd.nextDouble() * size.width, rnd.nextDouble() * size.height);
+      canvas.drawOval(
+        Rect.fromCenter(center: c, width: 120 + rnd.nextDouble() * 220, height: 36 + rnd.nextDouble() * 70),
+        Paint()
+          ..color = chalk.withValues(alpha: (_dark ? 0.03 : 0.035) + rnd.nextDouble() * 0.03)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22),
+      );
+    }
+    // Half-wiped writing: short wavy words in rows.
+    final stroke = Paint()
+      ..color = chalk.withValues(alpha: _dark ? 0.09 : 0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+    final blocks = (size.width * size.height / 60000).clamp(3, 30).toInt();
+    for (var b = 0; b < blocks; b++) {
+      final origin = Offset(rnd.nextDouble() * size.width, rnd.nextDouble() * size.height);
+      for (var line = 0; line < 2 + rnd.nextInt(3); line++) {
+        var x = origin.dx;
+        final y = origin.dy + line * 18;
+        for (var word = 0; word < 2 + rnd.nextInt(3); word++) {
+          final length = 12 + rnd.nextDouble() * 30;
+          final path = Path()..moveTo(x, y);
+          for (var t = 4.0; t <= length; t += 4) {
+            path.lineTo(x + t, y + math.sin(t * 0.9 + b) * 2.2);
+          }
+          canvas.drawPath(path, stroke);
+          x += length + 8;
+        }
+      }
+    }
   }
 
   void _plaster(Canvas canvas, Size size) {
@@ -346,6 +590,32 @@ class Candle extends StatefulWidget {
 
   @override
   State<Candle> createState() => _CandleState();
+}
+
+/// A taper and a pillar candle side by side, filling their box.
+class CandlePair extends StatelessWidget {
+  final int seed;
+  const CandlePair({super.key, this.seed = 0});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) => Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        SizedBox(
+          width: box.maxWidth * 0.25,
+          height: box.maxHeight,
+          child: Candle(kind: CandleKind.taper, seed: seed * 3 + 1),
+        ),
+        SizedBox(
+          width: box.maxWidth * 0.5,
+          height: box.maxHeight * 0.54,
+          child: Candle(kind: CandleKind.pillar, seed: seed * 3 + 2),
+        ),
+      ],
+    ),
+  );
 }
 
 class _CandleState extends State<Candle> with SingleTickerProviderStateMixin {
@@ -673,7 +943,6 @@ class _FlowerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (kind == FlowerKind.none) return;
     final w = size.width, h = size.height;
     final rnd = math.Random(seed * 13 + kind.index);
     final vaseH = h * 0.38, vaseTop = h - vaseH, cx = w / 2;
@@ -714,8 +983,6 @@ class _FlowerPainter extends CustomPainter {
           _hydrangea(canvas, head, 12 + rnd.nextDouble() * 3, rnd);
         case FlowerKind.daisies:
           _daisy(canvas, head, 6 + rnd.nextDouble() * 1.5);
-        case FlowerKind.none:
-          break;
       }
     }
 

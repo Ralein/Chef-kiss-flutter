@@ -19,6 +19,7 @@ import '../../journal/presentation/journal_view.dart';
 import '../domain/shelf_style.dart';
 import 'widgets/library_bookcase.dart';
 import 'widgets/shelf_art.dart';
+import 'widgets/shelf_edit_controller.dart';
 import 'widgets/shelf_style_editor.dart';
 import 'widgets/recipe_card.dart';
 
@@ -88,9 +89,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// Where Back returns to after opening a book in the journal.
   LibraryView _browseView = LibraryView.shelf;
 
-  /// Dressing the bookcase: [_previewStyle] shows unsaved changes live.
-  bool _styling = false;
-  ShelfStyle? _previewStyle;
+  /// Set while the bookcase is being dressed; it holds the unsaved style.
+  ShelfEditController? _edit;
+
+  /// A style just saved, shown until preferences report it back.
+  ShelfStyle? _savedStyle;
+  final _shelfScroll = ScrollController();
   late String? _journalRecipeId = widget.initialRecipeId;
   final _journalKey = GlobalKey<JournalViewState>();
 
@@ -186,7 +190,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     _debounce?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
+    _shelfScroll.dispose();
+    _edit?.dispose();
     super.dispose();
+  }
+
+  void _startStyling(ShelfStyle style) => setState(() => _edit = ShelfEditController(style, scroll: _shelfScroll));
+
+  void _stopStyling() {
+    final edit = _edit;
+    setState(() => _edit = null);
+    // The editor still listens until this frame unmounts it.
+    WidgetsBinding.instance.addPostFrameCallback((_) => edit?.dispose());
   }
 
   void _onSearchChanged(String value) {
@@ -278,11 +293,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// the journal was opened from. Ignored when another tab or a full-screen
   /// page is showing, so Back works normally there.
   Future<bool> _handleBack() async {
-    if (mounted && _styling) {
-      setState(() {
-        _styling = false;
-        _previewStyle = null;
-      });
+    if (mounted && _edit != null) {
+      // Put down the selected piece first, then leave without saving.
+      if (_edit!.selected != null) {
+        _edit!.select(null);
+      } else {
+        _stopStyling();
+      }
       return true;
     }
     if (!mounted || _view != LibraryView.journal) return false;
@@ -322,7 +339,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           floatingActionButton:
               view == LibraryView.journal ||
                   view == null ||
-                  _styling ||
+                  _edit != null ||
                   !(recipesAsync.valueOrNull?.isNotEmpty ?? false)
               ? null
               : FloatingActionButton.extended(
@@ -465,7 +482,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     if (view == LibraryView.shelf)
                       IconButton(
                         tooltip: 'Style shelves',
-                        onPressed: () => setState(() => _styling = true),
+                        onPressed: () => _startStyling(
+                          _savedStyle ?? ref.read(shelfStyleProvider).valueOrNull ?? const ShelfStyle(),
+                        ),
                         icon: const Icon(LucideIcons.paintbrush, size: 20),
                       ),
                   ],
@@ -561,8 +580,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// The library room: the wall fills the screen (under the status bar too),
   /// shelves scroll over it, and the controls take the wall's light or dark.
   Widget _buildShelf(BuildContext context, List<Recipe> all) {
+    final edit = _edit;
+    if (edit != null) {
+      return ListenableBuilder(listenable: edit, builder: (context, _) => _shelfRoom(context, all, edit.style, edit));
+    }
     final saved = ref.watch(shelfStyleProvider).valueOrNull ?? const ShelfStyle();
-    final style = _previewStyle ?? saved;
+    return _shelfRoom(context, all, _savedStyle ?? saved, null);
+  }
+
+  Widget _shelfRoom(BuildContext context, List<Recipe> all, ShelfStyle style, ShelfEditController? edit) {
     final filters = _filtersFor(all);
     final visible = _apply(all, filters);
     final theme = style.isDark ? ChefTheme.dark() : ChefTheme.light();
@@ -584,40 +610,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               SafeArea(
                 bottom: false,
                 child: CustomScrollView(
+                  controller: _shelfScroll,
                   slivers: [
-                    if (_styling)
+                    if (edit != null)
                       const SliverToBoxAdapter(child: SizedBox(height: 76))
                     else
                       ..._header(context, all, LibraryView.shelf, filters, visible.length),
-                    if (visible.isEmpty && !_styling)
+                    if (visible.isEmpty && edit == null)
                       SliverFillRemaining(hasScrollBody: false, child: _noMatches())
                     else
+                      // Dressing the shelves shows every book, whatever the filter.
                       LibraryBookcase(
-                        recipes: _styling ? all : visible,
+                        recipes: edit != null ? all : visible,
                         style: style,
-                        onOpen: _styling ? (_) {} : _openInJournal,
-                        onLongPress: _styling ? null : _showBookActions,
+                        onOpen: edit != null ? (_) {} : _openInJournal,
+                        onLongPress: edit != null ? null : _showBookActions,
+                        edit: edit,
                       ),
-                    SliverToBoxAdapter(child: SizedBox(height: _styling ? 340 : 120)),
+                    SliverToBoxAdapter(child: SizedBox(height: edit != null ? 340 : 120)),
                   ],
                 ),
               ),
-              if (_styling)
+              if (edit != null)
                 Positioned.fill(
                   child: ShelfStyleEditor(
-                    initial: style,
-                    onPreview: (s) => setState(() => _previewStyle = s),
-                    onCancel: () => setState(() {
-                      _styling = false;
-                      _previewStyle = null;
-                    }),
+                    controller: edit,
+                    onCancel: _stopStyling,
                     onSave: (s) async {
-                      setState(() {
-                        _styling = false;
-                        _previewStyle = s;
-                      });
+                      setState(() => _savedStyle = s);
+                      _stopStyling();
                       await saveShelfStyle(ref, s);
-                      if (mounted) setState(() => _previewStyle = null);
+                      if (mounted) setState(() => _savedStyle = null);
                     },
                   ),
                 ),

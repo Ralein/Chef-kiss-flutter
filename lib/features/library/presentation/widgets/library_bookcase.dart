@@ -1,67 +1,24 @@
-import 'dart:math' as math;
-
+import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../domain/shelf_style.dart';
-import 'kitchen_art.dart';
+import 'decor_art.dart';
 import 'library_books.dart';
 import 'shelf_art.dart';
-
-/// Something standing on a shelf.
-sealed class _ShelfItem {
-  const _ShelfItem(this.width);
-  final double width;
-}
-
-class _BookItem extends _ShelfItem {
-  final Recipe recipe;
-  final bool faceOut;
-  final double height;
-  const _BookItem(this.recipe, {required this.faceOut, required double width, required this.height}) : super(width);
-}
-
-enum _DecorKind { plant, flowers, candle, candlePair, crock, jars, pot, board }
-
-class _DecorItem extends _ShelfItem {
-  final _DecorKind kind;
-  final double height;
-  final int seed;
-  const _DecorItem(this.kind, double width, this.height, this.seed) : super(width);
-}
-
-/// What hangs from the shelf above a row.
-enum _Hanging { none, ivy, rail }
-
-/// One shelf: decor then books from the left end, an optional piece in the
-/// middle when there's room, and decor at the right end.
-class _Row {
-  final List<_ShelfItem> start;
-  final _DecorItem? middle;
-  final List<_ShelfItem> end;
-  final _Hanging hanging;
-  const _Row({required this.start, this.middle, required this.end, this.hanging = _Hanging.none});
-}
-
-/// Space between neighbours: spines stand close, covers and decor get air.
-double _spacing(_ShelfItem a, _ShelfItem b) {
-  if (a is _BookItem && b is _BookItem) return a.faceOut || b.faceOut ? 8 : LibraryBookcase._bookGap;
-  return 10;
-}
-
-double _span(List<_ShelfItem> items) {
-  var total = 0.0;
-  for (var i = 0; i < items.length; i++) {
-    total += items[i].width;
-    if (i > 0) total += _spacing(items[i - 1], items[i]);
-  }
-  return total;
-}
+import 'shelf_edit_controller.dart';
+import 'shelf_layout.dart';
 
 /// The library as floating kitchen shelves on a wall: books spine-out (and a
-/// few face-out) between crocks of utensils, pantry jars, pots, candles,
-/// plants and flowers; LED strips glowing under each shelf; ivy or a utensil
-/// rail hanging into the gaps below.
+/// few face-out) around the decorations placed on them — crocks of
+/// utensils, pantry jars, pots, candles, plants and flowers — with LED strips
+/// glowing under each shelf and ivy or a utensil rail hanging below.
+///
+/// With [edit], the bookcase is being dressed: books step back, and every
+/// decoration can be selected, dragged to another spot or shelf, or dropped
+/// in from the editor's palette.
 ///
 /// The wall itself is painted by the screen behind the scroll view.
 class LibraryBookcase extends StatelessWidget {
@@ -69,6 +26,7 @@ class LibraryBookcase extends StatelessWidget {
   final ShelfStyle style;
   final ValueChanged<Recipe> onOpen;
   final ValueChanged<Recipe>? onLongPress;
+  final ShelfEditController? edit;
 
   const LibraryBookcase({
     super.key,
@@ -76,48 +34,19 @@ class LibraryBookcase extends StatelessWidget {
     required this.style,
     required this.onOpen,
     this.onLongPress,
+    this.edit,
   });
-
-  static const _bookGap = 3.0;
-  static const _inset = 14.0;
-
-  /// Even a small library fills a few shelves, so the wall reads as a
-  /// bookcase rather than one crowded plank.
-  static const minShelves = 3;
-
-  /// What each shelf wants at its ends and, room permitting, in the middle;
-  /// the first enabled wish wins. Rotates so neighbouring shelves differ.
-  static const _plan = <({List<_DecorKind> left, List<_DecorKind> middle, List<_DecorKind> right})>[
-    (
-      left: [_DecorKind.crock, _DecorKind.plant],
-      middle: [_DecorKind.jars, _DecorKind.flowers],
-      right: [_DecorKind.plant, _DecorKind.pot, _DecorKind.flowers],
-    ),
-    (
-      left: [_DecorKind.jars],
-      middle: [_DecorKind.pot, _DecorKind.plant],
-      right: [_DecorKind.flowers, _DecorKind.crock, _DecorKind.plant],
-    ),
-    (
-      left: [_DecorKind.board],
-      middle: [_DecorKind.crock, _DecorKind.flowers],
-      right: [_DecorKind.pot, _DecorKind.plant, _DecorKind.jars],
-    ),
-    (
-      left: [],
-      middle: [_DecorKind.flowers, _DecorKind.jars],
-      right: [_DecorKind.jars, _DecorKind.plant, _DecorKind.crock],
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.crossAxisExtent;
-        final scale = width < 600 ? 1.0 : 1.18;
-        final shelfHeight = 168 * scale;
-        final rows = _layout(width - 2 * _inset, shelfHeight, scale);
+        final metrics = ShelfMetrics.forWidth(constraints.crossAxisExtent);
+        final rows = layoutShelves(recipes, style.pieces, metrics);
+        if (edit case final edit?) {
+          edit.metrics = metrics;
+          edit.shelfCount = rows.length;
+        }
         return SliverList.builder(
           itemCount: rows.length + 1,
           itemBuilder: (context, i) {
@@ -125,300 +54,299 @@ class LibraryBookcase extends StatelessWidget {
               // The top shelf edge: lights the first row and holds what hangs into it.
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: ShelfPlank(wood: style.wood, glow: style.glow, height: 10 * scale),
+                child: ShelfPlank(wood: style.wood, glow: style.glow, height: 10 * metrics.scale),
               );
             }
-            final r = i - 1;
             return _ShelfRow(
-              row: rows[r],
-              index: r,
+              row: rows[i - 1],
               style: style,
-              scale: scale,
-              shelfHeight: shelfHeight,
+              metrics: metrics,
               onOpen: onOpen,
               onLongPress: onLongPress,
+              edit: edit,
             );
           },
         );
       },
     );
   }
-
-  bool _enabled(_DecorKind k) => switch (k) {
-    _DecorKind.plant => style.greenery.hasPots,
-    _DecorKind.flowers => style.flowers != FlowerKind.none,
-    _DecorKind.crock => style.kitchen.hasUtensils,
-    _DecorKind.jars => style.kitchen.hasPantry,
-    _DecorKind.pot || _DecorKind.board => style.kitchen.hasCookware,
-    _DecorKind.candle || _DecorKind.candlePair => style.candles != CandleAmount.none,
-  };
-
-  static _DecorItem _decor(_DecorKind k, double s, int seed) => switch (k) {
-    _DecorKind.plant => _DecorItem(k, 64 * s, 92 * s, seed),
-    _DecorKind.flowers => _DecorItem(k, 58 * s, 96 * s, seed),
-    _DecorKind.candle => _DecorItem(k, 26 * s, 62 * s, seed),
-    _DecorKind.candlePair => _DecorItem(k, 44 * s, 74 * s, seed),
-    _DecorKind.crock => _DecorItem(k, 54 * s, 116 * s, seed),
-    _DecorKind.jars => _DecorItem(k, 80 * s, 86 * s, seed),
-    _DecorKind.pot => _DecorItem(k, 92 * s, 62 * s, seed),
-    _DecorKind.board => _DecorItem(k, 48 * s, 132 * s, seed),
-  };
-
-  List<_Row> _layout(double available, double shelfHeight, double scale) {
-    final rows = <_Row>[];
-    var next = 0;
-    for (var r = 0; next < recipes.length || r < minShelves; r++) {
-      final plan = _plan[r % _plan.length];
-      final used = <_DecorKind>{};
-      _DecorItem? pick(List<_DecorKind> wishes, int seed) {
-        for (final k in wishes) {
-          if (!used.contains(k) && _enabled(k)) {
-            used.add(k);
-            return _decor(k, scale, seed);
-          }
-        }
-        return null;
-      }
-
-      final left = <_ShelfItem>[?pick(plan.left, r)];
-      final right = <_ShelfItem>[?pick(plan.right, r + 3)];
-      switch (style.candles) {
-        case CandleAmount.none:
-          break;
-        case CandleAmount.few:
-          if (r.isOdd) left.add(_decor(_DecorKind.candle, scale, r));
-        case CandleAmount.many:
-          left.add(_decor(_DecorKind.candlePair, scale, r));
-          if (r.isEven) right.add(_decor(_DecorKind.candle, scale, r + 7));
-      }
-
-      // Spread what's left evenly over the shelves still to fill.
-      final cap = ((recipes.length - next) / math.max(1, minShelves - r)).ceil();
-      var room = available - _span(left) - _span(right) - (left.isEmpty ? 0 : 10) - (right.isEmpty ? 0 : 10);
-      final books = <_BookItem>[];
-      var faceOutUsed = false;
-      while (next < recipes.length && books.length < cap) {
-        final recipe = recipes[next];
-        final display = recipe.bookStyle.display;
-        // Automatic covers: one favorite with art, on every other shelf.
-        final wantsCover =
-            display == BookDisplay.cover ||
-            (display == BookDisplay.auto &&
-                r.isEven &&
-                !faceOutUsed &&
-                recipe.isFavorite &&
-                (recipe.coverImage?.isNotEmpty ?? false));
-        final item = wantsCover
-            ? _BookItem(
-                recipe,
-                faceOut: true,
-                width: BookMetrics.coverWidth(shelfHeight),
-                height: BookMetrics.coverHeight(shelfHeight),
-              )
-            : _BookItem(
-                recipe,
-                faceOut: false,
-                width: BookMetrics.spineWidth(recipe, scale),
-                height: BookMetrics.spineHeight(recipe, shelfHeight),
-              );
-        final need = item.width + (books.isEmpty ? 0 : _spacing(books.last, item));
-        if (need > room && books.isNotEmpty) break;
-        books.add(item);
-        room -= need;
-        if (item.faceOut && display == BookDisplay.auto) faceOutUsed = true;
-        next++;
-      }
-
-      final wish = pick(plan.middle, r + 11);
-      final middle = wish != null && room >= wish.width + 72 * scale ? wish : null;
-      rows.add(
-        _Row(
-          start: [...left, ...books],
-          middle: middle,
-          end: right,
-          hanging: style.greenery.hasIvy && r.isEven
-              ? _Hanging.ivy
-              : (style.kitchen.hasUtensils && r.isOdd ? _Hanging.rail : _Hanging.none),
-        ),
-      );
-    }
-    return rows;
-  }
 }
 
-class _ShelfRow extends StatelessWidget {
-  final _Row row;
-  final int index;
+class _ShelfRow extends StatefulWidget {
+  final ShelfRowPlan row;
   final ShelfStyle style;
-  final double scale;
-  final double shelfHeight;
+  final ShelfMetrics metrics;
   final ValueChanged<Recipe> onOpen;
   final ValueChanged<Recipe>? onLongPress;
+  final ShelfEditController? edit;
 
   const _ShelfRow({
     required this.row,
-    required this.index,
     required this.style,
-    required this.scale,
-    required this.shelfHeight,
+    required this.metrics,
     required this.onOpen,
     required this.onLongPress,
+    required this.edit,
   });
 
   @override
+  State<_ShelfRow> createState() => _ShelfRowState();
+}
+
+class _ShelfRowState extends State<_ShelfRow> {
+  /// Where a piece being dragged over this shelf would land.
+  Rect? _landing;
+
+  ShelfMetrics get _m => widget.metrics;
+  static const _inset = ShelfMetrics.inset;
+
+  @override
   Widget build(BuildContext context) {
-    final plank = 14 * scale;
-    final above = 22 * scale + shelfHeight;
-    const inset = LibraryBookcase._inset;
-    return LayoutBuilder(
-      builder: (context, box) {
-        final hang = _hangingRect(box.maxWidth - 2 * inset, above);
-        return SizedBox(
-          height: above + plank + 3,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                top: 0,
-                left: 8,
-                right: 8,
-                child: LightWash(glow: style.glow, height: 110 * scale),
-              ),
-              Positioned(
-                left: inset,
-                right: inset,
-                bottom: plank + 3,
-                height: shelfHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    ..._sequence(row.start),
-                    const Spacer(),
-                    if (row.middle case final middle?) ...[_build(middle), const Spacer()],
-                    ..._sequence(row.end),
-                  ],
-                ),
-              ),
-              if (hang != null)
-                Positioned.fromRect(
-                  rect: hang,
-                  child: row.hanging == _Hanging.ivy ? TrailingIvy(seed: index) : HangingUtensils(seed: index),
-                ),
-              Positioned(
-                left: 4,
-                right: 4,
-                bottom: 0,
-                child: ShelfPlank(wood: style.wood, glow: style.glow, height: plank),
-              ),
-            ],
+    final edit = widget.edit;
+    final row = widget.row;
+    final scene = SizedBox(
+      height: _m.rowHeight,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 8,
+            right: 8,
+            child: LightWash(glow: widget.style.glow, height: 110 * _m.scale),
           ),
-        );
+          if (edit != null)
+            // Tapping the wall puts down whatever is selected.
+            Positioned.fill(
+              child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => edit.select(null)),
+            ),
+          for (final b in row.books) _book(b),
+          // Standing pieces, then what hangs in front of them; each in the
+          // order placed, so the last moved is on top.
+          for (final d in row.decor)
+            if (!d.hangs) _piece(d),
+          for (final d in row.decor)
+            if (d.hangs) _piece(d),
+          if (_landing case final landing?) Positioned.fromRect(rect: landing, child: const _LandingMarker()),
+          Positioned(
+            left: 4,
+            right: 4,
+            bottom: 0,
+            child: ShelfPlank(wood: widget.style.wood, glow: widget.style.glow, height: _m.plank),
+          ),
+        ],
+      ),
+    );
+    if (edit == null) return scene;
+    return DragTarget<DecorDrag>(
+      onMove: (details) {
+        final landing = _landingFor(details);
+        if (landing != _landing) setState(() => _landing = landing);
       },
+      onLeave: (_) => setState(() => _landing = null),
+      onAcceptWithDetails: (details) {
+        setState(() => _landing = null);
+        final x = _xFor(details);
+        if (details.data.placed case final placed?) {
+          edit.move(placed.id, shelf: row.index, x: x);
+        } else {
+          edit.add(details.data.piece, shelf: row.index, x: x);
+        }
+      },
+      builder: (context, _, _) => scene,
     );
   }
 
-  /// Where the ivy or utensil rail hangs: centred over the widest empty
-  /// stretch of shelf, else above short decor at the right end. Never over
-  /// a book, so titles stay readable.
-  Rect? _hangingRect(double inner, double above) {
-    if (row.hanging == _Hanging.none) return null;
-    final ivy = row.hanging == _Hanging.ivy;
-    final w = (ivy ? 104 : 128) * scale;
-    final h = (ivy ? 96 : 100) * scale;
-    const inset = LibraryBookcase._inset;
-    final startEnd = inset + _span(row.start);
-    final endStart = inset + inner - _span(row.end);
-    final from = startEnd + (row.start.isEmpty ? 0 : 10);
-    final to = endStart - (row.end.isEmpty ? 0 : 10);
-    final gaps = <(double, double)>[];
-    if (row.middle case final m?) {
-      final mid = (startEnd + endStart) / 2;
-      gaps
-        ..add((from, mid - m.width / 2 - 10))
-        ..add((mid + m.width / 2 + 10, to));
-    } else {
-      gaps.add((from, to));
-    }
-    final widest = gaps.reduce((a, b) => a.$2 - a.$1 >= b.$2 - b.$1 ? a : b);
-    final room = widest.$2 - widest.$1;
-    if (room >= w * 0.8) {
-      final width = math.min(w, room);
-      return Rect.fromLTWH((widest.$1 + widest.$2 - width) / 2, 0, width, h);
-    }
-    final decor = row.end.whereType<_DecorItem>();
-    if (decor.isEmpty) return null;
-    final clear = above - decor.map((d) => d.height).reduce(math.max) - 6;
-    if (clear < 56 * scale) return null;
-    final width = math.min(w, _span(row.end) + 20);
-    return Rect.fromLTWH(inset + inner - width, 0, width, math.min(h, clear));
+  /// The dragged art's left edge, as an x position on this shelf.
+  double _xFor(DragTargetDetails<DecorDrag> details) {
+    final box = context.findRenderObject()! as RenderBox;
+    final topLeft = box.globalToLocal(details.offset);
+    return _m.xFor(topLeft.dx - _inset, details.data.size.width);
   }
 
-  List<Widget> _sequence(List<_ShelfItem> items) => [
-    for (final (i, item) in items.indexed) ...[
-      if (i > 0) SizedBox(width: _spacing(items[i - 1], item)),
-      _build(item),
-    ],
-  ];
+  Rect _landingFor(DragTargetDetails<DecorDrag> details) {
+    final size = details.data.size;
+    final left = _inset + _xFor(details) * (_m.inner - size.width).clamp(0.0, double.infinity);
+    final top = details.data.piece.hangs ? 0.0 : _m.room - size.height;
+    return Rect.fromLTWH(left, top, size.width, size.height);
+  }
 
-  Widget _build(_ShelfItem item) {
-    switch (item) {
-      case _BookItem():
-        return ShelfBook(
-          key: ValueKey(item.recipe.id),
-          recipe: item.recipe,
-          faceOut: item.faceOut,
-          width: item.width,
-          height: item.height,
-          scale: scale,
-          onTap: () => onOpen(item.recipe),
-          onLongPress: onLongPress == null ? null : () => onLongPress!(item.recipe),
-        );
-      case _DecorItem(kind: _DecorKind.plant):
-        return SizedBox(width: item.width, height: item.height, child: PottedPlant(seed: item.seed));
-      case _DecorItem(kind: _DecorKind.flowers):
-        return SizedBox(
-          width: item.width,
-          height: item.height,
-          child: FlowerVase(kind: style.flowers, seed: item.seed),
-        );
-      case _DecorItem(kind: _DecorKind.crock):
-        return SizedBox(width: item.width, height: item.height, child: UtensilCrock(seed: item.seed));
-      case _DecorItem(kind: _DecorKind.jars):
-        return SizedBox(width: item.width, height: item.height, child: PantryJars(seed: item.seed));
-      case _DecorItem(kind: _DecorKind.pot):
-        return SizedBox(width: item.width, height: item.height, child: DutchOven(seed: item.seed));
-      case _DecorItem(kind: _DecorKind.board):
-        return SizedBox(width: item.width, height: item.height, child: CuttingBoard(seed: item.seed));
-      case _DecorItem(kind: _DecorKind.candle):
-        final kind = item.seed.isEven ? CandleKind.pillar : CandleKind.tall;
-        return SizedBox(
-          width: item.width,
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: SizedBox.fromSize(
-              size: Candle.sizeOf(kind, scale),
-              child: Candle(kind: kind, seed: item.seed),
+  Widget _book(BookSpot b) {
+    final edit = widget.edit;
+    final book = ShelfBook(
+      recipe: b.recipe,
+      faceOut: b.faceOut,
+      width: b.width,
+      height: b.height,
+      scale: _m.scale,
+      onTap: () => widget.onOpen(b.recipe),
+      onLongPress: widget.onLongPress == null ? null : () => widget.onLongPress!(b.recipe),
+    );
+    if (edit == null) {
+      return Positioned(
+        key: ValueKey('book ${b.recipe.id}'),
+        left: _inset + b.left,
+        bottom: _m.plank + 3,
+        width: b.width,
+        height: b.height,
+        child: book,
+      );
+    }
+    // While dressing the shelves, books step back and slide aside for decor.
+    return AnimatedPositioned(
+      key: ValueKey('book ${b.recipe.id}'),
+      duration: ChefMotion.standard,
+      curve: ChefMotion.easeStandard,
+      left: _inset + b.left,
+      bottom: _m.plank + 3,
+      width: b.width,
+      height: b.height,
+      child: IgnorePointer(child: Opacity(opacity: 0.32, child: book)),
+    );
+  }
+
+  Widget _piece(DecorSpot d) {
+    final art = DecorArt(d.decor.piece, seed: d.decor.seed, flipped: d.decor.flipped);
+    final edit = widget.edit;
+    return Positioned(
+      key: ValueKey('decor ${d.decor.id}'),
+      left: _inset + d.left,
+      top: d.hangs ? 0 : null,
+      bottom: d.hangs ? null : _m.plank + 3,
+      width: d.size.width,
+      height: d.size.height,
+      child: edit == null ? art : _EditablePiece(spot: d, edit: edit, child: art),
+    );
+  }
+}
+
+/// A decoration while the shelves are being dressed: tap to select, drag a
+/// selected piece (or hold any piece) to move it.
+class _EditablePiece extends StatelessWidget {
+  final DecorSpot spot;
+  final ShelfEditController edit;
+  final Widget child;
+
+  const _EditablePiece({required this.spot, required this.edit, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = spot.decor;
+    final selected = edit.selected?.id == d.id;
+    if (selected && edit.takeReveal(d.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          Scrollable.ensureVisible(context, alignment: 0.4, duration: ChefMotion.standard);
+        }
+      });
+    }
+
+    final shown = selected
+        ? CompositedTransformTarget(
+            link: edit.selectionLink,
+            child: Stack(
+              clipBehavior: Clip.none,
+              fit: StackFit.expand,
+              children: [
+                child,
+                const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: _SelectionOutline()),
+              ],
             ),
-          ),
-        );
-      case _DecorItem(kind: _DecorKind.candlePair):
-        return SizedBox(
-          width: item.width,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              SizedBox.fromSize(
-                size: Candle.sizeOf(CandleKind.taper, scale),
-                child: Candle(kind: CandleKind.taper, seed: item.seed * 3 + 1),
-              ),
-              SizedBox.fromSize(
-                size: Candle.sizeOf(CandleKind.pillar, scale),
-                child: Candle(kind: CandleKind.pillar, seed: item.seed * 3 + 2),
-              ),
-            ],
-          ),
-        );
-    }
+          )
+        : child;
+    final feedback = _DragFeedback(size: spot.size, child: child);
+    final ghost = Opacity(opacity: 0.25, child: child);
+    final data = DecorDrag.move(d, spot.size);
+    // A selected piece moves with a plain drag; any other needs a hold, so
+    // swiping across the shelves still scrolls them.
+    final draggable = selected
+        ? Draggable<DecorDrag>(
+            data: data,
+            feedback: feedback,
+            childWhenDragging: ghost,
+            onDragStarted: edit.dragStarted,
+            onDragUpdate: (u) => edit.dragMoved(u.globalPosition),
+            onDragEnd: (_) => edit.dragEnded(),
+            child: shown,
+          )
+        : LongPressDraggable<DecorDrag>(
+            data: data,
+            delay: const Duration(milliseconds: 300),
+            feedback: feedback,
+            childWhenDragging: ghost,
+            onDragStarted: () {
+              HapticFeedback.selectionClick();
+              edit.dragStarted();
+            },
+            onDragUpdate: (u) => edit.dragMoved(u.globalPosition),
+            onDragEnd: (_) => edit.dragEnded(),
+            child: shown,
+          );
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${d.piece.label}, shelf ${d.shelf + 1}',
+      hint: selected ? null : 'Double tap to select it',
+      onTap: () => edit.select(d.id),
+      customSemanticsActions: selected
+          ? {
+              const CustomSemanticsAction(label: 'Move left'): () => edit.nudge(d.id, dx: -1),
+              const CustomSemanticsAction(label: 'Move right'): () => edit.nudge(d.id, dx: 1),
+              if (d.shelf > 0)
+                const CustomSemanticsAction(label: 'Move up a shelf'): () => edit.nudge(d.id, shelves: -1),
+              if (d.shelf < edit.shelfCount - 1)
+                const CustomSemanticsAction(label: 'Move down a shelf'): () => edit.nudge(d.id, shelves: 1),
+            }
+          : null,
+      excludeSemantics: true,
+      child: MouseRegion(
+        cursor: selected ? SystemMouseCursors.grab : SystemMouseCursors.click,
+        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => edit.select(d.id), child: draggable),
+      ),
+    );
   }
+}
+
+class _DragFeedback extends StatelessWidget {
+  final Size size;
+  final Widget child;
+  const _DragFeedback({required this.size, required this.child});
+
+  @override
+  Widget build(BuildContext context) => SizedBox.fromSize(
+    size: size,
+    child: Opacity(opacity: 0.92, child: child),
+  );
+}
+
+class _SelectionOutline extends StatelessWidget {
+  const _SelectionOutline();
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.75), width: 1.5),
+      ),
+    ),
+  );
+}
+
+/// Where a dragged piece will land.
+class _LandingMarker extends StatelessWidget {
+  const _LandingMarker();
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withValues(alpha: 0.10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
+      ),
+    ),
+  );
 }
