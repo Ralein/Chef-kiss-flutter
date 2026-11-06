@@ -58,6 +58,7 @@ class ShelfEditController extends ChangeNotifier {
   bool _dragging = false;
   bool _booksMoved = false;
   int _ids = 0;
+  bool _disposed = false;
 
   ShelfStyle get style => _style;
   List<PlacedDecor> get pieces => _style.pieces;
@@ -174,6 +175,46 @@ class ShelfEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The bookcase's shelves as last laid out; the editor's count follows
+  /// on the next frame.
+  void reportShelves(int count) {
+    if (count == shelfCount) return;
+    shelfCount = count;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  /// One more shelf at the bottom.
+  void addShelf() {
+    _style = _style.copyWith(shelves: shelfCount + 1);
+    notifyListeners();
+  }
+
+  /// The bottom shelf goes: what stood on it moves up to the shelf above.
+  /// Books that still don't fit keep a shelf of their own.
+  void removeShelf() {
+    if (shelfCount <= 1) return;
+    final last = shelfCount - 2;
+    final books = _style.books;
+    _style = ShelfStyle(
+      wall: _style.wall,
+      tint: _style.tint,
+      wood: _style.wood,
+      glow: _style.glow,
+      decor: [for (final p in pieces) p.shelf > last ? p.copyWith(shelf: last) : p],
+      books: books == null || books.length <= last + 1
+          ? books
+          : [
+              ...books.take(last),
+              [for (final s in books.skip(last)) ...s],
+            ],
+      shelves: shelfCount - 1,
+    );
+    _selectedId = null;
+    notifyListeners();
+  }
+
   /// A ready-made room; the books stay where they were put.
   void applyLook(ShelfLook look) {
     _style = _style.withLook(look.style);
@@ -230,6 +271,7 @@ class ShelfEditController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _stopAutoScroll();
     super.dispose();
   }

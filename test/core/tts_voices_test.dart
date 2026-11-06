@@ -2,7 +2,7 @@ import 'package:chefs_kiss/core/platform/tts_voices.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('the most natural installed voices come first, the phone’s region breaking ties', () {
+  test('every installed English voice, the chosen accent first, the most natural first within it', () {
     final voices = [
       {'name': 'en-us-x-sfg-local', 'locale': 'en-US', 'quality': 300, 'network_required': '0'},
       {'name': 'en-in-x-ene-network', 'locale': 'en-IN', 'quality': 400, 'network_required': '1'},
@@ -19,6 +19,9 @@ void main() {
       'en-gb-x-gbb-local',
       'en-us-x-sfg-local',
     ]);
+    // American by default: US voices lead, however good the others are.
+    expect(rankVoices(voices).first.name, 'en-us-x-sfg-local');
+    expect(rankVoices(voices), hasLength(4), reason: 'no cap on the list');
     expect(voiceLabels(ranked).values, [
       'English (India) · natural',
       'English (India) 2 · natural · online',

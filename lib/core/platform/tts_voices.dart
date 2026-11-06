@@ -70,20 +70,20 @@ const _regions = {
   'SG': 'Singapore',
 };
 
-/// The voices worth offering in [language], most natural first: installed
-/// ones only, best quality, the phone's own [region] first, voices that
-/// work offline before online ones. At most [limit].
-List<TtsVoice> rankVoices(Iterable<TtsVoice> voices, {String language = 'en', String? region, int limit = 8}) {
+/// Every installed voice in [language]: [region]'s accent first (American
+/// unless asked otherwise), then the others; within each, the most natural
+/// first and voices that work offline before online ones. At most [limit].
+List<TtsVoice> rankVoices(Iterable<TtsVoice> voices, {String language = 'en', String? region = 'US', int? limit}) {
   int score(TtsVoice v) =>
+      (region != null && v.region == region.toUpperCase() ? 1000 : 0) +
       v.quality * 10 +
       (v.sounds ? 4 : 0) +
-      (region != null && v.region == region.toUpperCase() ? 6 : 0) +
       (v.needsNetwork ? 0 : 3);
   final ranked = [
     for (final v in voices.toSet())
       if (v.installed && v.language == language) v,
   ]..sort((a, b) => score(b).compareTo(score(a)));
-  return ranked.take(limit).toList();
+  return limit == null ? ranked : ranked.take(limit).toList();
 }
 
 /// Short names for a ranked list: "English (India)", "English (India) 2"…

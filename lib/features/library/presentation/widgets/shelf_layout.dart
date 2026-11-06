@@ -104,6 +104,7 @@ List<ShelfRowPlan> layoutShelves(
   List<PlacedDecor> decor,
   ShelfMetrics m, {
   List<List<String>>? arranged,
+  int minShelves = ShelfMetrics.minShelves,
 }) {
   final shelves = arranged == null ? null : _arrangedShelves(recipes, arranged);
   final lastArranged = shelves?.lastIndexWhere((s) => s.isNotEmpty) ?? -1;
@@ -112,7 +113,7 @@ List<ShelfRowPlan> layoutShelves(
   var next = 0; // Unarranged: the next recipe to place.
   var carry = <Recipe>[]; // Arranged: books pushed on from the shelf above.
   bool booksLeft(int r) => shelves == null ? next < recipes.length : carry.isNotEmpty || r <= lastArranged;
-  for (var r = 0; booksLeft(r) || r < ShelfMetrics.minShelves || r <= lastDecorated; r++) {
+  for (var r = 0; booksLeft(r) || r < minShelves || r <= lastDecorated; r++) {
     final spots = [
       for (final d in decor)
         if (d.shelf == r) DecorSpot(d, left: m.leftOf(d), size: m.sizeOf(d)),
@@ -121,7 +122,7 @@ List<ShelfRowPlan> layoutShelves(
     final List<Recipe> wanted;
     if (shelves == null) {
       final remaining = recipes.length - next;
-      final cap = r < ShelfMetrics.minShelves ? (remaining / (ShelfMetrics.minShelves - r)).ceil() : remaining;
+      final cap = r < minShelves ? (remaining / (minShelves - r)).ceil() : remaining;
       wanted = recipes.sublist(next, next + cap);
     } else {
       wanted = [...carry, if (r < shelves.length) ...shelves[r]];

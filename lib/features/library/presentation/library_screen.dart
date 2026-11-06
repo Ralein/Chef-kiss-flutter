@@ -138,12 +138,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// where it was left.
   void _openCookbook(String bookId) => _openJournal(book: bookId, recipeId: _bookmarks[bookId]);
 
-  void _openFromShelf(Recipe item) =>
-      Cookbook.isCookbook(item) ? _openCookbook(Cookbook.collectionIdOf(item)) : _openInJournal(item);
+  /// While searching or filtering, a book opens to just its matches.
+  void _openFromShelf(Recipe item) {
+    if (!Cookbook.isCookbook(item)) return _openInJournal(item);
+    final bookId = Cookbook.collectionIdOf(item);
+    _narrowed ? _openJournal(book: bookId, matchesOnly: true) : _openCookbook(bookId);
+  }
 
-  void _openJournal({String? recipeId, String? book}) {
+  /// The open book shows only the recipes matching the search and filter.
+  bool _journalMatchesOnly = false;
+
+  void _openJournal({String? recipeId, String? book, bool matchesOnly = false}) {
     audioChime.playPageFlip();
     setState(() {
+      if (matchesOnly != _journalMatchesOnly) _journalKey = GlobalKey<JournalViewState>();
+      _journalMatchesOnly = matchesOnly;
       // Another book is another journal.
       if (book != _journalBook) _journalKey = GlobalKey<JournalViewState>();
       _journalBook = book;
@@ -316,25 +325,31 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final filters = <_Filter>[
       _Filter('all', 'All', (_) => true),
       _Filter('fav', 'Favorites', (r) => r.isFavorite, icon: LucideIcons.heart),
-      _Filter('quick', 'Under 30 min', (r) => r.totalMinutes > 0 && r.totalMinutes <= 30, icon: LucideIcons.zap),
-      _Filter('easy', 'Easy', (r) => r.difficulty == RecipeDifficulty.easy, icon: LucideIcons.smile),
+      _Filter('quick', 'Under 30 min', (r) => r.totalMinutes > 0 && r.totalMinutes <= 30, icon: LucideIcons.timer),
+      _Filter('easy', 'Easy', (r) => r.difficulty == RecipeDifficulty.easy, icon: LucideIcons.signalLow),
       _Filter('veg', 'Vegetarian', (r) {
         final diet = RecipeInsights.of(r).diet;
         return diet.isComplete && diet.isVegetarian;
-      }, icon: LucideIcons.leaf),
+      }, icon: LucideIcons.carrot),
     ];
 
-    final counts = <String, ({String name, int count})>{};
+    final counts = <String, ({String name, String kind, int count})>{};
     for (final r in recipes) {
       for (final l in r.labels.where((l) => l.kind == 'cuisine' || l.kind == 'tag' || l.kind == 'dietary')) {
         final key = l.canonicalKey.toLowerCase();
-        counts[key] = (name: l.displayName, count: (counts[key]?.count ?? 0) + 1);
+        counts[key] = (name: l.displayName, kind: l.kind, count: (counts[key]?.count ?? 0) + 1);
       }
     }
     final top = counts.entries.toList()..sort((a, b) => b.value.count.compareTo(a.value.count));
     for (final e in top.take(6)) {
       filters.add(
-        _Filter('label:${e.key}', e.value.name, (r) => r.labels.any((l) => l.canonicalKey.toLowerCase() == e.key)),
+        _Filter(
+          'label:${e.key}',
+          e.value.name,
+          (r) => r.labels.any((l) => l.canonicalKey.toLowerCase() == e.key),
+          // Cuisines are places; diets and other tags are tags.
+          icon: e.value.kind == 'cuisine' ? LucideIcons.globe : LucideIcons.tag,
+        ),
       );
     }
     return filters;
@@ -478,6 +493,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ? [for (final id in book.recipeIds) ?byId[id]]
           : all,
     );
+    if (_journalMatchesOnly && _narrowed) {
+      final matching = {for (final r in _apply(all, _filtersFor(all), _shelfStyle)) r.id};
+      recipes.retainWhere((r) => matching.contains(r.id));
+    }
     final volume = isMine
         ? Cookbook.myRecipes(recipes: recipes.length, cover: covers[myRecipesId])
         : book != null
@@ -663,18 +682,25 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     ];
   }
 
+  /// How many of [matching] each book holds, by its id on the shelf.
+  Map<String, int> _matchesByBook(List<Recipe> matching, List<RecipeCollection> books) {
+    final counts = <String, int>{};
+    for (final r in matching) {
+      final id = Cookbook.volumeId(bookOf(books, r.id));
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return counts;
+  }
+
   /// What stands on the shelf: My Recipes, holding every recipe in no
-  /// cookbook, then each cookbook. While filtering or searching, the
-  /// matching recipes themselves.
+  /// cookbook, then each cookbook — searching and filtering included, which
+  /// light up the books holding matches.
   List<Recipe> _shelfItems(
     List<Recipe> all,
-    List<Recipe> shown,
     List<RecipeCollection> books,
     Map<String, BookCover> covers,
-    ShelfStyle style, {
-    required bool narrowed,
-  }) {
-    if (narrowed) return shown;
+    ShelfStyle style,
+  ) {
     final ids = {for (final r in all) r.id};
     final loose = unfiledRecipes(all, books).length;
     final volumes = [
@@ -981,14 +1007,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       // filter, in the order the shelves keep them.
                       LibraryBookcase(
                         key: const ValueKey('bookcase'),
-                        recipes: _shelfItems(
-                          all,
-                          edit != null ? _apply(all, filters, style, unfiltered: true) : visible,
-                          books,
-                          covers,
-                          style,
-                          narrowed: edit == null && _narrowed,
-                        ),
+                        recipes: _shelfItems(all, books, covers, style),
+                        matches: edit == null && _narrowed ? _matchesByBook(visible, books) : null,
                         style: style,
                         // Books as arranged, unless sorted some other way (a
                         // book moved just now always shows where it was put).

@@ -390,7 +390,28 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text('Shelves', style: label),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Remove a shelf',
+                onPressed: _c.shelfCount > 1 ? _c.removeShelf : null,
+                icon: const Icon(LucideIcons.minus, size: 20),
+              ),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${_c.shelfCount}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              IconButton(tooltip: 'Add a shelf', onPressed: _c.addShelf, icon: const Icon(LucideIcons.plus, size: 20)),
+            ],
+          ),
+          const SizedBox(height: 6),
         ];
       case _Category.kitchen || _Category.plants || _Category.lights:
         return const [];

@@ -49,7 +49,8 @@ class FlutterTtsSpeechService implements SpeechOutputService {
     try {
       final raw = await _engine!.getVoices;
       final all = raw is List ? raw.map(TtsVoice.fromPlatform).nonNulls : const <TtsVoice>[];
-      return _voices = rankVoices(all, region: PlatformDispatcher.instance.locale.countryCode);
+      // American English unless another voice is picked.
+      return _voices = rankVoices(all);
     } catch (_) {
       return const [];
     }

@@ -541,6 +541,26 @@ void main() {
     await _teardown(tester, db);
   });
 
+  testWidgets('shelves can be added and removed in the editor; what stood on a removed one moves up', (tester) async {
+    final (db, container) = await _pumpApp(tester, size: const Size(390, 1100), recipes: [_recipe('a', 'Apple pie')]);
+    Finder planks() => find.descendant(of: find.byType(LibraryBookcase), matching: find.byType(ShelfPlank));
+    expect(planks(), findsNWidgets(4), reason: 'the top edge plus three shelves');
+    await _openEditor(tester);
+    await _pick(tester, find.byTooltip('Shelf'));
+    await _pick(tester, find.byTooltip('Add a shelf'));
+    expect(planks(), findsNWidgets(5));
+    await _pick(tester, find.byTooltip('Remove a shelf'));
+    await _pick(tester, find.byTooltip('Remove a shelf'));
+    expect(planks(), findsNWidgets(3));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final stored = await _storedShelf(tester, container);
+    expect(stored.shelves, 2);
+    expect(stored.pieces.every((d) => d.shelf <= 1), isTrue, reason: 'the third shelf\'s things moved up');
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
   testWidgets('the hanging utensil rail moves like everything else', (tester) async {
     final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
     await _openEditor(tester);
@@ -820,7 +840,7 @@ void main() {
     journal = tester.widget<JournalView>(find.byType(JournalView));
     expect(journal.recipes.map((r) => r.title), ['Apple pie']);
 
-    // Back on the shelf, a search finds recipes inside books too.
+    // Back on the shelf, a search lights up the books holding matches.
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Search'));
@@ -828,8 +848,21 @@ void main() {
     await tester.enterText(find.byType(TextField), 'brûlée');
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
-    expect(_book('Crème brûlée'), findsOneWidget);
-    expect(_book('French'), findsNothing);
+    expect(_book('Crème brûlée'), findsNothing, reason: 'recipes stay inside their books');
+    expect(_book('French'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(LibraryBookcase), matching: find.text('1')),
+      findsOneWidget,
+      reason: 'French holds one match',
+    );
+    final faded = find.ancestor(of: _book('My Recipes'), matching: find.byType(Opacity));
+    expect(tester.widget<Opacity>(faded.first).opacity, lessThan(0.5), reason: 'My Recipes has none');
+
+    // Opened now, the book shows just its matches.
+    await tester.tap(_book('French'));
+    await tester.pumpAndSettle();
+    journal = tester.widget<JournalView>(find.byType(JournalView));
+    expect(journal.recipes.map((r) => r.title), ['Crème brûlée']);
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
   });

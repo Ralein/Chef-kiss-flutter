@@ -214,6 +214,10 @@ class ShelfStyle {
   /// new recipes — stand after the last arranged one.
   final List<List<String>>? books;
 
+  /// How many shelves the bookcase has, as set by hand; null for the
+  /// default. There are always enough for every book.
+  final int? shelves;
+
   const ShelfStyle({
     this.wall = WallStyle.subway,
     this.tint = 0,
@@ -221,6 +225,7 @@ class ShelfStyle {
     this.glow = ShelfGlow.warm,
     this.decor,
     this.books,
+    this.shelves,
   });
 
   List<PlacedDecor> get pieces => decor ?? cozyKitchenDecor;
@@ -237,6 +242,7 @@ class ShelfStyle {
     ShelfGlow? glow,
     List<PlacedDecor>? decor,
     List<List<String>>? books,
+    int? shelves,
   }) => ShelfStyle(
     wall: wall ?? this.wall,
     tint: tint ?? this.tint,
@@ -244,12 +250,20 @@ class ShelfStyle {
     glow: glow ?? this.glow,
     decor: decor ?? this.decor,
     books: books ?? this.books,
+    shelves: shelves ?? this.shelves,
   );
 
   /// [look]'s wall, shelves and decorations, with the books left where they
   /// were put.
-  ShelfStyle withLook(ShelfStyle look) =>
-      ShelfStyle(wall: look.wall, tint: look.tint, wood: look.wood, glow: look.glow, decor: look.decor, books: books);
+  ShelfStyle withLook(ShelfStyle look) => ShelfStyle(
+    wall: look.wall,
+    tint: look.tint,
+    wood: look.wood,
+    glow: look.glow,
+    decor: look.decor,
+    books: books,
+    shelves: shelves,
+  );
 
   /// Same room, ignoring whether the decorations were ever arranged by hand.
   bool looksLike(ShelfStyle other) =>
@@ -266,6 +280,7 @@ class ShelfStyle {
     'glow': glow.name,
     if (decor case final decor?) 'decor': [for (final d in decor) d.toJson()],
     if (books case final books?) 'books': books,
+    if (shelves case final shelves?) 'shelves': shelves,
   };
 
   factory ShelfStyle.fromJson(Object? json) {
@@ -279,6 +294,7 @@ class ShelfStyle {
       glow: _byName(ShelfGlow.values, json['glow'], ShelfGlow.warm),
       decor: decor is List ? [...decor.map(PlacedDecor.fromJson).nonNulls] : null,
       books: _shelvesFromJson(json['books']),
+      shelves: json['shelves'] is int && (json['shelves'] as int) >= 1 ? json['shelves'] as int : null,
     );
   }
 
@@ -290,7 +306,8 @@ class ShelfStyle {
       other.wood == wood &&
       other.glow == glow &&
       listEquals(other.decor, decor) &&
-      _sameShelves(other.books, books);
+      _sameShelves(other.books, books) &&
+      other.shelves == shelves;
 
   @override
   int get hashCode => Object.hash(
@@ -300,6 +317,7 @@ class ShelfStyle {
     glow,
     decor == null ? null : Object.hashAll(decor!),
     books == null ? null : Object.hashAll(books!.map(Object.hashAll)),
+    shelves,
   );
 }
 

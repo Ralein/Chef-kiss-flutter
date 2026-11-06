@@ -164,8 +164,8 @@ class _RateLimitTile extends ConsumerWidget {
   }
 }
 
-/// The reading voice: automatic (the most natural on this phone) or one
-/// picked from a short list, each with a sample to hear.
+/// The reading voice: automatic (the most natural American English voice on
+/// this phone) or any English voice it has, each with a sample to hear.
 class _VoiceTile extends ConsumerWidget {
   const _VoiceTile();
 
@@ -181,7 +181,7 @@ class _VoiceTile extends ConsumerWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Voice'),
-      subtitle: Text(current == null ? 'Automatic · the most natural on this phone' : labels[current]!),
+      subtitle: Text(current == null ? 'Automatic · American English' : labels[current]!),
       trailing: const Icon(LucideIcons.chevronRight),
       onTap: () => showModalBottomSheet<void>(
         context: context,
@@ -215,19 +215,21 @@ class _VoicePicker extends ConsumerWidget {
     );
 
     return SafeArea(
-      child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+        child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Voice', style: context.chefText.headlineSmall),
+              child: Text('Voice', style: context.chefText.titleLarge),
             ),
             ListTile(
               leading: Icon(settings.voice == null ? LucideIcons.circleCheck : LucideIcons.circle),
               title: const Text('Automatic'),
-              subtitle: const Text('The most natural voice on this phone'),
+              subtitle: const Text('The most natural American English voice'),
               onTap: () => choose(null),
             ),
             for (final v in voices)
@@ -238,6 +240,7 @@ class _VoicePicker extends ConsumerWidget {
                 onTap: () => choose(v.name),
               ),
           ],
+        ),
         ),
       ),
     );

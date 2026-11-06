@@ -29,6 +29,10 @@ class LibraryBookcase extends StatelessWidget {
   final ValueChanged<Recipe>? onLongPress;
   final ShelfEditController? edit;
 
+  /// While searching or filtering: how many matching recipes each book holds,
+  /// by book id. Books with none fade; the others show their count.
+  final Map<String, int>? matches;
+
   const LibraryBookcase({
     super.key,
     required this.recipes,
@@ -37,6 +41,7 @@ class LibraryBookcase extends StatelessWidget {
     required this.onOpen,
     this.onLongPress,
     this.edit,
+    this.matches,
   });
 
   @override
@@ -44,14 +49,20 @@ class LibraryBookcase extends StatelessWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final metrics = ShelfMetrics.forWidth(constraints.crossAxisExtent);
-        final rows = layoutShelves(recipes, style.pieces, metrics, arranged: arranged);
+        final rows = layoutShelves(
+          recipes,
+          style.pieces,
+          metrics,
+          arranged: arranged,
+          minShelves: style.shelves ?? ShelfMetrics.minShelves,
+        );
         // The books as they stand now: where a moved book is taken from.
         final shelves = [
           for (final r in rows) [for (final b in r.books) b.recipe.id],
         ];
         if (edit case final edit?) {
           edit.metrics = metrics;
-          edit.shelfCount = rows.length;
+          edit.reportShelves(rows.length);
         }
         return SliverList.builder(
           itemCount: rows.length + 1,
@@ -71,6 +82,7 @@ class LibraryBookcase extends StatelessWidget {
               onOpen: onOpen,
               onLongPress: onLongPress,
               edit: edit,
+              matches: matches,
             );
           },
         );
@@ -87,6 +99,7 @@ class _ShelfRow extends StatefulWidget {
   final ValueChanged<Recipe> onOpen;
   final ValueChanged<Recipe>? onLongPress;
   final ShelfEditController? edit;
+  final Map<String, int>? matches;
 
   const _ShelfRow({
     required this.row,
@@ -96,6 +109,7 @@ class _ShelfRow extends StatefulWidget {
     required this.onOpen,
     required this.onLongPress,
     required this.edit,
+    required this.matches,
   });
 
   @override
@@ -217,17 +231,39 @@ class _ShelfRowState extends State<_ShelfRow> {
     return null;
   }
 
+  /// While filtering, a book without matches fades; one with them shows how many.
+  Widget _withMatches(String id, Widget book) {
+    final matches = widget.matches;
+    if (matches == null) return book;
+    final count = matches[id] ?? 0;
+    if (count == 0) return Opacity(opacity: 0.3, child: book);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: book),
+        Positioned(
+          top: -8,
+          right: -8,
+          child: Semantics(label: '$count matching', child: _MatchBadge(count)),
+        ),
+      ],
+    );
+  }
+
   Widget _book(BookSpot b) {
     final edit = widget.edit;
-    final book = ShelfBook(
-      recipe: b.recipe,
-      faceOut: b.faceOut,
-      width: b.width,
-      height: b.height,
-      scale: _m.scale,
-      // While dressing the shelves a tap only puts down a selected piece.
-      onTap: edit == null ? () => widget.onOpen(b.recipe) : () => edit.select(null),
-      onLongPress: edit == null && widget.onLongPress != null ? () => widget.onLongPress!(b.recipe) : null,
+    final Widget book = _withMatches(
+      b.recipe.id,
+      ShelfBook(
+        recipe: b.recipe,
+        faceOut: b.faceOut,
+        width: b.width,
+        height: b.height,
+        scale: _m.scale,
+        // While dressing the shelves a tap only puts down a selected piece.
+        onTap: edit == null ? () => widget.onOpen(b.recipe) : () => edit.select(null),
+        onLongPress: edit == null && widget.onLongPress != null ? () => widget.onLongPress!(b.recipe) : null,
+      ),
     );
     // Books slide aside as others (or decorations) move in. Each keeps the
     // same widgets in and out of the editor, so none reloads its cover.
@@ -267,6 +303,32 @@ class _ShelfRowState extends State<_ShelfRow> {
 
 /// A book that, while the shelves are being dressed ([edit] set), can be
 /// held and carried along the shelf or onto another one.
+/// A count of matching recipes, pinned to a book's top corner.
+class _MatchBadge extends StatelessWidget {
+  final int count;
+  const _MatchBadge(this.count);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22),
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: c.accentTomato,
+        borderRadius: BorderRadius.circular(11),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 3)],
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(color: c.contentInverse, fontSize: 12, fontWeight: FontWeight.w700, height: 1),
+      ),
+    );
+  }
+}
+
 class _MovableBook extends StatelessWidget {
   final BookSpot spot;
   final int shelf;
