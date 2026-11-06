@@ -211,7 +211,7 @@ class _ShelfBookState extends State<ShelfBook> {
       button: true,
       label: Cookbook.isCookbook(r)
           ? '${r.title}, cookbook, ${r.summary}. Opens the book.'
-          : '${r.title}. ${KitchenFormat.minutes(r.totalMinutes)}${r.isFavorite ? ', favorite' : ''}. Opens in the journal.',
+          : '${r.title}. ${KitchenFormat.minutes(r.totalMinutes)}${r.isFavorite ? ', favorite' : ''}. Opens in the cookbook.',
       excludeSemantics: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,

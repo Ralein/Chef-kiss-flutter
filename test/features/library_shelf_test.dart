@@ -740,10 +740,10 @@ void main() {
     expect(find.byType(FloatingActionButton), findsNothing);
     expect(find.text('AI recipe'), findsNothing, reason: 'quick actions moved off the home page');
 
-    // Empty collections: one button, no FAB.
-    await tester.tap(find.text('Cookbooks').last);
+    // Books: one New book button, no FAB.
+    await tester.tap(find.text('Books').last);
     await tester.pumpAndSettle();
-    expect(find.text('Create a cookbook'), findsOneWidget);
+    expect(find.text('New book'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
     await _teardown(tester, db);
   });

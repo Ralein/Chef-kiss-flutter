@@ -522,8 +522,8 @@ class JournalViewState extends ConsumerState<JournalView> {
     final radius = BorderRadius.circular(spread ? 10 : 16);
     return Semantics(
       label: spread
-          ? 'Recipe journal, pages $first and ${first + 1} of $_pageCount'
-          : 'Recipe journal, page $first of $_pageCount',
+          ? 'Cookbook, pages $first and ${first + 1} of $_pageCount'
+          : 'Cookbook, page $first of $_pageCount',
       container: true,
       child: Padding(
         padding: const EdgeInsets.only(right: 6, bottom: 6),

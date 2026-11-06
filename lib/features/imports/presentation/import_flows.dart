@@ -122,15 +122,19 @@ class _AddRecipeSheet extends ConsumerWidget {
       bool needsAi = false,
     }) {
       return ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
         leading: Container(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(color: c.meterTrack(tint), borderRadius: BorderRadius.circular(12)),
           child: Icon(icon, color: tint),
         ),
         title: Text(title),
-        subtitle: Text(needsAi && !aiReady ? '$subtitle · needs AI setup' : subtitle),
+        subtitle: Text(
+          needsAi && !aiReady ? '$subtitle · needs AI setup' : subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         trailing: const Icon(LucideIcons.chevronRight),
         onTap: onTap,
       );
@@ -138,20 +142,22 @@ class _AddRecipeSheet extends ConsumerWidget {
 
     void choose(_AddChoice choice) => Navigator.of(context).pop(choice);
 
+    // Scrolls rather than spilling off a short screen or large text.
     return SafeArea(
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Add a recipe', style: t.headlineSmall),
+            child: Text('Add a recipe', style: t.titleLarge),
           ),
           option(
-            icon: LucideIcons.sparkles,
+            icon: LucideIcons.chefHat,
             tint: c.accentTomato,
             title: 'Create with AI',
-            subtitle: 'Describe a dish and get a complete recipe',
+            subtitle: 'Describe a dish, get the whole recipe',
             needsAi: true,
             onTap: () => choose(_AddChoice.ai),
           ),
@@ -159,7 +165,7 @@ class _AddRecipeSheet extends ConsumerWidget {
             icon: LucideIcons.scanText,
             tint: c.accentHerb,
             title: 'Scan a recipe',
-            subtitle: 'Photo of a cookbook page or handwritten card',
+            subtitle: 'A cookbook page or handwritten card',
             needsAi: true,
             onTap: () => choose(_AddChoice.photo),
           ),
@@ -186,6 +192,7 @@ class _AddRecipeSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
         ],
+        ),
       ),
     );
   }
@@ -390,7 +397,7 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
         children: [
           Row(
             children: [
-              Icon(LucideIcons.sparkles, color: c.accentTomato),
+              Icon(LucideIcons.chefHat, color: c.accentTomato),
               const SizedBox(width: 8),
               Text('Create with AI', style: t.headlineSmall),
             ],
@@ -428,7 +435,7 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _generate,
-              icon: const Icon(LucideIcons.sparkles),
+              icon: const Icon(LucideIcons.chefHat),
               label: const Text('Create recipe'),
             ),
           ],

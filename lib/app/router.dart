@@ -38,13 +38,15 @@ GoRouter createRouter({String initialLocation = '/'}) {
           StatefulShellBranch(routes: [
             GoRoute(
               path: '/',
-              // `/?view=journal&recipe=<id>[&decorate=1]` opens the journal at a recipe.
+              // `/?view=journal&recipe=<id>[&decorate=1]` opens the cookbook at a recipe;
+              // `&book=<id>` opens one book.
               builder: (context, state) {
                 final q = state.uri.queryParameters;
                 return LibraryScreen(
                   key: ValueKey('library:${state.uri.query}'),
                   initialView: LibraryView.fromName(q['view']),
                   initialRecipeId: q['recipe'],
+                  initialBook: q['book'],
                   startDecorating: q['decorate'] == '1',
                 );
               },

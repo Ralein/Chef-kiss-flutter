@@ -112,7 +112,7 @@ class _AiSection extends ConsumerWidget {
     final t = context.chefText;
     return _Section(
       title: 'AI & Scanning',
-      icon: LucideIcons.sparkles,
+      icon: LucideIcons.chefHat,
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,

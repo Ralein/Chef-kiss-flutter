@@ -172,7 +172,7 @@ class _DishIdeasScreenState extends ConsumerState<DishIdeasScreen> {
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: _ingredients.isEmpty && _input.text.trim().isEmpty || _thinking ? null : _suggest,
-                  icon: const Icon(LucideIcons.sparkles, size: 18),
+                  icon: const Icon(LucideIcons.chefHat, size: 18),
                   label: Text(ideas == null ? 'Suggest dishes' : 'Suggest others'),
                 ),
                 const SizedBox(height: 24),

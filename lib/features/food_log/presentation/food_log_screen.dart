@@ -162,7 +162,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SectionHeader('Calories', subtitle: 'Last 7 days · tap a day to open it'),
+                          SectionHeader('This week', subtitle: 'Tap a day to open it'),
                           const SizedBox(height: 16),
                           WeeklyCaloriesChart(
                             summaries: week,

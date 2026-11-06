@@ -68,7 +68,7 @@ void main() {
     expect(find.descendant(of: find.byType(LibraryScreen), matching: find.text('Recipes')), findsOneWidget);
     // Every recipe is in a book: until it's moved to one of its own, My Recipes.
     expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'My Recipes'), findsOneWidget);
-    for (final tab in ['Recipes', 'Scan', 'Food log', 'Cookbooks', 'Settings']) {
+    for (final tab in ['Recipes', 'Scan', 'Food log', 'Books', 'Settings']) {
       expect(find.text(tab), findsWidgets, reason: '$tab tab');
     }
 
@@ -121,6 +121,7 @@ void main() {
     await tester.tap(find.text('Food log').last);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 8');
+    await tester.scrollUntilVisible(find.text('Nothing logged yet today'), 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Nothing logged yet today'), findsOneWidget);
 
     // Settings shows the app's own free AI, and how busy it is.

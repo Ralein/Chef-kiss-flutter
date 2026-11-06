@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/chef_toast_service.dart';
@@ -32,9 +33,9 @@ extension ScanModeCopy on ScanMode {
       };
 
   IconData get icon => switch (this) {
-        ScanMode.meal => Icons.restaurant_rounded,
-        ScanMode.ingredients => Icons.kitchen_outlined,
-        ScanMode.recipeCard => Icons.receipt_long_outlined,
+        ScanMode.meal => LucideIcons.utensils,
+        ScanMode.ingredients => LucideIcons.refrigerator,
+        ScanMode.recipeCard => LucideIcons.scrollText,
       };
 
   String get headline => switch (this) {
@@ -45,7 +46,7 @@ extension ScanModeCopy on ScanMode {
 
   String get explainer => switch (this) {
         ScanMode.meal => 'Get calories, macros and allergens for a meal, then log it.',
-        ScanMode.ingredients => 'Identify ingredients and find recipes you can make with them.',
+        ScanMode.ingredients => 'Snap or type what you have, and Chef’s Kiss AI suggests what to cook.',
         ScanMode.recipeCard => 'Turn a cookbook page or handwritten card into a saved recipe.',
       };
 }
@@ -139,6 +140,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   busy: _busy,
                   onCamera: PhotoPicker.cameraAvailable ? () => _capture(ImageSource.camera) : null,
                   onGallery: () => _capture(ImageSource.gallery),
+                  // No photo needed: list what you have instead.
+                  onType: _mode == ScanMode.ingredients ? () => context.push('/ideas') : null,
                 ),
                 if (_mode != ScanMode.recipeCard) ...[
                   const SizedBox(height: 16),
@@ -148,7 +151,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Add a detail (optional)',
                       hintText: 'e.g. “I ate half”, “dressing on the side”, “oat milk”',
-                      prefixIcon: Icon(Icons.edit_note_rounded),
+                      prefixIcon: Icon(LucideIcons.notebookPen),
                     ),
                   ),
                 ],
@@ -158,12 +161,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.lock_outline_rounded, size: 16, color: c.contentSecondary),
+                    Icon(LucideIcons.lock, size: 16, color: c.contentSecondary),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Photos are sent securely to Claude (Anthropic) for analysis. Nutrition values are estimates, '
-                        'not medical advice.',
+                        'Photos go to Chef’s Kiss AI, which runs on free shared models that may keep what they '
+                        'see. Nutrition values are estimates, not medical advice.',
                         style: t.bodySmall,
                       ),
                     ),
@@ -227,7 +230,17 @@ class _CaptureCard extends StatelessWidget {
   final VoidCallback? onCamera;
   final VoidCallback onGallery;
 
-  const _CaptureCard({required this.mode, required this.enabled, required this.busy, required this.onCamera, required this.onGallery});
+  /// Ingredients can be typed instead of photographed.
+  final VoidCallback? onType;
+
+  const _CaptureCard({
+    required this.mode,
+    required this.enabled,
+    required this.busy,
+    required this.onCamera,
+    required this.onGallery,
+    this.onType,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -248,30 +261,43 @@ class _CaptureCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(mode.headline, style: t.titleLarge, textAlign: TextAlign.center),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
+          // Side by side, each half the card: one row however long the labels.
+          Row(
             children: [
-              if (onCamera != null)
-                FilledButton.icon(
-                  onPressed: enabled ? onCamera : null,
-                  icon: const Icon(Icons.photo_camera_rounded),
-                  label: const Text('Take photo'),
+              if (onCamera != null) ...[
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: enabled ? onCamera : null,
+                    icon: const Icon(LucideIcons.camera, size: 18),
+                    label: const FittedBox(child: Text('Take photo')),
+                  ),
                 ),
-              (onCamera != null)
-                  ? OutlinedButton.icon(
-                      onPressed: enabled ? onGallery : null,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Choose photo'),
-                    )
-                  : FilledButton.icon(
-                      onPressed: enabled ? onGallery : null,
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Choose photo'),
-                    ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled ? onGallery : null,
+                    icon: const Icon(LucideIcons.image, size: 18),
+                    label: const FittedBox(child: Text('Choose photo')),
+                  ),
+                ),
+              ] else
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: enabled ? onGallery : null,
+                    icon: const Icon(LucideIcons.image, size: 18),
+                    label: const Text('Choose photo'),
+                  ),
+                ),
             ],
           ),
+          if (onType != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: onType,
+              icon: const Icon(LucideIcons.keyboard, size: 18),
+              label: const Text('Type them instead'),
+            ),
+          ],
         ],
       ),
     );

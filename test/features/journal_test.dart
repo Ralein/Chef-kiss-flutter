@@ -376,7 +376,7 @@ void main() {
 
   testWidgets('journal opens on the bookplate; contents lead to a recipe', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie'), _recipe('b', 'Banana bread')]);
-    await tester.tap(find.byTooltip('Recipe journal'));
+    await tester.tap(find.byTooltip('Cookbook'));
     await tester.pumpAndSettle();
     expect(find.text('EX LIBRIS'), findsOneWidget);
     expect(find.text('2 recipes  ·  0 favorites'), findsOneWidget);
@@ -402,7 +402,7 @@ void main() {
 
   testWidgets('Back on another tab leaves the journal alone', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
-    await tester.tap(find.byTooltip('Recipe journal'));
+    await tester.tap(find.byTooltip('Cookbook'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Scan').last);
     await tester.pumpAndSettle();

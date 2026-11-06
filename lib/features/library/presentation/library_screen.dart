@@ -53,7 +53,7 @@ class _Filter {
 enum LibraryView {
   cards('Cards', 'Recipe cards'),
   shelf('Shelf', 'Bookshelf'),
-  journal('Journal', 'Recipe journal');
+  journal('Cookbook', 'Cookbook');
 
   final String label;
   final String tooltip;
@@ -76,7 +76,16 @@ class LibraryScreen extends ConsumerStatefulWidget {
   final String? initialRecipeId;
   final bool startDecorating;
 
-  const LibraryScreen({super.key, this.initialView, this.initialRecipeId, this.startDecorating = false});
+  /// Opens this book (a cookbook's id or My Recipes) in the Cookbook view.
+  final String? initialBook;
+
+  const LibraryScreen({
+    super.key,
+    this.initialView,
+    this.initialRecipeId,
+    this.startDecorating = false,
+    this.initialBook,
+  });
 
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
@@ -120,7 +129,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   /// The book being read in the journal — a cookbook's id or [myRecipesId];
   /// null for the whole journal.
-  String? _journalBook;
+  late String? _journalBook = widget.initialBook;
 
   /// While searching, the search field takes the title's place.
   bool _searching = false;
@@ -221,7 +230,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ),
               ListTile(
                 leading: const Icon(LucideIcons.bookOpen),
-                title: const Text('Open in journal'),
+                title: const Text('Open in the cookbook'),
                 onTap: () => Navigator.pop(ctx, 'journal'),
               ),
               ListTile(
@@ -511,7 +520,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               Expanded(
                 child: Semantics(
                   header: true,
-                  child: Text(volume?.title ?? 'Recipe journal', style: t.titleLarge, overflow: TextOverflow.ellipsis),
+                  child: Text(volume?.title ?? 'Cookbook', style: t.titleLarge, overflow: TextOverflow.ellipsis),
                 ),
               ),
               if (volume != null)
@@ -544,7 +553,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               : recipes.isEmpty
               ? EmptyStateScene(
                   icon: LucideIcons.bookOpen,
-                  title: 'Your journal is empty',
+                  title: 'Your cookbook is empty',
                   message: 'Every recipe you add gets its own keepsake spread here.',
                   actionLabel: 'Add a recipe',
                   onAction: () => showAddRecipeSheet(context, ref),

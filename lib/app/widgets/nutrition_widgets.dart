@@ -14,10 +14,10 @@ class _Swatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
-      );
+    width: 10,
+    height: 10,
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
+  );
 }
 
 /// A single ratio against a limit: 8px bar whose track is a lighter step of
@@ -63,10 +63,15 @@ class KcalHero extends StatelessWidget {
     final t = context.chefText;
     final c = context.chefColors;
     return Text.rich(
-      TextSpan(children: [
-        TextSpan(text: KitchenFormat.kcal(calories), style: style ?? t.displayLarge),
-        TextSpan(text: '  kcal', style: t.titleMedium?.copyWith(color: c.contentSecondary)),
-      ]),
+      TextSpan(
+        children: [
+          TextSpan(text: KitchenFormat.kcal(calories), style: style ?? t.displayLarge),
+          TextSpan(
+            text: '  kcal',
+            style: t.titleMedium?.copyWith(color: c.contentSecondary),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -94,17 +99,26 @@ class CalorieSummary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           KcalHero(calories: consumed),
-          Text('$caption · goal ${KitchenFormat.kcal(goal)} kcal', style: t.bodyMedium?.copyWith(color: c.contentSecondary)),
+          Text(
+            '$caption · goal ${KitchenFormat.kcal(goal)} kcal',
+            style: t.bodyMedium?.copyWith(color: c.contentSecondary),
+          ),
           const SizedBox(height: 14),
           Meter(fraction: goal <= 0 ? 0 : consumed / goal, color: over ? c.stateWarning : c.chartPrimary, height: 10),
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(over ? Icons.trending_up_rounded : Icons.flag_outlined, size: 16, color: over ? c.stateWarning : c.contentSecondary),
+              Icon(
+                over ? Icons.trending_up_rounded : Icons.flag_outlined,
+                size: 16,
+                color: over ? c.stateWarning : c.contentSecondary,
+              ),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  over ? '${KitchenFormat.kcal(remaining)} kcal over goal' : '${KitchenFormat.kcal(remaining)} kcal left',
+                  over
+                      ? '${KitchenFormat.kcal(remaining)} kcal over goal'
+                      : '${KitchenFormat.kcal(remaining)} kcal left',
                   style: t.labelLarge?.copyWith(color: c.contentPrimary),
                 ),
               ),
@@ -123,7 +137,13 @@ class MacroMeterRow extends StatelessWidget {
   final double goalGrams;
   final Color color;
 
-  const MacroMeterRow({super.key, required this.label, required this.grams, required this.goalGrams, required this.color});
+  const MacroMeterRow({
+    super.key,
+    required this.label,
+    required this.grams,
+    required this.goalGrams,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +189,8 @@ class MacroSplitBar extends StatelessWidget {
       (split.fat, c.macroFat),
     ].where((p) => p.$1 > 0).toList();
 
-    final label = 'Energy split: protein ${(split.protein * 100).round()}%, '
+    final label =
+        'Energy split: protein ${(split.protein * 100).round()}%, '
         'carbs ${(split.carbs * 100).round()}%, fat ${(split.fat * 100).round()}%';
 
     if (parts.isEmpty) {
@@ -216,22 +237,22 @@ class MacroLegend extends StatelessWidget {
     final t = context.chefText;
     final split = facts.macroEnergySplit;
     Widget row(String name, double grams, double share, Color color) => Expanded(
-          child: Row(
-            children: [
-              _Swatch(color),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(KitchenFormat.grams(grams), style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-                    Text('$name · ${(share * 100).round()}%', style: t.bodySmall, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-            ],
+      child: Row(
+        children: [
+          _Swatch(color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(KitchenFormat.grams(grams), style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text('$name · ${(share * 100).round()}%', style: t.bodySmall, overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
-        );
+        ],
+      ),
+    );
     return Row(
       children: [
         row('Protein', facts.proteinG, split.protein, c.macroProtein),
@@ -251,12 +272,12 @@ class NutrientFootnote extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.chefText;
     Widget item(String label, String value) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value, style: t.labelLarge),
-            Text(label, style: t.bodySmall),
-          ],
-        );
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value, style: t.labelLarge),
+        Text(label, style: t.bodySmall),
+      ],
+    );
     return Wrap(
       spacing: 24,
       runSpacing: 8,
@@ -272,6 +293,8 @@ class NutrientFootnote extends StatelessWidget {
 /// Seven-day calorie columns with a goal reference line. Single series, so
 /// no legend (the card title names it). Every column is a hit target with a
 /// tooltip, semantics, and tap-to-open-day; the selected day is labeled.
+/// A week of calories: one bar per day on its own track, a dashed goal line,
+/// and above them the daily average and how many days stayed within the goal.
 class WeeklyCaloriesChart extends StatelessWidget {
   final List<DailyNutritionSummary> summaries;
   final String endDayKey;
@@ -287,7 +310,7 @@ class WeeklyCaloriesChart extends StatelessWidget {
     required this.goal,
     required this.selectedDayKey,
     this.onSelectDay,
-    this.height = 150,
+    this.height = 170,
   });
 
   @override
@@ -297,64 +320,139 @@ class WeeklyCaloriesChart extends StatelessWidget {
     final end = dateForDayKey(endDayKey);
     final days = [for (var i = 6; i >= 0; i--) end.subtract(Duration(days: i))];
     final byDay = {for (final s in summaries) s.dayKey: s.total.calories};
-    final maxValue = [goal, ...byDay.values].fold<double>(0, math.max);
-    final scaleMax = maxValue <= 0 ? 1.0 : maxValue * 1.15;
+    final values = [for (final d in days) byDay[dayKeyFor(d)] ?? 0.0];
+    final logged = values.where((v) => v > 0).toList();
+    final maxValue = [goal, ...values].fold<double>(0, math.max);
+    final scaleMax = maxValue <= 0 ? 1.0 : maxValue * 1.12;
     final weekday = DateFormat.E();
     final todayKey = dayKeyFor(DateTime.now());
+    final average = logged.isEmpty ? 0.0 : logged.reduce((a, b) => a + b) / logged.length;
+    final onGoal = goal <= 0 ? 0 : logged.where((v) => v <= goal).length;
 
-    return SizedBox(
-      height: height,
-      child: LayoutBuilder(builder: (context, constraints) {
-        const labelBand = 22.0;
-        const capBand = 18.0;
-        final plotHeight = constraints.maxHeight - labelBand - capBand;
-        final goalY = labelBand + plotHeight * (goal / scaleMax);
-
-        return Stack(
-          children: [
-            // Baseline (hairline, recessive).
-            Positioned(left: 0, right: 0, bottom: labelBand, child: Container(height: 1, color: c.outlineSubtle)),
-            // Goal reference line + label.
-            if (goal > 0)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: goalY,
-                child: Container(height: 1, color: c.contentSecondary.withValues(alpha: 0.6)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (logged.isNotEmpty)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: KitchenFormat.kcal(average), style: t.titleLarge),
+                      TextSpan(text: '  kcal a day on average', style: t.bodySmall),
+                    ],
+                  ),
+                ),
               ),
-            if (goal > 0)
-              Positioned(
-                right: 0,
-                bottom: goalY + 3,
-                child: Text('Goal ${KitchenFormat.kcal(goal)}', style: t.labelSmall),
-              ),
-            Positioned.fill(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              if (goal > 0) Text('$onGoal of ${logged.length} days within goal', style: t.bodySmall),
+            ],
+          ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: height,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const labelBand = 22.0;
+              const capBand = 18.0;
+              final plotHeight = constraints.maxHeight - labelBand - capBand;
+              final goalY = labelBand + plotHeight * (goal / scaleMax);
+              return Stack(
                 children: [
-                  for (final day in days)
-                    Expanded(
-                      child: _DayColumn(
-                        dayKey: dayKeyFor(day),
-                        label: weekday.format(day),
-                        value: byDay[dayKeyFor(day)] ?? 0,
-                        fraction: (byDay[dayKeyFor(day)] ?? 0) / scaleMax,
-                        plotHeight: plotHeight,
-                        labelBand: labelBand,
-                        selected: dayKeyFor(day) == selectedDayKey,
-                        isToday: dayKeyFor(day) == todayKey,
-                        onTap: onSelectDay,
-                        fullDate: DateFormat.MMMEd().format(day),
+                  Positioned.fill(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (i, day) in days.indexed)
+                          Expanded(
+                            child: _DayColumn(
+                              dayKey: dayKeyFor(day),
+                              label: weekday.format(day),
+                              value: values[i],
+                              fraction: values[i] / scaleMax,
+                              plotHeight: plotHeight,
+                              labelBand: labelBand,
+                              selected: dayKeyFor(day) == selectedDayKey,
+                              isToday: dayKeyFor(day) == todayKey,
+                              onTap: onSelectDay,
+                              fullDate: DateFormat.MMMEd().format(day),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Goal reference: dashed, above the bars, never catching taps.
+                  if (goal > 0)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: goalY,
+                      child: IgnorePointer(
+                        child: CustomPaint(
+                          size: const Size.fromHeight(1),
+                          painter: _DashPainter(c.contentSecondary.withValues(alpha: 0.7)),
+                        ),
+                      ),
+                    ),
+                  if (goal > 0)
+                    Positioned(
+                      right: 0,
+                      bottom: goalY + 3,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: c.surfacePaper.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text('Goal ${KitchenFormat.kcal(goal)}', style: t.labelSmall),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (logged.isEmpty)
+                    Positioned.fill(
+                      bottom: labelBand,
+                      child: IgnorePointer(
+                        child: Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: c.surfacePaper, borderRadius: BorderRadius.circular(8)),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              child: Text('Log a meal and your week fills in here', style: t.bodySmall),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                 ],
-              ),
-            ),
-          ],
-        );
-      }),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
+}
+
+class _DashPainter extends CustomPainter {
+  final Color color;
+  _DashPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, 0), Offset(math.min(x + 4, size.width), 0), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashPainter old) => old.color != color;
 }
 
 class _DayColumn extends StatefulWidget {
@@ -396,6 +494,8 @@ class _DayColumnState extends State<_DayColumn> {
     final barHeight = (widget.plotHeight * widget.fraction.clamp(0.0, 1.0)).toDouble();
     final valueText = widget.value > 0 ? '${KitchenFormat.kcal(widget.value)} kcal' : 'Nothing logged';
     final barColor = _hover && !widget.selected ? Color.lerp(c.chartPrimary, c.surfacePaper, 0.18)! : c.chartPrimary;
+    // Every day has a track, so an empty day still reads as a day.
+    final track = widget.selected ? c.meterTrack(c.chartPrimary) : c.meterTrack(c.contentSecondary);
 
     return Semantics(
       button: widget.onTap != null,
@@ -413,18 +513,37 @@ class _DayColumnState extends State<_DayColumn> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (widget.selected && widget.value > 0)
-                  Text(KitchenFormat.kcal(widget.value), style: t.labelSmall?.copyWith(color: c.contentPrimary)),
+                SizedBox(
+                  height: 16,
+                  child: widget.selected && widget.value > 0
+                      ? FittedBox(
+                          child: Text(
+                            KitchenFormat.kcal(widget.value),
+                            style: t.labelSmall?.copyWith(color: c.contentPrimary, fontWeight: FontWeight.w700),
+                          ),
+                        )
+                      : null,
+                ),
                 const SizedBox(height: 2),
-                if (barHeight > 0)
-                  Container(
-                    width: 22,
-                    height: math.max(2, barHeight),
-                    decoration: BoxDecoration(
-                      color: barColor,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                SizedBox(
+                  width: 24,
+                  height: widget.plotHeight,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(6)),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: barHeight > 0
+                          ? AnimatedContainer(
+                              duration: ChefMotion.standard,
+                              curve: ChefMotion.easeStandard,
+                              width: 24,
+                              height: math.max(4, barHeight),
+                              decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(6)),
+                            )
+                          : null,
                     ),
                   ),
+                ),
                 SizedBox(
                   height: widget.labelBand,
                   child: Center(

@@ -299,7 +299,7 @@ class _HeroAppBar extends StatelessWidget {
         ),
         circle(
           IconButton(
-            tooltip: 'Open in journal',
+            tooltip: 'Open in the cookbook',
             onPressed: () => onMenu(_MenuAction.journal),
             icon: const Icon(Icons.auto_stories_outlined),
           ),
@@ -324,7 +324,7 @@ class _HeroAppBar extends StatelessWidget {
               ),
               PopupMenuItem(
                 value: _MenuAction.decorate,
-                child: ListTile(leading: Icon(Icons.auto_fix_high_outlined), title: Text('Decorate in journal')),
+                child: ListTile(leading: Icon(Icons.auto_fix_high_outlined), title: Text('Decorate in the cookbook')),
               ),
               PopupMenuItem(
                 value: _MenuAction.copy,

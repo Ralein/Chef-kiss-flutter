@@ -1066,7 +1066,7 @@ class BookplatePage extends StatelessWidget {
               const SizedBox(height: 28),
               Semantics(
                 header: true,
-                child: Text(title ?? 'Recipe Journal', textAlign: TextAlign.center, style: _serif(38, c.contentPrimary)),
+                child: Text(title ?? 'Cookbook', textAlign: TextAlign.center, style: _serif(38, c.contentPrimary)),
               ),
               if (title == null) ...[
                 const SizedBox(height: 10),
