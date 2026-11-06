@@ -65,6 +65,17 @@ class JournalPalette {
       context.chefColors.isDark ? Color.lerp(color, Colors.white, 0.4)! : color;
 }
 
+/// Whether the photo caption says something the title doesn't. "Tokyo Shoyu
+/// Ramen" under "Tokyo Shoyu Craft Ramen with Ajitsuke Egg" only repeats it,
+/// so the page leaves it out (it still shows while decorating, to edit).
+bool captionAddsToTitle(Recipe recipe) {
+  final caption = recipe.polaroidCaption?.trim().toLowerCase() ?? '';
+  if (caption.isEmpty) return false;
+  final word = RegExp(r"[\p{L}\p{N}']+", unicode: true);
+  final title = {for (final m in word.allMatches(recipe.title.toLowerCase())) m.group(0)};
+  return word.allMatches(caption).any((m) => !title.contains(m.group(0)));
+}
+
 TextStyle _serif(double size, Color color, {bool italic = false, double height = 1.15}) => TextStyle(
   fontFamily: kSerifFamily,
   fontSize: size,
@@ -591,7 +602,7 @@ class _StoryPageState extends ConsumerState<StoryPage> {
           ),
           const SizedBox(height: 6),
           _Photo(recipe: recipe, decorating: actions.decorating, onEdit: () => actions.onEditPolaroid(recipe)),
-          if (recipe.polaroidCaption?.trim().isNotEmpty ?? false) ...[
+          if (actions.decorating ? (recipe.polaroidCaption?.trim().isNotEmpty ?? false) : captionAddsToTitle(recipe)) ...[
             const SizedBox(height: 8),
             Text(
               recipe.polaroidCaption!.trim(),

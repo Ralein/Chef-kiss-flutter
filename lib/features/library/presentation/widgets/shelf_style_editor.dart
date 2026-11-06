@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../domain/shelf_style.dart';
+import 'kitchen_art.dart';
 import 'library_books.dart';
 import 'shelf_art.dart';
 
 enum _Category {
   wall('Wall', LucideIcons.image),
   shelf('Shelf', LucideIcons.rows3),
+  kitchen('Kitchen', LucideIcons.cookingPot),
   lights('Lights', LucideIcons.lamp),
   plants('Plants', LucideIcons.sprout),
   flowers('Flowers', LucideIcons.flower2);
@@ -19,7 +21,7 @@ enum _Category {
 }
 
 /// Dress the bookcase: wall texture and colour, shelf wood and LED strip,
-/// candles, greenery and flowers. Changes preview live; ✕ reverts.
+/// kitchenware, candles, greenery and flowers. Changes preview live; ✕ reverts.
 class ShelfStyleEditor extends StatefulWidget {
   final ShelfStyle initial;
   final ValueChanged<ShelfStyle> onPreview;
@@ -195,6 +197,7 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
   String get _hint => switch (_category) {
     _Category.wall => 'The wall behind your shelves.',
     _Category.shelf => 'Shelf wood and the light strip underneath.',
+    _Category.kitchen => 'Spatulas and whisks in a crock, a utensil rail, pantry jars, a pot and a board.',
     _Category.lights => 'Candles flicker softly between your books.',
     _Category.plants => 'Potted plants and ivy trailing over the shelves.',
     _Category.flowers => 'A vase on alternate shelves.',
@@ -216,22 +219,22 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
               ),
           ]),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          const Text('Tint', style: TextStyle(color: Colors.white70)),
+          // One row of equal cells: every swatch gets a full-size tap target.
+          Row(
             children: [
-              const Text('Tint', style: TextStyle(color: Colors.white70)),
               for (final (i, tint) in wallTints.indexed)
-                _Swatch(
-                  color: tint.color,
-                  label: tint.name,
-                  selected: _style.tint == i,
-                  onTap: () => _set(_style.copyWith(tint: i)),
+                Expanded(
+                  child: _Swatch(
+                    color: tint.color,
+                    label: tint.name,
+                    selected: _style.tint == i,
+                    onTap: () => _set(_style.copyWith(tint: i)),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 4),
         ];
       case _Category.shelf:
         return [
@@ -266,6 +269,37 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                 ),
             ],
           ),
+          const SizedBox(height: 10),
+        ];
+      case _Category.kitchen:
+        return [
+          _tiles([
+            for (final k in Kitchenware.values)
+              _Tile(
+                label: k.label,
+                selected: _style.kitchen == k,
+                onTap: () => _set(_style.copyWith(kitchen: k)),
+                child: switch (k) {
+                  Kitchenware.none => const Center(child: Icon(LucideIcons.ban, color: Colors.white38)),
+                  Kitchenware.utensils => const Padding(
+                    padding: EdgeInsets.fromLTRB(24, 4, 24, 6),
+                    child: UtensilCrock(),
+                  ),
+                  Kitchenware.pantry => const Padding(padding: EdgeInsets.fromLTRB(14, 10, 14, 8), child: PantryJars()),
+                  Kitchenware.cookware => const Padding(
+                    padding: EdgeInsets.fromLTRB(10, 28, 10, 10),
+                    child: DutchOven(),
+                  ),
+                  Kitchenware.everything => const Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned(left: 10, bottom: 6, width: 26, height: 60, child: UtensilCrock(seed: 1)),
+                      Positioned(right: 8, bottom: 6, width: 42, height: 29, child: DutchOven(seed: 1)),
+                    ],
+                  ),
+                },
+              ),
+          ]),
           const SizedBox(height: 10),
         ];
       case _Category.lights:
@@ -441,16 +475,22 @@ class _Swatch extends StatelessWidget {
         excludeSemantics: true,
         child: GestureDetector(
           onTap: onTap,
-          child: AnimatedContainer(
-            duration: ChefMotion.quick,
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              border: Border.all(
-                color: selected ? const Color(0xFFE3C77F) : Colors.white.withValues(alpha: 0.18),
-                width: selected ? 2.5 : 1,
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox(
+            height: 48,
+            child: Center(
+              child: AnimatedContainer(
+                duration: ChefMotion.quick,
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(
+                    color: selected ? const Color(0xFFE3C77F) : Colors.white.withValues(alpha: 0.18),
+                    width: selected ? 2.5 : 1,
+                  ),
+                ),
               ),
             ),
           ),

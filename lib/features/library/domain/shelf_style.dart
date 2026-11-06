@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 
-/// Texture painted on the wall behind the bookcase.
+/// Texture painted on the wall behind the bookcase. The tiles make it a
+/// kitchen; the rest a study.
 enum WallStyle {
+  subway('Subway tile'),
+  zellige('Glazed tile'),
   plaster('Plaster'),
   brick('Brick'),
   panels('Wood panels'),
@@ -80,6 +83,23 @@ enum FlowerKind {
   const FlowerKind(this.label);
 }
 
+/// Kitchen things between the books: a crock of spatulas, whisks and spoons
+/// with a utensil rail under the shelves, pantry jars, or a cast-iron pot and
+/// a cutting board.
+enum Kitchenware {
+  none('None'),
+  utensils('Utensils'),
+  pantry('Pantry jars'),
+  cookware('Pots & boards'),
+  everything('Everything');
+
+  final String label;
+  const Kitchenware(this.label);
+  bool get hasUtensils => this == utensils || this == everything;
+  bool get hasPantry => this == pantry || this == everything;
+  bool get hasCookware => this == cookware || this == everything;
+}
+
 T _byName<T extends Enum>(List<T> values, Object? name, T fallback) =>
     values.where((v) => v.name == name).firstOrNull ?? fallback;
 
@@ -93,15 +113,17 @@ class ShelfStyle {
   final CandleAmount candles;
   final Greenery greenery;
   final FlowerKind flowers;
+  final Kitchenware kitchen;
 
   const ShelfStyle({
-    this.wall = WallStyle.brick,
+    this.wall = WallStyle.subway,
     this.tint = 0,
     this.wood = ShelfWood.walnut,
     this.glow = ShelfGlow.warm,
     this.candles = CandleAmount.few,
     this.greenery = Greenery.lush,
     this.flowers = FlowerKind.none,
+    this.kitchen = Kitchenware.everything,
   });
 
   Color get wallColor => wallTints[tint.clamp(0, wallTints.length - 1)].color;
@@ -117,6 +139,7 @@ class ShelfStyle {
     CandleAmount? candles,
     Greenery? greenery,
     FlowerKind? flowers,
+    Kitchenware? kitchen,
   }) => ShelfStyle(
     wall: wall ?? this.wall,
     tint: tint ?? this.tint,
@@ -125,6 +148,7 @@ class ShelfStyle {
     candles: candles ?? this.candles,
     greenery: greenery ?? this.greenery,
     flowers: flowers ?? this.flowers,
+    kitchen: kitchen ?? this.kitchen,
   );
 
   Map<String, dynamic> toJson() => {
@@ -135,19 +159,21 @@ class ShelfStyle {
     'candles': candles.name,
     'greenery': greenery.name,
     'flowers': flowers.name,
+    'kitchen': kitchen.name,
   };
 
   factory ShelfStyle.fromJson(Object? json) {
     if (json is! Map) return const ShelfStyle();
     final tint = json['tint'];
     return ShelfStyle(
-      wall: _byName(WallStyle.values, json['wall'], WallStyle.brick),
+      wall: _byName(WallStyle.values, json['wall'], WallStyle.subway),
       tint: tint is int && tint >= 0 && tint < wallTints.length ? tint : 0,
       wood: _byName(ShelfWood.values, json['wood'], ShelfWood.walnut),
       glow: _byName(ShelfGlow.values, json['glow'], ShelfGlow.warm),
       candles: _byName(CandleAmount.values, json['candles'], CandleAmount.few),
       greenery: _byName(Greenery.values, json['greenery'], Greenery.lush),
       flowers: _byName(FlowerKind.values, json['flowers'], FlowerKind.none),
+      kitchen: _byName(Kitchenware.values, json['kitchen'], Kitchenware.everything),
     );
   }
 
@@ -160,10 +186,11 @@ class ShelfStyle {
       other.glow == glow &&
       other.candles == candles &&
       other.greenery == greenery &&
-      other.flowers == flowers;
+      other.flowers == flowers &&
+      other.kitchen == kitchen;
 
   @override
-  int get hashCode => Object.hash(wall, tint, wood, glow, candles, greenery, flowers);
+  int get hashCode => Object.hash(wall, tint, wood, glow, candles, greenery, flowers, kitchen);
 }
 
 const shelfStyleKey = 'library.shelf';

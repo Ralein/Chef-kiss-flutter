@@ -305,6 +305,9 @@ void main() {
     await tester.tap(_book('Apple pie'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Ingredients  ·  1 of 2'), findsOneWidget);
+    // The page carries the title; the toolbar doesn't repeat it.
+    expect(find.text('Apple pie'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Contents'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Next page'));
     await tester.pumpAndSettle();

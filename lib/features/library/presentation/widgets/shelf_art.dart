@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/shelf_style.dart';
 
-/// Painted art for the library: wall textures, shelf planks with LED glow,
-/// candles, potted plants, trailing ivy and vases of flowers. Everything is
+/// Painted art for the library: wall textures (kitchen tiles among them),
+/// shelf planks with LED glow, candles, potted plants, trailing ivy and vases
+/// of flowers. Kitchen things live in kitchen_art.dart. Everything is
 /// vector so it stays crisp at any size and follows the chosen style.
 
 // --- Wall ----------------------------------------------------------------------------
@@ -25,6 +26,10 @@ class WallPainter extends CustomPainter {
     final rect = Offset.zero & size;
     canvas.drawRect(rect, Paint()..color = tint);
     switch (style) {
+      case WallStyle.subway:
+        _subway(canvas, size);
+      case WallStyle.zellige:
+        _zellige(canvas, size);
       case WallStyle.plaster:
         _plaster(canvas, size);
       case WallStyle.brick:
@@ -46,6 +51,98 @@ class WallPainter extends CustomPainter {
             Colors.black.withValues(alpha: _dark ? 0.45 : 0.10),
           ],
           stops: const [0.45, 1],
+        ).createShader(rect),
+    );
+  }
+
+  /// Grout is lighter than dark tiles and darker than light ones.
+  Color get _grout => _shade(tint, _dark ? 0.10 : -0.13);
+
+  /// Classic kitchen backsplash: 2:1 bevelled tiles in a running bond.
+  void _subway(Canvas canvas, Size size) {
+    const tw = 58.0, th = 27.0, grout = 2.5;
+    canvas.drawRect(Offset.zero & size, Paint()..color = _grout);
+    final rnd = math.Random(23);
+    final face = Paint();
+    // One bevel shader in tile-local coordinates, reused for every tile.
+    final local = Rect.fromLTWH(0, 0, tw - grout, th - grout);
+    final bevel = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.white.withValues(alpha: _dark ? 0.10 : 0.55),
+          Colors.white.withValues(alpha: 0),
+          Colors.black.withValues(alpha: 0),
+          Colors.black.withValues(alpha: _dark ? 0.32 : 0.10),
+        ],
+        stops: const [0, 0.22, 0.7, 1],
+      ).createShader(local);
+    final localTile = RRect.fromRectAndRadius(local, const Radius.circular(3));
+    for (var row = 0; row * th < size.height + th; row++) {
+      final offset = row.isOdd ? -tw / 2 : 0.0;
+      for (var col = 0; col * tw + offset < size.width + tw; col++) {
+        final left = col * tw + offset + grout / 2, top = row * th + grout / 2;
+        face.color = _shade(tint, (_dark ? 0.05 : 0.03) + (rnd.nextDouble() - 0.5) * (_dark ? 0.05 : 0.025));
+        canvas.save();
+        canvas.translate(left, top);
+        canvas.drawRRect(localTile, face);
+        canvas.drawRRect(localTile, bevel);
+        canvas.restore();
+      }
+    }
+    _glaze(canvas, size, 0.05);
+  }
+
+  /// Hand-made square tiles: each glaze a little lighter or darker, warmer or
+  /// cooler, with a soft shine.
+  void _zellige(Canvas canvas, Size size) {
+    const t = 34.0, grout = 2.0;
+    canvas.drawRect(Offset.zero & size, Paint()..color = _grout);
+    final rnd = math.Random(29);
+    final face = Paint();
+    final shine = Paint();
+    const warm = Color(0xFF9A6E45), cool = Color(0xFF4B6E8E);
+    for (var y = 0.0; y < size.height; y += t) {
+      for (var x = 0.0; x < size.width; x += t) {
+        final r = Rect.fromLTWH(x + grout / 2, y + grout / 2, t - grout, t - grout);
+        final c = _shade(tint, (_dark ? 0.06 : 0.0) + (rnd.nextDouble() - 0.5) * (_dark ? 0.14 : 0.09));
+        face.color = Color.lerp(c, rnd.nextBool() ? warm : cool, 0.03 + rnd.nextDouble() * 0.04)!;
+        canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(3.5)), face);
+        // Glaze catches the light unevenly: a faint shine on some tiles only.
+        final glint = rnd.nextDouble();
+        if (glint < 0.55) {
+          shine.color = Colors.white.withValues(alpha: (_dark ? 0.05 : 0.16) * (0.5 + glint));
+          canvas.drawOval(
+            Rect.fromLTWH(
+              r.left + r.width * (0.1 + rnd.nextDouble() * 0.3),
+              r.top + r.height * (0.08 + rnd.nextDouble() * 0.5),
+              r.width * (0.25 + rnd.nextDouble() * 0.25),
+              r.height * (0.12 + rnd.nextDouble() * 0.1),
+            ),
+            shine,
+          );
+        }
+      }
+    }
+    _glaze(canvas, size, 0.04);
+  }
+
+  /// A broad diagonal sheen, as light catches glazed tiles.
+  void _glaze(Canvas canvas, Size size, double strength) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0),
+            Colors.white.withValues(alpha: _dark ? strength : strength * 2),
+            Colors.white.withValues(alpha: 0),
+          ],
+          stops: const [0.25, 0.45, 0.65],
         ).createShader(rect),
     );
   }
@@ -233,8 +330,9 @@ class LightWash extends StatelessWidget {
 
 enum CandleKind { pillar, tall, taper }
 
-/// A candle with a softly flickering flame and a warm glow on its
-/// surroundings. Static when animations are turned off.
+/// A candle with a warm glow on its surroundings. The flame flickers as the
+/// candle comes into view, then settles: a library left open shouldn't keep
+/// the screen redrawing. Still from the start when animations are off.
 class Candle extends StatefulWidget {
   final CandleKind kind;
   final int seed;
@@ -251,19 +349,20 @@ class Candle extends StatefulWidget {
 }
 
 class _CandleState extends State<Candle> with SingleTickerProviderStateMixin {
-  late final AnimationController _flicker = AnimationController(
-    vsync: this,
-    duration: Duration(milliseconds: 1700 + widget.seed % 5 * 230),
-  );
+  static const _burn = Duration(seconds: 6);
+  late final AnimationController _flicker = AnimationController(vsync: this, duration: _burn);
+
+  /// Flicker cycles over the burn; each candle keeps its own rhythm.
+  late final double _cycles = _burn.inMilliseconds / (1700 + widget.seed % 5 * 230);
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     if (still) {
-      _flicker.stop();
-    } else if (!_flicker.isAnimating) {
-      _flicker.repeat();
+      _flicker.value = 1;
+    } else if (_flicker.isDismissed) {
+      _flicker.forward();
     }
   }
 
@@ -279,9 +378,14 @@ class _CandleState extends State<Candle> with SingleTickerProviderStateMixin {
       child: RepaintBoundary(
         child: AnimatedBuilder(
           animation: _flicker,
-          builder: (context, _) => CustomPaint(
-            painter: _CandlePainter(kind: widget.kind, t: _flicker.value, phase: widget.seed * 0.37),
-          ),
+          builder: (context, _) {
+            final v = _flicker.value;
+            // Full flicker for most of the burn, easing to a steady flame.
+            final amp = 1 - Curves.easeIn.transform(((v - 0.55) / 0.45).clamp(0.0, 1.0));
+            return CustomPaint(
+              painter: _CandlePainter(kind: widget.kind, t: v * _cycles, amp: amp, phase: widget.seed * 0.37),
+            );
+          },
         ),
       ),
     );
@@ -291,8 +395,9 @@ class _CandleState extends State<Candle> with SingleTickerProviderStateMixin {
 class _CandlePainter extends CustomPainter {
   final CandleKind kind;
   final double t;
+  final double amp;
   final double phase;
-  _CandlePainter({required this.kind, required this.t, required this.phase});
+  _CandlePainter({required this.kind, required this.t, required this.amp, required this.phase});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -303,8 +408,8 @@ class _CandlePainter extends CustomPainter {
       CandleKind.taper => h * 0.80,
     };
     final body = Rect.fromLTWH(0, h - bodyH, w, bodyH);
-    final wave = math.sin((t + phase) * math.pi * 2);
-    final wave2 = math.sin((t * 2.3 + phase) * math.pi * 2);
+    final wave = math.sin((t + phase) * math.pi * 2) * amp;
+    final wave2 = math.sin((t * 2.3 + phase) * math.pi * 2) * amp;
     final flameH = (kind == CandleKind.taper ? h * 0.15 : h * 0.24) * (1 + 0.08 * wave);
     final flameW = math.min(w * 0.42, 9.0) * (1 + 0.05 * wave2);
     final flameBase = Offset(w / 2 + wave2 * 0.6, body.top - 2);
@@ -403,7 +508,7 @@ class _CandlePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CandlePainter old) => old.t != t || old.kind != kind;
+  bool shouldRepaint(_CandlePainter old) => old.t != t || old.amp != amp || old.kind != kind;
 }
 
 // --- Plants ---------------------------------------------------------------------------------

@@ -7,6 +7,9 @@ import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:chefs_kiss/features/library/domain/shelf_style.dart';
 import 'package:chefs_kiss/features/library/presentation/book_editor_screen.dart';
+import 'package:chefs_kiss/features/journal/presentation/widgets/journal_pages.dart' show captionAddsToTitle;
+import 'package:chefs_kiss/features/library/presentation/widgets/kitchen_art.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/library_bookcase.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/library_books.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/shelf_art.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/shelf_style_editor.dart';
@@ -17,7 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
-Recipe _recipe(String id, String title, {bool favorite = false}) => Recipe(
+Recipe _recipe(String id, String title, {bool favorite = false, String? caption}) => Recipe(
   id: id,
   profileId: 'default',
   title: title,
@@ -28,6 +31,7 @@ Recipe _recipe(String id, String title, {bool favorite = false}) => Recipe(
   updatedAt: 1,
   status: RecipeStatus.ready,
   isFavorite: favorite,
+  polaroidCaption: caption,
   ingredients: [
     RecipeIngredient(
       id: '$id-i1',
@@ -99,6 +103,9 @@ WallStyle _sceneWall() => find
     .map((e) => ((e.widget as CustomPaint).painter! as WallPainter).style)
     .first;
 
+/// An option tile in the style editor; it may start scrolled out of view.
+Finder _option(String label) => find.text(label, skipOffstage: false);
+
 Finder _book(String title) => find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == title);
 
 void main() {
@@ -112,10 +119,19 @@ void main() {
         candles: CandleAmount.many,
         greenery: Greenery.ivy,
         flowers: FlowerKind.sunflowers,
+        kitchen: Kitchenware.pantry,
       );
       expect(ShelfStyle.fromJson(style.toJson()), style);
       expect(ShelfStyle.fromJson(null), const ShelfStyle());
       expect(ShelfStyle.fromJson({'wall': 'castle', 'tint': 99, 'wood': 7}), const ShelfStyle());
+    });
+
+    test('a kitchen by default; styles saved before kitchenware get it too', () {
+      expect(const ShelfStyle().wall, WallStyle.subway);
+      expect(const ShelfStyle().kitchen, Kitchenware.everything);
+      final older = ShelfStyle.fromJson({'wall': 'brick', 'tint': 2, 'greenery': 'ivy'});
+      expect(older.wall, WallStyle.brick, reason: 'a chosen wall is kept');
+      expect(older.kitchen, Kitchenware.everything);
     });
 
     test('light walls switch the scene to dark ink', () {
@@ -134,10 +150,10 @@ void main() {
     expect(find.byType(ShelfStyleEditor), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing, reason: 'nothing competes with the editor');
 
-    await _pick(tester, find.bySemanticsLabel('Wood panels'));
+    await _pick(tester, _option('Wood panels'));
     expect(_sceneWall(), WallStyle.panels, reason: 'the scene previews the choice live');
-    await _pick(tester, find.bySemanticsLabel('Flowers'));
-    await _pick(tester, find.bySemanticsLabel('Sunflowers'));
+    await _pick(tester, find.byTooltip('Flowers'));
+    await _pick(tester, _option('Sunflowers'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.byType(ShelfStyleEditor), findsNothing);
@@ -148,7 +164,7 @@ void main() {
     // A change that is discarded never reaches preferences.
     await tester.tap(find.byTooltip('Style shelves'));
     await tester.pumpAndSettle();
-    await _pick(tester, find.bySemanticsLabel('Linen'));
+    await _pick(tester, _option('Linen'));
     expect(_sceneWall(), WallStyle.linen);
     await tester.tap(find.byTooltip('Discard changes'));
     await tester.pumpAndSettle();
@@ -233,6 +249,98 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Create a collection'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
+    await _teardown(tester, db);
+  });
+
+  group('spine titles', () {
+    const style = TextStyle(fontSize: 12.5, letterSpacing: 1.1, height: 1);
+
+    test('a short title keeps its size on one line', () {
+      final f = SpineTitle.fit('PIE', style, TextScaler.noScaling, length: 100, thickness: 27);
+      expect(f.lines, ['PIE']);
+      expect(f.size, 12.5);
+    });
+
+    test('a long title breaks into two balanced lines on a thick enough spine', () {
+      final f = SpineTitle.fit('TOKYO SHOYU CRAFT RAMEN', style, TextScaler.noScaling, length: 100, thickness: 27);
+      expect(f.lines, ['TOKYO SHOYU', 'CRAFT RAMEN']);
+      expect(f.size, greaterThanOrEqualTo(7.75));
+    });
+
+    test('a thin spine keeps one line at a readable size', () {
+      final f = SpineTitle.fit('TOKYO SHOYU CRAFT RAMEN', style, TextScaler.noScaling, length: 100, thickness: 14);
+      expect(f.lines, hasLength(1));
+      expect(f.size, greaterThanOrEqualTo(7.75));
+    });
+  });
+
+  test('a photo caption that only repeats the title adds nothing', () {
+    Recipe titled(String title, String? caption) => _recipe('x', title, caption: caption);
+    expect(captionAddsToTitle(titled('Tokyo Shoyu Craft Ramen with Ajitsuke Egg', 'Tokyo Shoyu Ramen')), isFalse);
+    expect(captionAddsToTitle(titled('French Crêpes Suzette with Sweet Berries', 'French crêpes suzette')), isFalse);
+    expect(captionAddsToTitle(titled('Rustic Country Sourdough Boule', 'Artisan Sourdough Boule')), isTrue);
+    expect(captionAddsToTitle(titled('Apple pie', null)), isFalse);
+  });
+
+  testWidgets('a small library spreads over three shelves, with kitchen things between', (tester) async {
+    final titles = ['Apple pie', 'Banana bread', 'Carrot cake', 'Date squares', 'Eggplant parmesan'];
+    final (db, _) = await _pumpApp(
+      tester,
+      size: const Size(430, 1500),
+      recipes: [for (final (i, t) in titles.indexed) _recipe('r$i', t)],
+    );
+    final books = find.byType(ShelfBook);
+    expect(books, findsNWidgets(5));
+    final shelves = {for (final e in books.evaluate()) tester.getRect(find.byWidget(e.widget)).bottom.round()};
+    expect(shelves, hasLength(3), reason: '2 + 2 + 1, not one crowded plank');
+
+    Finder inScene(Type type) => find.descendant(of: find.byType(LibraryBookcase), matching: find.byType(type));
+    expect(inScene(UtensilCrock), findsWidgets);
+    expect(inScene(PantryJars), findsWidgets);
+
+    // What hangs from a shelf never covers a book.
+    final hanging = [...inScene(TrailingIvy).evaluate(), ...inScene(HangingUtensils).evaluate()];
+    expect(hanging, isNotEmpty);
+    for (final h in hanging) {
+      final rect = tester.getRect(find.byWidget(h.widget));
+      for (final b in books.evaluate()) {
+        final book = tester.getRect(find.byWidget(b.widget));
+        expect(
+          rect.intersect(book).isEmpty || rect.intersect(book).width <= 0.5,
+          isTrue,
+          reason: 'hangs clear of books',
+        );
+      }
+    }
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('one recipe still gets a bookcase: the other shelves hold kitchen things', (tester) async {
+    final (db, _) = await _pumpApp(tester, size: const Size(430, 1500), recipes: [_recipe('a', 'Apple pie')]);
+    // The top edge plus three shelves.
+    expect(find.descendant(of: find.byType(LibraryBookcase), matching: find.byType(ShelfPlank)), findsNWidgets(4));
+    expect(find.byType(ShelfBook), findsOneWidget);
+    await _teardown(tester, db);
+  });
+
+  testWidgets('kitchenware can be turned off and on in the style editor', (tester) async {
+    final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
+    Finder inScene(Type type) => find.descendant(of: find.byType(LibraryBookcase), matching: find.byType(type));
+    expect(inScene(UtensilCrock), findsWidgets);
+
+    await tester.tap(find.byTooltip('Style shelves'));
+    await tester.pumpAndSettle();
+    await _pick(tester, find.byTooltip('Kitchen'));
+    await _pick(tester, _option('None'));
+    expect(inScene(UtensilCrock), findsNothing);
+    expect(inScene(HangingUtensils), findsNothing);
+    await _pick(tester, _option('Pantry jars'));
+    expect(inScene(PantryJars), findsWidgets);
+    expect(inScene(UtensilCrock), findsNothing);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect((await _storedShelf(tester, container)).kitchen, Kitchenware.pantry);
     await _teardown(tester, db);
   });
 }

@@ -624,18 +624,17 @@ class JournalViewState extends ConsumerState<JournalView> {
       icon: const Icon(LucideIcons.wandSparkles),
     );
     if (!spread) {
+      // The page carries the title; the toolbar offers the way around the book.
       return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 4, 4, 4),
+        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
         child: Row(
           children: [
-            Expanded(
-              child: Text(
-                recipe.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontFamily: kSerifFamily, fontSize: 20, color: c.contentPrimary),
-              ),
+            TextButton.icon(
+              onPressed: _openContents,
+              icon: const Icon(LucideIcons.tableOfContents, size: 18),
+              label: const Text('Contents'),
             ),
+            const Spacer(),
             listen,
             decorate,
             _moreMenu(recipe),
@@ -682,8 +681,6 @@ class JournalViewState extends ConsumerState<JournalView> {
       icon: const Icon(LucideIcons.ellipsisVertical),
       onSelected: (v) {
         switch (v) {
-          case 'contents':
-            _openContents();
           case 'details':
             context.push('/recipe/${recipe.id}');
           case 'collection':
@@ -693,10 +690,6 @@ class JournalViewState extends ConsumerState<JournalView> {
         }
       },
       itemBuilder: (_) => const [
-        PopupMenuItem(
-          value: 'contents',
-          child: ListTile(leading: Icon(LucideIcons.tableOfContents), title: Text('Contents')),
-        ),
         PopupMenuItem(
           value: 'details',
           child: ListTile(leading: Icon(LucideIcons.notebookText), title: Text('Details & nutrition')),

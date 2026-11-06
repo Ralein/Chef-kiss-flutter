@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:recipe_domain/recipe_domain.dart';
@@ -230,6 +232,8 @@ class BookSpine extends StatelessWidget {
         final h = box.maxHeight;
         final w = box.maxWidth;
         final margin = h * 0.13;
+        // The title runs between the bands, or nearly end to end on a plain spine.
+        final titleInset = look.pattern == SpinePattern.plain ? 10.0 : margin + 1;
         return ClipRRect(
           borderRadius: BorderRadius.circular(2.5),
           child: DecoratedBox(
@@ -256,24 +260,21 @@ class BookSpine extends StatelessWidget {
                 ),
                 CustomPaint(size: Size(w, h), painter: _SpinePatternPainter(look.pattern, look.ink, margin)),
                 Positioned.fill(
-                  top: margin + 6,
-                  bottom: margin + 6,
+                  top: titleInset,
+                  bottom: titleInset,
                   child: Center(
                     child: RotatedBox(
                       quarterTurns: 3,
                       child: SizedBox(
-                        width: (h - 2 * margin - 12).clamp(10, double.infinity),
-                        child: Text(
+                        width: math.max(10, h - 2 * titleInset),
+                        height: math.max(8, w - 5),
+                        child: SpineTitle(
                           // Italic reads best in title case; the others are set in capitals.
-                          recipe.bookStyle.font == SpineFont.serifItalic
+                          text: recipe.bookStyle.font == SpineFont.serifItalic
                               ? BookLook.spineTitle(recipe)
                               : BookLook.spineTitle(recipe).toUpperCase(),
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.15),
                           style: look.title,
+                          textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.15),
                         ),
                       ),
                     ),
@@ -285,6 +286,119 @@ class BookSpine extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// How a spine title is set: the lines, and their font size.
+typedef SpineFit = ({List<String> lines, double size});
+
+/// A spine title as large as the spine allows: one line, shrunk a little if
+/// need be; else two balanced lines when the spine is thick enough; else one
+/// small line. A line that still doesn't fit ends in an ellipsis. Lay it out
+/// unrotated: width is the spine's length, height its thickness.
+class SpineTitle extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+  final TextScaler textScaler;
+
+  const SpineTitle({super.key, required this.text, required this.style, this.textScaler = TextScaler.noScaling});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final f = fit(text, style, textScaler, length: box.maxWidth, thickness: box.maxHeight);
+        final lineStyle = _sized(style, f.size).copyWith(height: f.lines.length > 1 ? _twoLineHeight : style.height);
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final line in f.lines)
+              Text(
+                line,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                textScaler: textScaler,
+                style: lineStyle,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  static const _twoLineHeight = 1.08;
+
+  /// Letter spacing shrinks with the type, so the title keeps its texture.
+  static TextStyle _sized(TextStyle style, double size) {
+    final base = style.fontSize ?? 13;
+    return style.copyWith(fontSize: size, letterSpacing: (style.letterSpacing ?? 0) * size / base);
+  }
+
+  static final _widths = <String, double>{};
+
+  static double _width(String s, TextStyle style, TextScaler scaler, double size) {
+    final key =
+        '${style.fontFamily}|${style.fontStyle}|${style.fontWeight}|${style.letterSpacing}|${style.fontSize}|'
+        '${scaler.scale(100)}|$size|$s';
+    final cached = _widths[key];
+    if (cached != null) return cached;
+    if (_widths.length > 800) _widths.clear();
+    final painter = TextPainter(
+      text: TextSpan(text: s, style: _sized(style, size)),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return _widths[key] = width;
+  }
+
+  /// The largest size up to [cap] at which [s] fits [length] on one line.
+  static double _fitLine(String s, TextStyle style, TextScaler scaler, double cap, double length) {
+    final w = _width(s, style, scaler, cap);
+    if (w <= length) return cap;
+    // Width grows linearly with size; settle on a quarter point just inside.
+    return (cap * length / w * 4).floorToDouble() / 4;
+  }
+
+  static SpineFit fit(
+    String text,
+    TextStyle style,
+    TextScaler scaler, {
+    required double length,
+    required double thickness,
+  }) {
+    final base = style.fontSize ?? 13;
+    final floor = math.max(7.5, base * 0.62);
+    final perPixel = scaler.scale(1);
+    final oneCap = math.min(base, (thickness - 2) / (perPixel * (style.height ?? 1.2)));
+    final one = _fitLine(text, style, scaler, oneCap, length);
+    if (one >= base * 0.86) return (lines: [text], size: one);
+
+    final words = text.split(' ');
+    final twoCap = math.min(base, (thickness - 2) / (2 * _twoLineHeight * perPixel));
+    if (words.length > 1 && twoCap >= floor) {
+      var split = 1;
+      var best = double.infinity;
+      for (var i = 1; i < words.length; i++) {
+        final longer = math.max(
+          _width(words.take(i).join(' '), style, scaler, base),
+          _width(words.skip(i).join(' '), style, scaler, base),
+        );
+        if (longer < best) {
+          best = longer;
+          split = i;
+        }
+      }
+      final a = words.take(split).join(' '), b = words.skip(split).join(' ');
+      final two = math.min(_fitLine(a, style, scaler, twoCap, length), _fitLine(b, style, scaler, twoCap, length));
+      // Two lines show more of the title, even when one has to be trimmed.
+      if (two > one || one < floor) return (lines: [a, b], size: math.max(two, floor));
+    }
+    return (lines: [text], size: math.max(one, floor));
   }
 }
 
