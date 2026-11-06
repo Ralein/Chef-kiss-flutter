@@ -93,7 +93,7 @@ Future<void> _teardown(WidgetTester tester, AppDatabase db) async {
 
 void main() {
   testWidgets('scan a meal → review items → log it → see it in the food log', (tester) async {
-    final (db, container) = await _pump(tester, extra: [claudeClientProvider.overrideWithValue(_fakeVisionClient())]);
+    final (db, container) = await _pump(tester, extra: [aiClientProvider.overrideWithValue(_fakeVisionClient())]);
 
     container.read(routerProvider).push('/analyze', extra: ScanRequest(mode: ScanMode.meal, bytes: _tinyPng));
     await _pumpUntil(tester, find.text('Avocado toast'));

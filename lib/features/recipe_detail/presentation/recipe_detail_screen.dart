@@ -311,7 +311,7 @@ class _HeroAppBar extends StatelessWidget {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: _MenuAction.collection,
-                child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Save to collection')),
+                child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Add to a cookbook')),
               ),
               PopupMenuItem(
                 value: _MenuAction.cover,

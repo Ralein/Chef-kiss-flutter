@@ -71,7 +71,7 @@ class _BackupExportDialogState extends ConsumerState<BackupExportDialog> {
                             const SizedBox(width: ChefSpacing.space2),
                             Expanded(
                               child: Text(
-                                'Contains all recipes, collections, and preferences in an open, portable JSON format.',
+                                'Contains all recipes, cookbooks, and preferences in an open, portable JSON format.',
                                 style: textTheme.bodyMedium?.copyWith(fontSize: 12),
                               ),
                             ),

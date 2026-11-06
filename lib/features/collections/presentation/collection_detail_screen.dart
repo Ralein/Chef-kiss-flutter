@@ -23,7 +23,7 @@ class CollectionDetailScreen extends ConsumerWidget {
 
     return collectionsAsync.when(
       loading: () => const Scaffold(body: LoadingView()),
-      error: (e, _) => Scaffold(appBar: AppBar(), body: const ErrorView(message: 'This collection could not be loaded.')),
+      error: (e, _) => Scaffold(appBar: AppBar(), body: const ErrorView(message: 'This cookbook could not be loaded.')),
       data: (collections) {
         final col = collections.where((c) => c.id == collectionId).firstOrNull;
         if (col == null) {
@@ -31,9 +31,9 @@ class CollectionDetailScreen extends ConsumerWidget {
             appBar: AppBar(),
             body: EmptyStateScene(
               icon: Icons.collections_bookmark_outlined,
-              title: 'Collection not found',
+              title: 'Cookbook not found',
               message: 'It may have been deleted.',
-              actionLabel: 'All collections',
+              actionLabel: 'All cookbooks',
               onAction: () => context.go('/collections'),
             ),
           );
@@ -51,7 +51,7 @@ class CollectionDetailScreen extends ConsumerWidget {
                 onPressed: () => _manage(context, ref, col, recipes),
               ),
               PopupMenuButton<String>(
-                tooltip: 'Collection options',
+                tooltip: 'Cookbook options',
                 onSelected: (v) async {
                   if (v == 'rename') {
                     await CollectionActions.rename(context, ref, col);
@@ -61,7 +61,7 @@ class CollectionDetailScreen extends ConsumerWidget {
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'rename', child: Text('Rename')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete collection')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete cookbook')),
                 ],
               ),
             ],
@@ -70,7 +70,7 @@ class CollectionDetailScreen extends ConsumerWidget {
               ? EmptyStateScene(
                   icon: LucideIcons.folderPlus,
                   title: 'No recipes here yet',
-                  message: 'Add recipes from your cookbook to this collection.',
+                  message: 'Add recipes from your library to this cookbook.',
                   actionLabel: 'Add recipes',
                   onAction: () => _manage(context, ref, col, recipes),
                 )
@@ -128,7 +128,7 @@ class _MembershipSheet extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Recipes in ${col?.name ?? 'collection'}', style: context.chefText.headlineSmall),
+            child: Text('Recipes in ${col?.name ?? 'this cookbook'}', style: context.chefText.headlineSmall),
           ),
           Expanded(
             child: ListView.builder(

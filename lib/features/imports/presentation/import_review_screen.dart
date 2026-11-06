@@ -12,7 +12,11 @@ import '../../../app/widgets/recipe_image.dart';
 
 class ImportReviewScreen extends ConsumerStatefulWidget {
   final String jobId;
-  const ImportReviewScreen({super.key, required this.jobId});
+
+  /// A cookbook the recipe goes into once saved.
+  final String? cookbookId;
+
+  const ImportReviewScreen({super.key, required this.jobId, this.cookbookId});
 
   @override
   ConsumerState<ImportReviewScreen> createState() => _ImportReviewScreenState();
@@ -57,6 +61,10 @@ class _ImportReviewScreenState extends ConsumerState<ImportReviewScreen> {
     recipe = recipe.copyWith(status: ready ? RecipeStatus.ready : RecipeStatus.draft);
 
     final res = await ref.read(importRepositoryProvider).acceptImportReview(jobId: widget.jobId, recipe: recipe);
+    final saved = res.orNull, cookbook = widget.cookbookId;
+    if (saved != null && cookbook != null) {
+      await ref.read(collectionRepositoryProvider).addRecipeToCollection(cookbook, saved.id);
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     res.when(

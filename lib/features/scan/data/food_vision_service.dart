@@ -2,12 +2,13 @@ import 'package:app_contracts/app_contracts.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../core/ai/ai_prompts.dart';
+import '../../../core/ai/ai_client.dart';
 import '../../../core/ai/claude_client.dart';
 import '../../../core/media/image_prep.dart';
 
 /// Meal and ingredient recognition from photos.
 class FoodVisionService {
-  final ClaudeClient _client;
+  final AiClient _client;
   FoodVisionService(this._client);
 
   Future<Result<FoodAnalysis, AppFailure>> analyze(ScanMode mode, PreparedImage image, {String? hint}) async {

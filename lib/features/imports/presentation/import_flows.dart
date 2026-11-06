@@ -16,16 +16,19 @@ import '../../../app/widgets/common_widgets.dart';
 import '../../../core/ai/ai_connection.dart';
 import '../../../core/media/photo_picker.dart';
 
-/// Creates an import job and opens its review screen.
+/// Creates an import job and opens its review screen. With [cookbookId],
+/// the recipe goes into that cookbook once it is saved.
 ///
 /// [context] and [ref] must belong to a long-lived widget (a screen), not a
 /// sheet that is closing: both are captured before the first await.
-Future<void> startImport(BuildContext context, WidgetRef ref, ImportSource source) async {
+Future<void> startImport(BuildContext context, WidgetRef ref, ImportSource source, {String? cookbookId}) async {
   final router = GoRouter.of(context);
   final repo = ref.read(importRepositoryProvider);
   final res = await repo.createJob(profileId: 'default', source: source);
   res.when(
-    ok: (job) => router.push('/import/review/${job.id}'),
+    ok: (job) => router.push(
+      Uri(path: '/import/review/${job.id}', queryParameters: cookbookId == null ? null : {'cookbook': cookbookId}).toString(),
+    ),
     err: (f) => ChefToastService.show(title: f.message, type: ChefToastType.error),
   );
 }

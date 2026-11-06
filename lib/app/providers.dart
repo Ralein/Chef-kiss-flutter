@@ -114,17 +114,17 @@ final illustrationMatcherProvider = Provider<IllustrationMatcher>((ref) => Illus
 // --- AI services (null until AI is configured) --------------------------------
 
 final aiRecipeServiceProvider = Provider<AiRecipeService?>((ref) {
-  final client = ref.watch(claudeClientProvider);
+  final client = ref.watch(aiClientProvider);
   return client == null ? null : AiRecipeService(client);
 });
 
 final foodVisionServiceProvider = Provider<FoodVisionService?>((ref) {
-  final client = ref.watch(claudeClientProvider);
+  final client = ref.watch(aiClientProvider);
   return client == null ? null : FoodVisionService(client);
 });
 
 final aiNutritionServiceProvider = Provider<AiNutritionService?>((ref) {
-  final client = ref.watch(claudeClientProvider);
+  final client = ref.watch(aiClientProvider);
   return client == null ? null : AiNutritionService(client);
 });
 

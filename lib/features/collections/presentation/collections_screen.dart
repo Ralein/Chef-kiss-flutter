@@ -17,15 +17,15 @@ class CollectionActions {
 
   static Future<void> create(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(collectionRepositoryProvider);
-    final name = await showTextPromptDialog(context, title: 'New collection', hint: 'e.g. Weeknight dinners', confirmLabel: 'Create');
+    final name = await showTextPromptDialog(context, title: 'New cookbook', hint: 'e.g. French', confirmLabel: 'Create');
     if (name == null || name.trim().isEmpty) return;
     final res = await repo.createCollection(profileId: 'default', name: name.trim(), colorToken: 'accent.herb');
-    if (res.isFailure) ChefToastService.show(title: 'Could not create collection', type: ChefToastType.error);
+    if (res.isFailure) ChefToastService.show(title: 'Could not create the cookbook', type: ChefToastType.error);
   }
 
   static Future<void> rename(BuildContext context, WidgetRef ref, RecipeCollection col) async {
     final repo = ref.read(collectionRepositoryProvider);
-    final name = await showTextPromptDialog(context, title: 'Rename collection', initial: col.name);
+    final name = await showTextPromptDialog(context, title: 'Rename cookbook', initial: col.name);
     if (name == null || name.trim().isEmpty || name.trim() == col.name) return;
     await repo.updateCollection(col.copyWith(name: name.trim()));
   }
@@ -35,8 +35,8 @@ class CollectionActions {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete collection?'),
-        content: Text('“${col.name}” will be removed. The recipes in it stay in your cookbook.'),
+        title: const Text('Delete cookbook?'),
+        content: Text('“${col.name}” comes off the shelf. Its recipes stay in your library.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
@@ -68,21 +68,21 @@ class CollectionsScreen extends ConsumerWidget {
               heroTag: 'collections-fab',
               onPressed: () => CollectionActions.create(context, ref),
               icon: const Icon(LucideIcons.folderPlus),
-              label: const Text('New collection'),
+              label: const Text('New cookbook'),
             )
           : null,
       body: SafeArea(
         bottom: false,
         child: collectionsAsync.when(
           loading: () => const LoadingView(),
-          error: (e, _) => ErrorView(message: 'Collections could not be loaded.', onRetry: () => ref.invalidate(collectionsStreamProvider)),
+          error: (e, _) => ErrorView(message: 'Cookbooks could not be loaded.', onRetry: () => ref.invalidate(collectionsStreamProvider)),
           data: (collections) {
             if (collections.isEmpty) {
               return EmptyStateScene(
-                icon: LucideIcons.folderHeart,
-                title: 'No collections yet',
-                message: 'Group recipes for meal plans, holidays, or anything else — a recipe can live in several.',
-                actionLabel: 'Create a collection',
+                icon: LucideIcons.bookHeart,
+                title: 'No cookbooks yet',
+                message: 'Gather recipes into books, like French or Weeknight dinners. They stand on your shelf, and a recipe can live in several.',
+                actionLabel: 'Create a cookbook',
                 onAction: () => CollectionActions.create(context, ref),
               );
             }
@@ -90,7 +90,7 @@ class CollectionsScreen extends ConsumerWidget {
               slivers: [
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                  sliver: SliverToBoxAdapter(child: Semantics(header: true, child: Text('Collections', style: t.headlineMedium))),
+                  sliver: SliverToBoxAdapter(child: Semantics(header: true, child: Text('Cookbooks', style: t.headlineMedium))),
                 ),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
@@ -171,7 +171,7 @@ class _CollectionTile extends ConsumerWidget {
                     ),
                   ),
                   PopupMenuButton<String>(
-                    tooltip: 'Collection options',
+                    tooltip: 'Cookbook options',
                     onSelected: (v) => v == 'rename'
                         ? CollectionActions.rename(context, ref, collection)
                         : CollectionActions.delete(context, ref, collection),

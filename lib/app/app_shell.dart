@@ -20,7 +20,7 @@ const _destinations = [
   _Destination(LucideIcons.bookOpen, LucideIcons.bookOpen, 'Recipes'),
   _Destination(LucideIcons.scanLine, LucideIcons.scanLine, 'Scan'),
   _Destination(LucideIcons.chartColumnBig, LucideIcons.chartColumnBig, 'Food log'),
-  _Destination(LucideIcons.folderHeart, LucideIcons.folderHeart, 'Collections'),
+  _Destination(LucideIcons.bookHeart, LucideIcons.bookHeart, 'Cookbooks'),
   _Destination(LucideIcons.settings, LucideIcons.settings, 'Settings'),
 ];
 

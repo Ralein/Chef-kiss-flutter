@@ -116,7 +116,10 @@ GoRouter createRouter({String initialLocation = '/'}) {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/import/review/:id',
-        builder: (context, state) => ImportReviewScreen(jobId: state.pathParameters['id']!),
+        builder: (context, state) => ImportReviewScreen(
+          jobId: state.pathParameters['id']!,
+          cookbookId: state.uri.queryParameters['cookbook'],
+        ),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

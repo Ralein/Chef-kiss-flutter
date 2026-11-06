@@ -6,6 +6,7 @@ import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../../app/widgets/kitchen_format.dart';
 import '../../../../app/widgets/recipe_image.dart';
+import '../../domain/cookbook.dart';
 
 /// Bundled serif (DM Serif Display) for spines and journal headings.
 const kSerifFamily = 'DMSerifDisplay';
@@ -70,8 +71,15 @@ class BookLook {
       final base = _themeCloth[recipe.theme]!;
       cloth = jitter >= 0 ? Color.lerp(base, Colors.white, jitter)! : Color.lerp(base, Colors.black, -jitter)!;
     }
+    // On a photo spine the title sits on a dark scrim: light ink reads best.
+    final photo = style.pattern == SpinePattern.photo && (recipe.coverImage?.isNotEmpty ?? false);
     final ink =
-        _hex(style.textColor) ?? (cloth.computeLuminance() > 0.45 ? const Color(0xFF2A221C) : const Color(0xFFE3C77F));
+        _hex(style.textColor) ??
+        (photo
+            ? const Color(0xFFF7F1E6)
+            : cloth.computeLuminance() > 0.45
+            ? const Color(0xFF2A221C)
+            : const Color(0xFFE3C77F));
     final size =
         baseSize *
         switch (style.textSize) {
@@ -97,7 +105,10 @@ class BookLook {
         height: 1,
       ),
     };
-    return BookLook(cloth: cloth, ink: ink, title: title, pattern: style.pattern);
+    final shadowed = photo
+        ? title.copyWith(shadows: [Shadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 3)])
+        : title;
+    return BookLook(cloth: cloth, ink: ink, title: shadowed, pattern: style.pattern);
   }
 
   /// "Tokyo Shoyu Craft Ramen with Ajitsuke Egg" → "Tokyo Shoyu Craft Ramen":
@@ -132,6 +143,8 @@ class BookMetrics {
   }
 
   static double spineWidth(Recipe r, double scale) {
+    // A cookbook holds many recipes: the thickest book on the shelf.
+    if (Cookbook.isCookbook(r)) return 54 * scale;
     final base = switch (r.bookStyle.width) {
       SpineScale.small => 24.0,
       SpineScale.medium => 32.0,
@@ -181,8 +194,9 @@ class _ShelfBookState extends State<ShelfBook> {
     final r = widget.recipe;
     return Semantics(
       button: true,
-      label:
-          '${r.title}. ${KitchenFormat.minutes(r.totalMinutes)}${r.isFavorite ? ', favorite' : ''}. Opens in the journal.',
+      label: Cookbook.isCookbook(r)
+          ? '${r.title}, cookbook, ${r.summary}. Opens the book.'
+          : '${r.title}. ${KitchenFormat.minutes(r.totalMinutes)}${r.isFavorite ? ', favorite' : ''}. Opens in the journal.',
       excludeSemantics: true,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -233,7 +247,8 @@ class BookSpine extends StatelessWidget {
         final w = box.maxWidth;
         final margin = h * 0.13;
         // The title runs between the bands, or nearly end to end on a plain spine.
-        final titleInset = look.pattern == SpinePattern.plain ? 10.0 : margin + 1;
+        final titleInset = look.pattern == SpinePattern.plain || look.pattern == SpinePattern.photo ? 10.0 : margin + 1;
+        final photo = look.pattern == SpinePattern.photo ? recipe.coverImage : null;
         return ClipRRect(
           borderRadius: BorderRadius.circular(2.5),
           child: DecoratedBox(
@@ -250,6 +265,25 @@ class BookSpine extends StatelessWidget {
             ),
             child: Stack(
               children: [
+                if (photo != null && photo.isNotEmpty) ...[
+                  Positioned.fill(
+                    child: RecipeImage(source: photo, theme: recipe.theme),
+                  ),
+                  // A scrim in the photo's own colour keeps the title readable.
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color.lerp(cloth, Colors.black, 0.45)!.withValues(alpha: 0.7),
+                            cloth.withValues(alpha: 0.35),
+                            Color.lerp(cloth, Colors.black, 0.5)!.withValues(alpha: 0.75),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 // Page tops peeking above the cloth.
                 Positioned(
                   top: 0,
@@ -411,7 +445,7 @@ class _SpinePatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     switch (pattern) {
-      case SpinePattern.plain:
+      case SpinePattern.plain || SpinePattern.photo:
         return;
       case SpinePattern.bands:
         final p = Paint()

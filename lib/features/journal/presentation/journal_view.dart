@@ -696,7 +696,7 @@ class JournalViewState extends ConsumerState<JournalView> {
         ),
         PopupMenuItem(
           value: 'collection',
-          child: ListTile(leading: Icon(LucideIcons.folderHeart), title: Text('Save to collection')),
+          child: ListTile(leading: Icon(LucideIcons.bookPlus), title: Text('Add to a cookbook')),
         ),
         PopupMenuItem(
           value: 'edit',

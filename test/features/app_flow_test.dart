@@ -6,6 +6,7 @@ import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
+import 'package:chefs_kiss/features/library/presentation/library_screen.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/library_books.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -64,10 +65,10 @@ void main() {
     final db = await _pumpApp(tester, const Size(390, 844));
 
     // Library with bottom navigation (no duplicate headers).
-    expect(find.text('Your recipes'), findsOneWidget);
+    expect(find.descendant(of: find.byType(LibraryScreen), matching: find.text('Recipes')), findsOneWidget);
     // Spines carry the title in small caps; the book itself is the target.
     expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'Heirloom Tomato Salad'), findsOneWidget);
-    for (final tab in ['Recipes', 'Scan', 'Food log', 'Collections', 'Settings']) {
+    for (final tab in ['Recipes', 'Scan', 'Food log', 'Cookbooks', 'Settings']) {
       expect(find.text(tab), findsWidgets, reason: '$tab tab');
     }
 
@@ -102,7 +103,7 @@ void main() {
     await tester.tap(find.byTooltip('Bookshelf'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 6');
-    expect(find.text('Your recipes'), findsOneWidget);
+    expect(find.descendant(of: find.byType(LibraryScreen), matching: find.text('Recipes')), findsOneWidget);
 
     // Scan without AI configured explains how to enable it.
     await tester.tap(find.text('Scan').last);

@@ -149,6 +149,24 @@ You develop original, reliable recipes for a home-cooking app. Write one recipe 
 
 $_recipeFieldNotes''';
 
+  // --- What to cook with what's on hand ---------------------------------------
+
+  static Map<String, dynamic> get dishIdeasSchema => _obj({
+        'ideas': {
+          'type': 'array',
+          'items': _obj({
+            'title': _str,
+            'summary': _str,
+            'minutes': _int,
+            'uses': _strList,
+            'missing': _strList,
+          }),
+        },
+      });
+
+  static const dishIdeasSystem = '''
+You help a home cook decide what to make with the ingredients they have. Suggest four varied dishes (different cuisines, techniques or effort) that use mostly the listed ingredients plus common pantry staples — salt, pepper, oil, butter, flour, sugar, stock, everyday spices. For each give a short, appealing title; one sentence on what it is and why it suits these ingredients; realistic total minutes; the listed ingredients it uses (as written); and any further ingredients that are not pantry staples, keeping that list short and empty where you can. Prefer dishes that need nothing missing.''';
+
   // --- Ingredient nutrition estimates ----------------------------------------
 
   static Map<String, dynamic> get ingredientNutritionSchema => _obj({

@@ -7,6 +7,9 @@ import 'package:app_contracts/app_contracts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 
+import 'ai_client.dart';
+import 'ai_usage.dart';
+
 /// Content blocks for a single user turn.
 sealed class ClaudeContent {
   const ClaudeContent();
@@ -96,10 +99,13 @@ class ClaudeJsonResponse {
 /// retries on 408/409/429/5xx and network errors, honouring `x-should-retry`,
 /// `retry-after-ms` and `retry-after`, otherwise exponential backoff from
 /// 0.5 s capped at 8 s with up to 25 % jitter.
-class ClaudeClient {
+class ClaudeClient implements AiClient {
   static const _maxServerRequestedWait = Duration(seconds: 30);
 
   final ClaudeConfig config;
+
+  /// Told about every response, for the rate limit shown in Settings.
+  final AiUsageMeter? meter;
   final http.Client _http;
   final Random _random;
   final Future<void> Function(Duration) _sleep;
@@ -107,6 +113,7 @@ class ClaudeClient {
 
   ClaudeClient(
     this.config, {
+    this.meter,
     http.Client? httpClient,
     Random? random,
     Future<void> Function(Duration)? sleep,
@@ -116,10 +123,12 @@ class ClaudeClient {
         _sleep = sleep ?? Future<void>.delayed,
         _logger = logger;
 
+  @override
   void close() => _http.close();
 
   /// Verifies credentials and model access with `GET /v1/models/{id}`,
   /// which costs no tokens.
+  @override
   Future<Result<void, AppFailure>> checkAccess() async {
     try {
       final headers = _headers()..remove('content-type');
@@ -127,6 +136,7 @@ class ClaudeClient {
           await _http.get(config.baseUri.resolve('/v1/models/${config.model}'), headers: headers).timeout(
                 const Duration(seconds: 20),
               );
+      meter?.record(response.statusCode, response.headers);
       if (response.statusCode == 200) return const Result.ok(null);
       return Result.err(_mapError(response));
     } on TimeoutException {
@@ -138,6 +148,7 @@ class ClaudeClient {
 
   /// Sends one user turn and returns the model's JSON object, constrained by
   /// [schema] through structured outputs (`output_config.format`).
+  @override
   Future<Result<ClaudeJsonResponse, AppFailure>> createStructured({
     required String system,
     required List<ClaudeContent> content,
@@ -189,6 +200,7 @@ class ClaudeClient {
         ));
       }
 
+      meter?.record(response.statusCode, response.headers);
       if (response.statusCode == 200) {
         _logger?.info(
           'AI request succeeded',

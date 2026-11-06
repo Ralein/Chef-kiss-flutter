@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:app_contracts/app_contracts.dart';
 import 'package:chefs_kiss/app/bootstrap.dart';
@@ -7,6 +8,7 @@ import 'package:chefs_kiss/app/providers.dart';
 import 'package:chefs_kiss/core/ai/ai_connection.dart';
 import 'package:chefs_kiss/core/media/image_store.dart';
 import 'package:chefs_kiss/data/db/app_database.dart';
+import 'package:chefs_kiss/data/repositories/drift_collection_repository.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:chefs_kiss/features/library/domain/shelf_style.dart';
 import 'package:chefs_kiss/features/library/presentation/book_editor_screen.dart';
@@ -18,6 +20,8 @@ import 'package:chefs_kiss/features/library/presentation/widgets/shelf_art.dart'
 import 'package:chefs_kiss/features/library/presentation/widgets/shelf_edit_controller.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/shelf_layout.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/shelf_style_editor.dart';
+import 'package:chefs_kiss/features/library/presentation/widgets/spine_from_photo.dart';
+import 'package:chefs_kiss/features/journal/presentation/journal_view.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +58,7 @@ Future<(AppDatabase, ProviderContainer)> _pumpApp(
   WidgetTester tester, {
   Size size = const Size(390, 844),
   List<Recipe> recipes = const [],
+  Map<String, List<String>> cookbooks = const {},
 }) async {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   tester.view.physicalSize = size * 3;
@@ -62,6 +67,15 @@ Future<(AppDatabase, ProviderContainer)> _pumpApp(
   final db = AppDatabase(NativeDatabase.memory());
   for (final r in recipes) {
     await DriftRecipeRepository(db).saveRecipe(r);
+  }
+  // Made before the app runs: once it watches the database, writes from a
+  // test must go through the app.
+  for (final MapEntry(key: name, value: ids) in cookbooks.entries) {
+    final books = DriftCollectionRepository(db);
+    final book = (await books.createCollection(profileId: 'default', name: name, colorToken: 'accent.herb')).orNull!;
+    for (final id in ids) {
+      await books.addRecipeToCollection(book.id, id);
+    }
   }
   await tester.pumpWidget(
     ProviderScope(
@@ -98,6 +112,16 @@ Future<void> _pick(WidgetTester tester, Finder option) async {
   await tester.pumpAndSettle();
   await tester.tap(option);
   await tester.pumpAndSettle();
+}
+
+/// Scrolls the book editor down to [option], then taps it.
+Future<void> _pickInEditor(WidgetTester tester, Finder option) async {
+  await tester.scrollUntilVisible(
+    option,
+    160,
+    scrollable: find.descendant(of: find.byType(BookEditorScreen), matching: find.byType(Scrollable)).first,
+  );
+  await _pick(tester, option);
 }
 
 /// The wall the library scene paints behind the shelves (the first one in the
@@ -555,19 +579,15 @@ void main() {
     expect(_italic(find.byType(BookEditorScreen)), findsNothing, reason: "the app's own type, no italics");
 
     await tester.enterText(find.byType(TextField), 'Grandma’s apple pie');
-    await _pick(tester, find.widgetWithText(ChoiceChip, 'Cover'));
-    await _pick(tester, find.text('Spine').first);
-    expect(
-      _italic(find.byType(BookEditorScreen)),
-      findsOneWidget,
-      reason: 'italic only to show the "Italic serif" lettering',
-    );
-    await _pick(tester, find.text('Italic serif'));
-    await _pick(tester, find.bySemanticsLabel('Forest'));
-    await _pick(tester, find.text('Raised ribs'));
+    await _pickInEditor(tester, find.text('Cover'));
+    await _pickInEditor(tester, find.text('Ribs'));
+    await _pickInEditor(tester, find.bySemanticsLabel('Forest'));
+    await _pickInEditor(tester, find.text('Italic serif'));
     expect(tester.takeException(), isNull);
+    // One screen, the app's own pattern: a title bar with Save.
+    expect(find.widgetWithText(AppBar, 'Edit book'), findsOneWidget);
 
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.byType(BookEditorScreen), findsNothing);
 
@@ -586,17 +606,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit book'));
     await tester.pumpAndSettle();
-    await _pick(tester, find.text('Spine').first);
-    await _pick(tester, find.text('Modern sans'));
+    await _pickInEditor(tester, find.text('Sans'));
 
-    await tester.tap(find.byTooltip('Close'));
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
     expect(find.byType(BookEditorScreen), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Close'));
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
@@ -613,9 +632,9 @@ void main() {
     expect(find.text('AI recipe'), findsNothing, reason: 'quick actions moved off the home page');
 
     // Empty collections: one button, no FAB.
-    await tester.tap(find.text('Collections').last);
+    await tester.tap(find.text('Cookbooks').last);
     await tester.pumpAndSettle();
-    expect(find.text('Create a collection'), findsOneWidget);
+    expect(find.text('Create a cookbook'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
     await _teardown(tester, db);
   });
@@ -684,6 +703,47 @@ void main() {
     }
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
+  });
+
+  testWidgets('a cookbook stands as one book and opens to its own recipes', (tester) async {
+    final (db, _) = await _pumpApp(
+      tester,
+      recipes: [_recipe('a', 'Boeuf bourguignon'), _recipe('b', 'Crème brûlée'), _recipe('c', 'Apple pie')],
+      cookbooks: {
+        'French': ['a', 'b'],
+      },
+    );
+    expect(_book('French'), findsOneWidget, reason: 'the cookbook stands as one book');
+    expect(_book('Boeuf bourguignon'), findsNothing, reason: 'its recipes are inside it');
+    expect(_book('Apple pie'), findsOneWidget, reason: 'a recipe in no cookbook stands on its own');
+
+    await tester.tap(_book('French'));
+    await tester.pumpAndSettle();
+    final journal = tester.widget<JournalView>(find.byType(JournalView));
+    expect(journal.recipes.map((r) => r.title), ['Boeuf bourguignon', 'Crème brûlée']);
+    expect(find.text('French'), findsWidgets, reason: 'the journal is titled with the cookbook');
+
+    // Back on the shelf, a search finds recipes inside cookbooks too.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'brûlée');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(_book('Crème brûlée'), findsOneWidget);
+    expect(_book('French'), findsNothing);
+    expect(tester.takeException(), isNull);
+    await _teardown(tester, db);
+  });
+
+  test('a photo binds its spine in its own colour, deep enough for gilt lettering', () {
+    // Three tomato-red pixels and a white one.
+    final rgba = Uint8List.fromList([210, 60, 40, 255, 205, 55, 35, 255, 215, 65, 45, 255, 255, 255, 255, 255]);
+    final cloth = HSLColor.fromColor(clothFromPixels(rgba)!);
+    expect(cloth.hue, lessThan(25), reason: 'red stays red');
+    expect(cloth.lightness, inInclusiveRange(0.19, 0.39), reason: 'deep, give or take 8-bit rounding');
+    expect(clothFromPixels(Uint8List(0)), isNull);
   });
 
   testWidgets('one recipe still gets a bookcase: the other shelves hold kitchen things', (tester) async {

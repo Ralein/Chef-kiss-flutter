@@ -2,11 +2,12 @@ import 'package:app_contracts/app_contracts.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../core/ai/ai_prompts.dart';
+import '../../../core/ai/ai_client.dart';
 import '../../../core/ai/claude_client.dart';
 
 /// Fills nutrition gaps the offline catalog cannot resolve.
 class AiNutritionService {
-  final ClaudeClient _client;
+  final AiClient _client;
   AiNutritionService(this._client);
 
   /// Returns estimates keyed by [RecipeNutritionAnalyzer.fingerprint], ready

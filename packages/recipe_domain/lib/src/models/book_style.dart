@@ -24,7 +24,10 @@ enum SpineScale {
 enum SpinePattern {
   plain('Plain'),
   bands('Gilt bands'),
-  ribs('Raised ribs');
+  ribs('Raised ribs'),
+
+  /// A strip of the cover photo, cropped to the spine.
+  photo('Photo');
 
   final String label;
   const SpinePattern(this.label);

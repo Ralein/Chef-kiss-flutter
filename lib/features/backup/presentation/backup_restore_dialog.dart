@@ -118,7 +118,7 @@ class _BackupRestoreDialogState extends ConsumerState<BackupRestoreDialog> {
                         ),
                         const SizedBox(height: ChefSpacing.space1),
                         Text('• ${_validationResult!.recipeCount} recipes ready to restore'),
-                        Text('• ${_validationResult!.collectionCount} collections ready to restore'),
+                        Text('• ${_validationResult!.collectionCount} cookbooks ready to restore'),
                         if (_validationResult!.duplicateRecipeTitles.isNotEmpty) ...[
                           const SizedBox(height: ChefSpacing.space1),
                           Text(

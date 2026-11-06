@@ -149,7 +149,7 @@ class _CoverSheetState extends ConsumerState<_CoverSheet> {
   }
 }
 
-/// Adds/removes a recipe from collections, or creates a new one.
+/// Adds a recipe to cookbooks (or takes it out), or starts a new cookbook.
 Future<void> showAddToCollectionSheet(BuildContext context, Recipe recipe) {
   return showModalBottomSheet<void>(
     context: context,
@@ -178,7 +178,7 @@ class _CollectionsSheet extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text('Save to collection', style: t.headlineSmall),
+              child: Text('Add to a cookbook', style: t.headlineSmall),
             ),
             const SizedBox(height: 8),
             for (final col in collections)
@@ -192,9 +192,9 @@ class _CollectionsSheet extends ConsumerWidget {
               ),
             ListTile(
               leading: const Icon(Icons.create_new_folder_outlined),
-              title: const Text('New collection'),
+              title: const Text('New cookbook'),
               onTap: () async {
-                final name = await showTextPromptDialog(context, title: 'New collection', hint: 'e.g. Weeknight dinners');
+                final name = await showTextPromptDialog(context, title: 'New cookbook', hint: 'e.g. French');
                 if (name == null || name.trim().isEmpty) return;
                 final res = await repo.createCollection(profileId: 'default', name: name.trim(), colorToken: 'accent.herb');
                 final created = res.orNull;

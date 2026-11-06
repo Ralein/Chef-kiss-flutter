@@ -12,6 +12,7 @@ import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../core/ai/ai_connection.dart';
+import '../../../core/ai/ai_usage.dart';
 import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
 import '../../illustrations/presentation/illustration_approval_screen.dart';
@@ -119,12 +120,21 @@ class _AiSection extends ConsumerWidget {
     final t = context.chefText;
     final async = ref.watch(aiConnectionProvider);
     final state = async.valueOrNull;
+    final mode = state?.mode;
 
-    final (IconData icon, Color color, String status) = switch (state?.mode) {
+    final (IconData icon, Color color, String status) = switch (mode) {
       AiConnectionMode.proxy => (Icons.verified_rounded, c.stateSuccess, 'Connected · managed by Chef’s Kiss'),
-      AiConnectionMode.userKey => (Icons.verified_rounded, c.stateSuccess, 'Connected with your API key'),
+      AiConnectionMode.gateway => (Icons.verified_rounded, c.stateSuccess, 'Connected to your free-model gateway'),
+      AiConnectionMode.userKey => (Icons.verified_rounded, c.stateSuccess, 'Connected with your Claude key'),
       _ => (Icons.cloud_off_rounded, c.contentSecondary, 'Not set up'),
     };
+    final detail = switch (mode) {
+      AiConnectionMode.gateway => '${state!.gateway!.model} · ${state.gateway!.baseUri.authority}',
+      AiConnectionMode.userKey => '${state!.maskedKey} · ${state.config?.model ?? AiEnvironment.model}',
+      AiConnectionMode.proxy => state!.model ?? '',
+      _ => 'Powers food scanning, recipe photos, AI recipes, what-to-cook ideas and nutrition gap-filling.',
+    };
+    final ownConnection = mode == AiConnectionMode.gateway || mode == AiConnectionMode.userKey;
 
     return _Section(
       title: 'AI & Scanning',
@@ -136,13 +146,11 @@ class _AiSection extends ConsumerWidget {
           leading: Icon(icon, color: color),
           title: Text(status),
           subtitle: Text(
-            state?.mode == AiConnectionMode.userKey
-                ? '${state!.maskedKey} · ${state.config?.model ?? AiEnvironment.model}'
-                    '${state.persistentStorage ? '' : '\nCould not use the device keychain — the key will be forgotten when the app closes.'}'
-                : 'Powers food scanning, recipe photos, AI recipe creation and nutrition gap-filling.',
+            '$detail${state?.persistentStorage == false ? '\nCould not use the device keychain — the connection will be forgotten when the app closes.' : ''}',
           ),
         ),
-        if (state?.mode == AiConnectionMode.userKey) ...[
+        if (state?.isAvailable ?? false) const _RateLimitTile(),
+        if (ownConnection)
           Wrap(
             spacing: 8,
             children: [
@@ -159,50 +167,262 @@ class _AiSection extends ConsumerWidget {
                 label: const Text('Test'),
               ),
               TextButton.icon(
-                onPressed: () => showApiKeySheet(context),
-                icon: const Icon(Icons.key_rounded),
-                label: const Text('Replace key'),
+                onPressed: () => mode == AiConnectionMode.gateway ? showGatewaySheet(context) : showApiKeySheet(context),
+                icon: const Icon(Icons.tune_rounded),
+                label: const Text('Change'),
               ),
               TextButton.icon(
                 onPressed: () async {
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Remove API key?'),
-                      content: const Text('AI features will stop working until you add a key again.'),
+                      title: const Text('Disconnect AI?'),
+                      content: const Text('AI features stop working until you connect again.'),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnect')),
                       ],
                     ),
                   );
-                  if (ok == true) await ref.read(aiConnectionProvider.notifier).removeApiKey();
+                  if (ok != true) return;
+                  final notifier = ref.read(aiConnectionProvider.notifier);
+                  await (mode == AiConnectionMode.gateway ? notifier.removeGateway() : notifier.removeApiKey());
                 },
-                icon: const Icon(Icons.delete_outline_rounded),
-                label: const Text('Remove'),
+                icon: const Icon(Icons.link_off_rounded),
+                label: const Text('Disconnect'),
               ),
             ],
-          ),
-        ] else if (state?.canEditKey ?? false) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton.icon(
-              onPressed: () => showApiKeySheet(context),
-              icon: const Icon(Icons.key_rounded),
-              label: const Text('Add Anthropic API key'),
-            ),
+          )
+        else if (mode != AiConnectionMode.proxy) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.icon(
+                onPressed: () => showGatewaySheet(context),
+                icon: const Icon(Icons.hub_outlined),
+                label: const Text('Connect free models'),
+              ),
+              if (state?.canEditKey ?? false)
+                TextButton(onPressed: () => showApiKeySheet(context), child: const Text('Use a Claude key instead')),
+            ],
           ),
           const SizedBox(height: 8),
         ],
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            'Photos and text you choose to analyze are sent to Anthropic’s Claude API. '
-            'Everything else — your recipes and food log — stays on this device.',
+            switch (mode) {
+              AiConnectionMode.gateway =>
+                'Photos and text you choose to analyze go to your gateway, which passes them to free models. '
+                    'Free models may log what they are sent: leave personal details out. '
+                    'Your recipes and food log stay on this device.',
+              AiConnectionMode.userKey || AiConnectionMode.proxy =>
+                'Photos and text you choose to analyze are sent to Anthropic’s Claude API. '
+                    'Everything else — your recipes and food log — stays on this device.',
+              _ => 'Use free models through a gateway you run, or your own Claude key. '
+                  'Only what you choose to analyze leaves this device.',
+            },
             style: t.bodySmall,
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The AI service's rate limit as last reported, and this session's
+/// requests: shown so a busy free model isn't a mystery.
+class _RateLimitTile extends ConsumerWidget {
+  const _RateLimitTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.chefColors;
+    final usage = ref.watch(aiUsageProvider).usage;
+    final now = DateTime.now();
+    String at(DateTime time) => TimeOfDay.fromDateTime(time).format(context);
+    final limited = usage.limitedAt(now);
+    final requests = '${usage.requests} request${usage.requests == 1 ? '' : 's'} this session';
+    final (String title, String? subtitle) = limited
+        ? ('Rate limited — try again after ${at(usage.limitedUntil!)}', requests)
+        : usage.limit != null && usage.remaining != null
+        ? (
+            '${usage.remaining} of ${usage.limit} requests left',
+            [if (usage.resetsAt != null && usage.resetsAt!.isAfter(now)) 'resets at ${at(usage.resetsAt!)}', requests]
+                .join(' · '),
+          )
+        : usage.requests > 0
+        ? ('No rate limit reported', requests)
+        : ('Rate limit: shown after the first request', null);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(Icons.speed_rounded, color: limited ? c.stateWarning : c.contentSecondary),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+    );
+  }
+}
+
+Future<void> showGatewaySheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    builder: (_) => const _GatewaySheet(),
+  );
+}
+
+/// Connects to an OpenAI-compatible gateway — such as a free-model gateway
+/// running on the user's computer — and picks which of its models to use.
+class _GatewaySheet extends ConsumerStatefulWidget {
+  const _GatewaySheet();
+
+  @override
+  ConsumerState<_GatewaySheet> createState() => _GatewaySheetState();
+}
+
+class _GatewaySheetState extends ConsumerState<_GatewaySheet> {
+  late final _address = TextEditingController(
+    text: ref.read(aiConnectionProvider).valueOrNull?.gateway?.baseUri.toString() ?? '',
+  );
+  final _key = TextEditingController();
+  bool _obscure = true;
+  bool _busy = false;
+  String? _error;
+  List<String>? _models;
+  String? _model;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    _key.dispose();
+    super.dispose();
+  }
+
+  Future<void> _findModels() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final res = await ref.read(aiConnectionProvider.notifier).gatewayModels(_address.text, _key.text);
+    if (!mounted) return;
+    final current = ref.read(aiConnectionProvider).valueOrNull?.gateway?.model;
+    setState(() {
+      _busy = false;
+      if (res.isSuccess) {
+        final models = res.orNull!;
+        _models = models;
+        _model = models.contains(current) ? current : models.firstOrNull;
+        if (models.isEmpty) _error = 'The gateway has no models to offer right now.';
+      } else {
+        _error = [res.error!.message, if (res.error!.recoveryAction != null) res.error!.recoveryAction!].join(' ');
+      }
+    });
+  }
+
+  Future<void> _connect() async {
+    final model = _model;
+    if (model == null) return;
+    setState(() => _busy = true);
+    final navigator = Navigator.of(context);
+    final res = await ref
+        .read(aiConnectionProvider.notifier)
+        .saveGateway(address: _address.text, key: _key.text, model: model);
+    if (!mounted) return;
+    if (res.isSuccess) {
+      navigator.pop();
+      ChefToastService.show(title: 'AI is ready', description: 'Using $model.', type: ChefToastType.success);
+    } else {
+      setState(() {
+        _busy = false;
+        _error = res.error!.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    final c = context.chefColors;
+    final models = _models;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Connect free models', style: t.headlineSmall),
+            const SizedBox(height: 6),
+            Text(
+              'Run an OpenAI-compatible gateway, such as dsh-our-free-model, on your computer. With this phone on USB, '
+              'run “adb reverse tcp:18899 tcp:18899” there and use http://127.0.0.1:18899. A gateway with an https '
+              'address works from anywhere.',
+              style: t.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _address,
+              autofocus: _address.text.isEmpty,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              onChanged: (_) => setState(() => _models = null),
+              decoration: const InputDecoration(labelText: 'Gateway address', hintText: 'http://127.0.0.1:18899'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _key,
+              obscureText: _obscure,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.visiblePassword,
+              onChanged: (_) => setState(() => _models = null),
+              decoration: InputDecoration(
+                labelText: 'Key, if the gateway asks for one',
+                errorText: _error,
+                errorMaxLines: 3,
+                suffixIcon: IconButton(
+                  tooltip: _obscure ? 'Show key' : 'Hide key',
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                ),
+              ),
+            ),
+            if (models != null && models.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _model,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Model'),
+                items: [for (final m in models) DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis))],
+                onChanged: (m) => setState(() => _model = m),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: c.stateWarning),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Free models may log what they are sent. Leave personal details out.', style: t.bodySmall),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _busy ? null : (models == null || models.isEmpty ? _findModels : _connect),
+              child: _busy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(models == null || models.isEmpty ? 'Find models' : 'Connect'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -270,7 +490,7 @@ class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Connect Claude', style: t.headlineSmall),
+            Text('Use your Claude key', style: t.headlineSmall),
             const SizedBox(height: 6),
             Text(
               'Create an API key in the Claude Console (platform.claude.com → Settings → API keys) and paste it here. '
@@ -531,7 +751,7 @@ class _DataSection extends ConsumerWidget {
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.upload_rounded),
           title: const Text('Export backup'),
-          subtitle: const Text('Copy all recipes and collections as a JSON backup'),
+          subtitle: const Text('Copy all recipes and cookbooks as a JSON backup'),
           onTap: () => showDialog<void>(context: context, builder: (_) => const BackupExportDialog()),
         ),
         ListTile(
@@ -552,7 +772,7 @@ class _DataSection extends ConsumerWidget {
           contentPadding: EdgeInsets.zero,
           leading: Icon(Icons.warning_amber_rounded, color: c.stateDanger),
           title: Text('Erase all data', style: TextStyle(color: c.stateDanger)),
-          subtitle: const Text('Permanently delete recipes, collections and your food log'),
+          subtitle: const Text('Permanently delete recipes, cookbooks and your food log'),
           onTap: () => _confirmReset(context, ref),
         ),
       ],
@@ -576,7 +796,7 @@ class _DataSection extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Erase all data?'),
         content: const Text(
-          'This permanently deletes every recipe, collection, cooking session and food log entry on this device. '
+          'This permanently deletes every recipe, cookbook, cooking session and food log entry on this device. '
           'Export a backup first if you might want them back.',
         ),
         actions: [
@@ -702,7 +922,7 @@ class _AboutSection extends StatelessWidget {
       icon: Icons.info_outline_rounded,
       children: [
         Text(
-          'Your recipes, collections and food log are stored only on this device. Chef’s Kiss has no account, '
+          'Your recipes, cookbooks and food log are stored only on this device. Chef’s Kiss has no account, '
           'ads or tracking. AI requests you start are processed by Anthropic under its commercial terms.',
           style: t.bodyMedium,
         ),
