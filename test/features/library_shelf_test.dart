@@ -251,10 +251,13 @@ void main() {
   testWidgets('style editor: looks, walls and decorations preview live; Save keeps them, ✕ discards', (tester) async {
     final (db, container) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie')]);
     expect(find.byType(ShelfBook), findsOneWidget);
+    final book = tester.state(find.byType(ShelfBook));
 
     await _openEditor(tester);
     expect(find.byType(ShelfStyleEditor), findsOneWidget);
+    expect(tester.state(find.byType(ShelfBook)), same(book), reason: 'books stay put, covers and all');
     expect(find.byType(FloatingActionButton), findsNothing, reason: 'nothing competes with the editor');
+    expect(find.byType(NavigationBar), findsNothing, reason: 'it takes the whole screen');
 
     await _pick(tester, _option('Bistro'));
     expect(_sceneWall(), WallStyle.steel, reason: 'a look sets the wall');
@@ -357,6 +360,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ShelfStyleEditor), findsNothing);
     expect(find.byType(ShelfBook), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget, reason: 'navigation comes back');
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
   });

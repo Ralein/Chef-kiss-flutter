@@ -173,9 +173,11 @@ class ShelfEditController extends ChangeNotifier {
   void dragMoved(Offset global) {
     const zone = 72.0, fastest = 14.0;
     final y = global.dy;
+    // Over the editor's panel doesn't count: a piece dragged in from the
+    // palette starts there.
     final push = y < sceneTop + zone
         ? -(sceneTop + zone - y) / zone
-        : (y > sceneBottom - zone ? (y - sceneBottom + zone) / zone : 0.0);
+        : (y > sceneBottom - zone && y <= sceneBottom ? (y - sceneBottom + zone) / zone : 0.0);
     _scrollSpeed = push.clamp(-1.0, 1.0) * fastest;
     final scroll = this.scroll;
     if (_scrollSpeed == 0 || scroll == null || !scroll.hasClients) {

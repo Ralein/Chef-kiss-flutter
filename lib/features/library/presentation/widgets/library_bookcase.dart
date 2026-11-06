@@ -118,6 +118,7 @@ class _ShelfRowState extends State<_ShelfRow> {
           if (edit != null)
             // Tapping the wall puts down whatever is selected.
             Positioned.fill(
+              key: const ValueKey('wall'),
               child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => edit.select(null)),
             ),
           for (final b in row.books) _book(b),
@@ -137,8 +138,10 @@ class _ShelfRowState extends State<_ShelfRow> {
         ],
       ),
     );
-    if (edit == null) return scene;
+    // The same widgets whether or not the shelves are being dressed, so
+    // switching keeps every book (and its loaded cover) as it is.
     return DragTarget<DecorDrag>(
+      onWillAcceptWithDetails: (_) => widget.edit != null,
       onMove: (details) {
         final landing = _landingFor(details);
         if (landing != _landing) setState(() => _landing = landing);
@@ -148,9 +151,9 @@ class _ShelfRowState extends State<_ShelfRow> {
         setState(() => _landing = null);
         final x = _xFor(details);
         if (details.data.placed case final placed?) {
-          edit.move(placed.id, shelf: row.index, x: x);
+          edit?.move(placed.id, shelf: row.index, x: x);
         } else {
-          edit.add(details.data.piece, shelf: row.index, x: x);
+          edit?.add(details.data.piece, shelf: row.index, x: x);
         }
       },
       builder: (context, _, _) => scene,
@@ -182,26 +185,20 @@ class _ShelfRowState extends State<_ShelfRow> {
       onTap: () => widget.onOpen(b.recipe),
       onLongPress: widget.onLongPress == null ? null : () => widget.onLongPress!(b.recipe),
     );
-    if (edit == null) {
-      return Positioned(
-        key: ValueKey('book ${b.recipe.id}'),
-        left: _inset + b.left,
-        bottom: _m.plank + 3,
-        width: b.width,
-        height: b.height,
-        child: book,
-      );
-    }
-    // While dressing the shelves, books step back and slide aside for decor.
+    // While the shelves are being dressed, books step back and slide aside
+    // for decorations.
     return AnimatedPositioned(
       key: ValueKey('book ${b.recipe.id}'),
-      duration: ChefMotion.standard,
+      duration: edit == null ? Duration.zero : ChefMotion.standard,
       curve: ChefMotion.easeStandard,
       left: _inset + b.left,
       bottom: _m.plank + 3,
       width: b.width,
       height: b.height,
-      child: IgnorePointer(child: Opacity(opacity: 0.32, child: book)),
+      child: IgnorePointer(
+        ignoring: edit != null,
+        child: AnimatedOpacity(duration: ChefMotion.quick, opacity: edit == null ? 1 : 0.32, child: book),
+      ),
     );
   }
 

@@ -198,6 +198,10 @@ final remoteBackupRepositoryProvider = Provider<RemoteBackupRepository>((ref) {
 
 final recipeFilterProvider = StateProvider<RecipeFilter>((ref) => const RecipeFilter());
 
+/// True while a screen takes over the whole window — dressing the bookcase —
+/// so the shell hides its navigation bar.
+final immersiveModeProvider = StateProvider<bool>((ref) => false);
+
 final recipesStreamProvider = StreamProvider<List<Recipe>>((ref) {
   return ref.watch(recipeRepositoryProvider).watchRecipes(filter: ref.watch(recipeFilterProvider));
 });

@@ -307,8 +307,18 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                 label: w.label,
                 selected: style.wall == w,
                 onTap: () => _c.style = style.copyWith(wall: w),
-                child: CustomPaint(
-                  painter: WallPainter(style: w, tint: style.wallColor),
+                // A patch of wall shrunk to fit, so tiles and magnets show at
+                // something like their size on the shelves.
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox(
+                    width: 210,
+                    height: 200,
+                    child: CustomPaint(
+                      painter: WallPainter(style: w, tint: style.wallColor),
+                    ),
+                  ),
                 ),
               ),
           ]),
@@ -562,7 +572,8 @@ class _PieceActions extends StatelessWidget {
         decoration: _glass(radius: 18),
         child: Row(
           children: [
-            _action(LucideIcons.flipHorizontal2, 'Flip', onFlip),
+            // This package's flipVertical2 is the left-right mirror glyph.
+            _action(LucideIcons.flipVertical2, 'Flip', onFlip),
             _action(LucideIcons.copy, 'Duplicate', onDuplicate),
             _action(LucideIcons.trash2, 'Delete', onDelete, color: const Color(0xFFF2A08F)),
           ],

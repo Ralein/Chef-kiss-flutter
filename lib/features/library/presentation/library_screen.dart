@@ -95,6 +95,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// A style just saved, shown until preferences report it back.
   ShelfStyle? _savedStyle;
   final _shelfScroll = ScrollController();
+
+  /// Stands in for [_edit] when nothing is being dressed.
+  final _noEdits = ChangeNotifier();
   late String? _journalRecipeId = widget.initialRecipeId;
   final _journalKey = GlobalKey<JournalViewState>();
 
@@ -191,15 +194,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     _searchController.dispose();
     _searchFocus.dispose();
     _shelfScroll.dispose();
-    _edit?.dispose();
+    _noEdits.dispose();
+    if (_edit != null) {
+      _edit!.dispose();
+      // Leaving mid-edit: give the navigation bar back once this frame is done.
+      final immersive = ref.read(immersiveModeProvider.notifier);
+      Future.microtask(() => immersive.state = false);
+    }
     super.dispose();
   }
 
-  void _startStyling(ShelfStyle style) => setState(() => _edit = ShelfEditController(style, scroll: _shelfScroll));
+  /// Dressing the bookcase takes the whole screen, navigation bar included.
+  void _startStyling(ShelfStyle style) {
+    setState(() => _edit = ShelfEditController(style, scroll: _shelfScroll));
+    ref.read(immersiveModeProvider.notifier).state = true;
+  }
 
   void _stopStyling() {
     final edit = _edit;
     setState(() => _edit = null);
+    ref.read(immersiveModeProvider.notifier).state = false;
     // The editor still listens until this frame unmounts it.
     WidgetsBinding.instance.addPostFrameCallback((_) => edit?.dispose());
   }
@@ -580,12 +594,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   /// The library room: the wall fills the screen (under the status bar too),
   /// shelves scroll over it, and the controls take the wall's light or dark.
   Widget _buildShelf(BuildContext context, List<Recipe> all) {
-    final edit = _edit;
-    if (edit != null) {
-      return ListenableBuilder(listenable: edit, builder: (context, _) => _shelfRoom(context, all, edit.style, edit));
-    }
     final saved = ref.watch(shelfStyleProvider).valueOrNull ?? const ShelfStyle();
-    return _shelfRoom(context, all, _savedStyle ?? saved, null);
+    // One shape whether or not the shelves are being dressed, so opening the
+    // editor keeps every book (and its loaded cover) in place.
+    return ListenableBuilder(
+      listenable: _edit ?? _noEdits,
+      builder: (context, _) => _shelfRoom(context, all, _edit?.style ?? _savedStyle ?? saved, _edit),
+    );
   }
 
   Widget _shelfRoom(BuildContext context, List<Recipe> all, ShelfStyle style, ShelfEditController? edit) {
@@ -619,9 +634,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     if (visible.isEmpty && edit == null)
                       SliverFillRemaining(hasScrollBody: false, child: _noMatches())
                     else
-                      // Dressing the shelves shows every book, whatever the filter.
+                      // Dressing the shelves shows every book, whatever the
+                      // filter, in the order the shelves keep them.
                       LibraryBookcase(
-                        recipes: edit != null ? all : visible,
+                        key: const ValueKey('bookcase'),
+                        recipes: edit != null ? _apply(all, filters, unfiltered: true) : visible,
                         style: style,
                         onOpen: edit != null ? (_) {} : _openInJournal,
                         onLongPress: edit != null ? null : _showBookActions,

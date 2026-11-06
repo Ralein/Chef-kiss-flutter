@@ -24,8 +24,9 @@ const _destinations = [
   _Destination(LucideIcons.settings, LucideIcons.settings, 'Settings'),
 ];
 
-/// Adaptive navigation: bottom bar on phones, rail on tablets/desktop.
-class AppShell extends StatelessWidget {
+/// Adaptive navigation: bottom bar on phones, rail on tablets/desktop. The
+/// bar steps aside while a screen is immersive.
+class AppShell extends ConsumerWidget {
   final StatefulNavigationShell shell;
   const AppShell({super.key, required this.shell});
 
@@ -34,27 +35,30 @@ class AppShell extends StatelessWidget {
   void _select(int index) => shell.goBranch(index, initialLocation: index == shell.currentIndex);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.chefColors;
+    final immersive = ref.watch(immersiveModeProvider);
     return LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth < compactBreakpoint) {
         return Scaffold(
           body: shell,
-          bottomNavigationBar: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const _RunningTimersBar(),
-              Divider(height: 1, color: c.outlineSubtle),
-              NavigationBar(
-                selectedIndex: shell.currentIndex,
-                onDestinationSelected: _select,
-                destinations: [
-                  for (final d in _destinations)
-                    NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selectedIcon), label: d.label),
-                ],
-              ),
-            ],
-          ),
+          bottomNavigationBar: immersive
+              ? null
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const _RunningTimersBar(),
+                    Divider(height: 1, color: c.outlineSubtle),
+                    NavigationBar(
+                      selectedIndex: shell.currentIndex,
+                      onDestinationSelected: _select,
+                      destinations: [
+                        for (final d in _destinations)
+                          NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selectedIcon), label: d.label),
+                      ],
+                    ),
+                  ],
+                ),
         );
       }
 
