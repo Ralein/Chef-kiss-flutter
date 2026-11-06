@@ -133,7 +133,7 @@ class _IllustrationApprovalScreenState extends ConsumerState<IllustrationApprova
                             const SizedBox(height: ChefSpacing.space1),
                             Text(
                               'Prompt: "${candidate.promptTemplate}"',
-                              style: textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: colors.contentSecondary),
+                              style: textTheme.bodySmall?.copyWith(color: colors.contentSecondary),
                             ),
                           ],
                           const SizedBox(height: ChefSpacing.space3),

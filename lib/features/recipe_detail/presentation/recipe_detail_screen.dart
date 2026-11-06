@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
@@ -311,7 +312,7 @@ class _HeroAppBar extends StatelessWidget {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: _MenuAction.collection,
-                child: ListTile(leading: Icon(Icons.collections_bookmark_outlined), title: Text('Add to a cookbook')),
+                child: ListTile(leading: Icon(LucideIcons.bookPlus), title: Text('Add to a cookbook')),
               ),
               PopupMenuItem(
                 value: _MenuAction.cover,
@@ -447,7 +448,7 @@ class _Overview extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         recipe.chefTip?.trim().isNotEmpty ?? false ? recipe.chefTip! : 'Tap to add a tip',
-                        style: t.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+                        style: t.bodyMedium,
                       ),
                     ],
                   ),

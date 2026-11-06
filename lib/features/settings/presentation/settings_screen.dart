@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
@@ -123,10 +124,10 @@ class _AiSection extends ConsumerWidget {
     final mode = state?.mode;
 
     final (IconData icon, Color color, String status) = switch (mode) {
-      AiConnectionMode.proxy => (Icons.verified_rounded, c.stateSuccess, 'Connected · managed by Chef’s Kiss'),
-      AiConnectionMode.gateway => (Icons.verified_rounded, c.stateSuccess, 'Connected to your free-model gateway'),
-      AiConnectionMode.userKey => (Icons.verified_rounded, c.stateSuccess, 'Connected with your Claude key'),
-      _ => (Icons.cloud_off_rounded, c.contentSecondary, 'Not set up'),
+      AiConnectionMode.proxy => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected · managed by Chef’s Kiss'),
+      AiConnectionMode.gateway => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected to your free-model gateway'),
+      AiConnectionMode.userKey => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected with your Claude key'),
+      _ => (LucideIcons.cloudOff, c.contentSecondary, 'Not set up'),
     };
     final detail = switch (mode) {
       AiConnectionMode.gateway => '${state!.gateway!.model} · ${state.gateway!.baseUri.authority}',
@@ -138,7 +139,7 @@ class _AiSection extends ConsumerWidget {
 
     return _Section(
       title: 'AI & Scanning',
-      icon: Icons.auto_awesome_rounded,
+      icon: LucideIcons.sparkles,
       children: [
         if (async.isLoading) const LinearProgressIndicator(),
         ListTile(
@@ -163,12 +164,12 @@ class _AiSection extends ConsumerWidget {
                     type: res.isSuccess ? ChefToastType.success : ChefToastType.error,
                   );
                 },
-                icon: const Icon(Icons.network_check_rounded),
+                icon: const Icon(LucideIcons.activity),
                 label: const Text('Test'),
               ),
               TextButton.icon(
                 onPressed: () => mode == AiConnectionMode.gateway ? showGatewaySheet(context) : showApiKeySheet(context),
-                icon: const Icon(Icons.tune_rounded),
+                icon: const Icon(LucideIcons.slidersHorizontal),
                 label: const Text('Change'),
               ),
               TextButton.icon(
@@ -188,7 +189,7 @@ class _AiSection extends ConsumerWidget {
                   final notifier = ref.read(aiConnectionProvider.notifier);
                   await (mode == AiConnectionMode.gateway ? notifier.removeGateway() : notifier.removeApiKey());
                 },
-                icon: const Icon(Icons.link_off_rounded),
+                icon: const Icon(LucideIcons.unlink),
                 label: const Text('Disconnect'),
               ),
             ],
@@ -201,7 +202,7 @@ class _AiSection extends ConsumerWidget {
             children: [
               FilledButton.icon(
                 onPressed: () => showGatewaySheet(context),
-                icon: const Icon(Icons.hub_outlined),
+                icon: const Icon(LucideIcons.plug),
                 label: const Text('Connect free models'),
               ),
               if (state?.canEditKey ?? false)
@@ -259,7 +260,7 @@ class _RateLimitTile extends ConsumerWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      leading: Icon(Icons.speed_rounded, color: limited ? c.stateWarning : c.contentSecondary),
+      leading: Icon(LucideIcons.gauge, color: limited ? c.stateWarning : c.contentSecondary),
       title: Text(title),
       subtitle: subtitle == null ? null : Text(subtitle),
     );
@@ -388,7 +389,7 @@ class _GatewaySheetState extends ConsumerState<_GatewaySheet> {
                 suffixIcon: IconButton(
                   tooltip: _obscure ? 'Show key' : 'Hide key',
                   onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff),
                 ),
               ),
             ),
@@ -406,7 +407,7 @@ class _GatewaySheetState extends ConsumerState<_GatewaySheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, size: 16, color: c.stateWarning),
+                Icon(LucideIcons.info, size: 16, color: c.stateWarning),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text('Free models may log what they are sent. Leave personal details out.', style: t.bodySmall),
@@ -513,7 +514,7 @@ class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
                 suffixIcon: IconButton(
                   tooltip: _obscure ? 'Show key' : 'Hide key',
                   onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff),
                 ),
               ),
               onSubmitted: (_) => _saving ? null : _save(),
@@ -541,7 +542,7 @@ class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: c.stateWarning),
+                  Icon(LucideIcons.info, size: 16, color: c.stateWarning),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -558,7 +559,7 @@ class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.verified_outlined),
+                  : const Icon(LucideIcons.badgeCheck),
               label: Text(_saving ? 'Checking…' : 'Save & verify'),
             ),
           ],
@@ -586,7 +587,7 @@ class _VoiceSection extends ConsumerWidget {
 
     return _Section(
       title: 'Read aloud',
-      icon: Icons.record_voice_over_outlined,
+      icon: LucideIcons.speech,
       children: [
         Text(
           'Hear recipes and Cook Mode steps read out loud, so your hands can stay in the dough. '
@@ -660,7 +661,7 @@ class _GoalsSection extends ConsumerWidget {
 
     return _Section(
       title: 'Daily nutrition goals',
-      icon: Icons.flag_outlined,
+      icon: LucideIcons.flag,
       children: [
         row('Calories', goals.calories, 'kcal', (v) => goals.copyWith(calories: v)),
         row('Protein', goals.proteinG, 'g', (v) => goals.copyWith(proteinG: v)),
@@ -745,32 +746,32 @@ class _DataSection extends ConsumerWidget {
     final c = context.chefColors;
     return _Section(
       title: 'Your data',
-      icon: Icons.storage_rounded,
+      icon: LucideIcons.database,
       children: [
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.upload_rounded),
+          leading: const Icon(LucideIcons.upload),
           title: const Text('Export backup'),
           subtitle: const Text('Copy all recipes and cookbooks as a JSON backup'),
           onTap: () => showDialog<void>(context: context, builder: (_) => const BackupExportDialog()),
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.restore_rounded),
+          leading: const Icon(LucideIcons.archiveRestore),
           title: const Text('Restore from backup'),
           subtitle: const Text('Import recipes from a JSON backup'),
           onTap: () => showDialog<void>(context: context, builder: (_) => const BackupRestoreDialog()),
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.delete_sweep_outlined),
+          leading: const Icon(LucideIcons.trash),
           title: const Text('Recently deleted'),
           subtitle: const Text('Restore or permanently remove deleted recipes'),
           onTap: () => _showTrash(context),
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.warning_amber_rounded, color: c.stateDanger),
+          leading: Icon(LucideIcons.triangleAlert, color: c.stateDanger),
           title: Text('Erase all data', style: TextStyle(color: c.stateDanger)),
           subtitle: const Text('Permanently delete recipes, cookbooks and your food log'),
           onTap: () => _confirmReset(context, ref),
@@ -858,7 +859,7 @@ class _TrashSheet extends ConsumerWidget {
                                 TextButton(onPressed: () => repo.restoreRecipe(r.id), child: const Text('Restore')),
                                 IconButton(
                                   tooltip: 'Delete forever',
-                                  icon: const Icon(Icons.delete_forever_outlined),
+                                  icon: const Icon(LucideIcons.trash2),
                                   onPressed: () => repo.purgeRecipe(r.id),
                                 ),
                               ],
@@ -887,7 +888,7 @@ class _DeveloperSection extends StatelessWidget {
     final t = context.chefText;
     return _Section(
       title: 'Developer preview',
-      icon: Icons.science_outlined,
+      icon: LucideIcons.flaskConical,
       children: [
         Text(
           'Visible in ${env.flavor.name} builds only. Cloud sync runs against an in-memory demo server — '
@@ -899,7 +900,7 @@ class _DeveloperSection extends StatelessWidget {
         if (env.flags.illustrationGovernanceEnabled)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.palette_outlined),
+            leading: const Icon(LucideIcons.palette),
             title: const Text('Illustration moderation'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const IllustrationApprovalScreen())),
           ),
@@ -919,7 +920,7 @@ class _AboutSection extends StatelessWidget {
     final t = context.chefText;
     return _Section(
       title: 'About',
-      icon: Icons.info_outline_rounded,
+      icon: LucideIcons.info,
       children: [
         Text(
           'Your recipes, cookbooks and food log are stored only on this device. Chef’s Kiss has no account, '
@@ -934,7 +935,7 @@ class _AboutSection extends StatelessWidget {
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.description_outlined),
+          leading: const Icon(LucideIcons.fileText),
           title: const Text('Open-source licenses'),
           onTap: () => showLicensePage(
             context: context,

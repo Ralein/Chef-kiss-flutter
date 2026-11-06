@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:uuid/uuid.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
@@ -130,7 +131,7 @@ class _AddRecipeSheet extends ConsumerWidget {
         ),
         title: Text(title),
         subtitle: Text(needsAi && !aiReady ? '$subtitle · needs AI setup' : subtitle),
-        trailing: const Icon(Icons.chevron_right_rounded),
+        trailing: const Icon(LucideIcons.chevronRight),
         onTap: onTap,
       );
     }
@@ -147,7 +148,7 @@ class _AddRecipeSheet extends ConsumerWidget {
             child: Text('Add a recipe', style: t.headlineSmall),
           ),
           option(
-            icon: Icons.auto_awesome_rounded,
+            icon: LucideIcons.sparkles,
             tint: c.accentTomato,
             title: 'Create with AI',
             subtitle: 'Describe a dish and get a complete recipe',
@@ -155,7 +156,7 @@ class _AddRecipeSheet extends ConsumerWidget {
             onTap: () => choose(_AddChoice.ai),
           ),
           option(
-            icon: Icons.document_scanner_outlined,
+            icon: LucideIcons.scanText,
             tint: c.accentHerb,
             title: 'Scan a recipe',
             subtitle: 'Photo of a cookbook page or handwritten card',
@@ -163,21 +164,21 @@ class _AddRecipeSheet extends ConsumerWidget {
             onTap: () => choose(_AddChoice.photo),
           ),
           option(
-            icon: Icons.link_rounded,
+            icon: LucideIcons.link,
             tint: c.accentYolk,
             title: 'Import from a website',
             subtitle: 'Paste a link to any recipe page',
             onTap: () => choose(_AddChoice.url),
           ),
           option(
-            icon: Icons.content_paste_rounded,
+            icon: LucideIcons.clipboardPaste,
             tint: c.macroCarbs,
             title: 'Paste recipe text',
             subtitle: 'From notes, messages or email',
             onTap: () => choose(_AddChoice.text),
           ),
           option(
-            icon: Icons.edit_note_rounded,
+            icon: LucideIcons.notebookPen,
             tint: c.contentSecondary,
             title: 'Write it myself',
             subtitle: 'Start from a blank recipe',
@@ -199,12 +200,12 @@ Future<ImageSource?> _chooseSource(BuildContext context) {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.photo_camera_outlined),
+            leading: const Icon(LucideIcons.camera),
             title: const Text('Take a photo'),
             onTap: () => Navigator.pop(ctx, ImageSource.camera),
           ),
           ListTile(
-            leading: const Icon(Icons.photo_library_outlined),
+            leading: const Icon(LucideIcons.images),
             title: const Text('Choose from photos'),
             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
           ),
@@ -324,7 +325,7 @@ class _TextEntrySheetState extends State<_TextEntrySheet> {
             decoration: InputDecoration(hintText: widget.hint, errorText: _error),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(onPressed: _submit, icon: const Icon(Icons.download_rounded), label: const Text('Import')),
+          FilledButton.icon(onPressed: _submit, icon: const Icon(LucideIcons.download), label: const Text('Import')),
         ],
       ),
     );
@@ -389,7 +390,7 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
         children: [
           Row(
             children: [
-              Icon(Icons.auto_awesome_rounded, color: c.accentTomato),
+              Icon(LucideIcons.sparkles, color: c.accentTomato),
               const SizedBox(width: 8),
               Text('Create with AI', style: t.headlineSmall),
             ],
@@ -427,7 +428,7 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _generate,
-              icon: const Icon(Icons.auto_awesome_rounded),
+              icon: const Icon(LucideIcons.sparkles),
               label: const Text('Create recipe'),
             ),
           ],

@@ -77,7 +77,8 @@ class _DishIdeasScreenState extends ConsumerState<DishIdeasScreen> {
     final service = ref.read(aiRecipeServiceProvider);
     if (service == null) return;
     if (_input.text.trim().isNotEmpty) _add(_input.text);
-    FocusScope.of(context).unfocus();
+    // Put the keyboard away to show the ideas.
+    _focus.unfocus();
     setState(() {
       _thinking = true;
       _failure = null;
@@ -121,10 +122,9 @@ class _DishIdeasScreenState extends ConsumerState<DishIdeasScreen> {
                   focusNode: _focus,
                   textCapitalization: TextCapitalization.sentences,
                   textInputAction: TextInputAction.done,
-                  onSubmitted: (v) {
-                    _add(v);
-                    _focus.requestFocus();
-                  },
+                  // Stay in the field, keyboard up, to add the next one.
+                  onEditingComplete: () {},
+                  onSubmitted: _add,
                   decoration: InputDecoration(
                     hintText: 'e.g. eggs, spinach, feta',
                     prefixIcon: const Icon(LucideIcons.carrot, size: 20),

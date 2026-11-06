@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:uuid/uuid.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../app/chef_toast_service.dart';
 import '../../../../app/providers.dart';
@@ -102,18 +103,18 @@ class _CoverSheetState extends ConsumerState<_CoverSheet> {
             if (supportsLocalImages) ...[
               if (PhotoPicker.cameraAvailable)
                 ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
+                  leading: const Icon(LucideIcons.camera),
                   title: const Text('Take a photo'),
                   onTap: _busy ? null : () => _pick(ImageSource.camera),
                 ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
+                leading: const Icon(LucideIcons.images),
                 title: const Text('Choose from photos'),
                 onTap: _busy ? null : () => _pick(ImageSource.gallery),
               ),
             ],
             ListTile(
-              leading: const Icon(Icons.link_rounded),
+              leading: const Icon(LucideIcons.link),
               title: const Text('Use an image link'),
               onTap: _busy ? null : _link,
             ),
@@ -139,7 +140,7 @@ class _CoverSheetState extends ConsumerState<_CoverSheet> {
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () => Navigator.pop(context, CoverChoice.remove),
-              icon: const Icon(Icons.hide_image_outlined),
+              icon: const Icon(LucideIcons.imageOff),
               label: const Text('Remove cover'),
             ),
           ],
@@ -191,7 +192,7 @@ class _CollectionsSheet extends ConsumerWidget {
                     : repo.removeRecipeFromCollection(col.id, recipe.id),
               ),
             ListTile(
-              leading: const Icon(Icons.create_new_folder_outlined),
+              leading: const Icon(LucideIcons.bookPlus),
               title: const Text('New cookbook'),
               onTap: () async {
                 final name = await showTextPromptDialog(context, title: 'New cookbook', hint: 'e.g. French');
