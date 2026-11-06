@@ -8,6 +8,7 @@ import 'package:recipe_domain/recipe_domain.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/recipe_image.dart';
+import '../../library/domain/book_covers.dart';
 import '../../library/presentation/widgets/recipe_card.dart';
 import 'collections_screen.dart';
 
@@ -116,7 +117,9 @@ class _MembershipSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.read(collectionRepositoryProvider);
-    final col = (ref.watch(collectionsStreamProvider).valueOrNull ?? const []).where((c) => c.id == collectionId).firstOrNull;
+    final books = ref.watch(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+    final covers = ref.watch(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
+    final col = books.where((c) => c.id == collectionId).firstOrNull;
     final members = col?.recipeIds.toSet() ?? const <String>{};
 
     return DraggableScrollableSheet(
@@ -128,7 +131,11 @@ class _MembershipSheet extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Recipes in ${col?.name ?? 'this cookbook'}', style: context.chefText.headlineSmall),
+            child: Text('Recipes in ${col?.name ?? 'this cookbook'}', style: context.chefText.titleLarge),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('A recipe is in one book at a time: ticking one moves it here.', style: context.chefText.bodySmall),
           ),
           Expanded(
             child: ListView.builder(
@@ -144,9 +151,9 @@ class _MembershipSheet extends ConsumerWidget {
                     child: SizedBox(width: 44, height: 44, child: RecipeImage(source: r.coverImage, theme: r.theme)),
                   ),
                   title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  onChanged: (v) => v == true
-                      ? repo.addRecipeToCollection(collectionId, r.id)
-                      : repo.removeRecipeFromCollection(collectionId, r.id),
+                  subtitle: inIt ? null : Text('In ${bookName(bookOf(books, r.id), books, covers)}'),
+                  // A recipe is in one book: ticking moves it here, unticking back to My Recipes.
+                  onChanged: (v) => moveRecipeToBook(repo, books, r.id, v == true ? collectionId : myRecipesId),
                 );
               },
             ),

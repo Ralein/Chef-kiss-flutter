@@ -1,9 +1,11 @@
 import 'package:app_contracts/app_contracts.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
 import '../core/ai/ai_connection.dart';
+import '../core/platform/tts_voices.dart';
 import '../core/platform/flutter_tts_speech_service.dart';
 import '../core/platform/wakelock_screen_awake_service.dart';
 import '../core/timers/kitchen_timers.dart';
@@ -51,8 +53,17 @@ final localAlertServiceProvider = Provider<LocalAlertService>((ref) => FakeLocal
 /// [FakeSpeechOutputService].
 final speechOutputServiceProvider = Provider<SpeechOutputService>((ref) {
   final service = FlutterTtsSpeechService();
+  // Reads with the voice picked in Settings, or the most natural one.
+  ref.listen(voiceSettingsProvider, (_, next) => service.preferredVoice = next.valueOrNull?.voice, fireImmediately: true);
   ref.onDispose(service.stop);
   return service;
+});
+
+/// English voices on this device worth offering, most natural first; empty
+/// where the platform voice can't be listed (tests, some browsers).
+final ttsVoicesProvider = FutureProvider<List<TtsVoice>>((ref) async {
+  final service = ref.watch(speechOutputServiceProvider);
+  return service is FlutterTtsSpeechService ? service.voices() : const [];
 });
 
 final speechCommandServiceProvider = Provider<SpeechCommandService>((ref) => FakeSpeechCommandService());
@@ -92,6 +103,16 @@ const libraryViewKey = 'library.view';
 
 final libraryViewPrefProvider = StreamProvider<String?>((ref) {
   return ref.watch(preferencesRepositoryProvider).watchJson(libraryViewKey).map((v) => v is String ? v : null);
+});
+
+/// Light, dark, or following the phone: `system`, `light` or `dark`.
+const appearanceKey = 'app.appearance';
+
+final appearanceProvider = StreamProvider<ThemeMode>((ref) {
+  return ref
+      .watch(preferencesRepositoryProvider)
+      .watchJson(appearanceKey)
+      .map((v) => ThemeMode.values.where((m) => m.name == v).firstOrNull ?? ThemeMode.system);
 });
 
 /// Shared countdowns for the recipe page and Cook Mode.

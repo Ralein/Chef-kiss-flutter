@@ -36,7 +36,7 @@ class CollectionActions {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete cookbook?'),
-        content: Text('“${col.name}” comes off the shelf. Its recipes stay in your library.'),
+        content: Text('“${col.name}” comes off the shelf. Its recipes go back to My Recipes.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),

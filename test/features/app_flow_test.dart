@@ -66,14 +66,19 @@ void main() {
 
     // Library with bottom navigation (no duplicate headers).
     expect(find.descendant(of: find.byType(LibraryScreen), matching: find.text('Recipes')), findsOneWidget);
-    // Spines carry the title in small caps; the book itself is the target.
-    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'Heirloom Tomato Salad'), findsOneWidget);
+    // Every recipe is in a book: until it's moved to one of its own, My Recipes.
+    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'My Recipes'), findsOneWidget);
     for (final tab in ['Recipes', 'Scan', 'Food log', 'Cookbooks', 'Settings']) {
       expect(find.text(tab), findsWidgets, reason: '$tab tab');
     }
 
-    // Opening a book shows its journal spread; ingredients scale with servings.
+    // A book opens at its bookplate; its contents lead to the recipe, whose
+    // ingredients scale with servings.
     await tester.tap(find.byType(ShelfBook).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Contents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('p. 3'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 1');
     expect(find.text('Cook'), findsOneWidget);
@@ -105,11 +110,12 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'layout after step 6');
     expect(find.descendant(of: find.byType(LibraryScreen), matching: find.text('Recipes')), findsOneWidget);
 
-    // Scan without AI configured explains how to enable it.
+    // Scanning works straight away: Chef's Kiss AI needs no setup.
     await tester.tap(find.text('Scan').last);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 7');
-    expect(find.text('Set up AI to use food scanning'), findsOneWidget);
+    expect(find.text('Set up AI to use food scanning'), findsNothing);
+    expect(find.text('Choose photo'), findsWidgets);
 
     // Food log starts empty.
     await tester.tap(find.text('Food log').last);
@@ -117,11 +123,11 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'layout after step 8');
     expect(find.text('Nothing logged yet today'), findsOneWidget);
 
-    // Settings shows AI status honestly.
+    // Settings shows the app's own free AI, and how busy it is.
     await tester.tap(find.text('Settings').last);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'layout after step 9');
-    expect(find.text('Not set up'), findsOneWidget);
+    expect(find.text('Chef’s Kiss AI · free'), findsOneWidget);
 
     await _teardown(tester, db);
   });
@@ -131,8 +137,11 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
 
-    // The journal opens as a two-page spread with index tabs.
+    // The journal opens as a two-page spread with index tabs: the bookplate
+    // beside the contents, which lead to the recipe.
     await tester.tap(find.byType(ShelfBook).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('p. 3'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull, reason: 'journal spread');
     expect(find.text('Ingredients'), findsOneWidget);

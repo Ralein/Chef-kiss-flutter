@@ -1025,7 +1025,10 @@ class _TipNote extends StatelessWidget {
 class BookplatePage extends StatelessWidget {
   final List<Recipe> recipes;
   final DogEar? dogEar;
-  const BookplatePage({super.key, required this.recipes, this.dogEar});
+
+  /// A book's name; null for the whole journal.
+  final String? title;
+  const BookplatePage({super.key, required this.recipes, this.title, this.dogEar});
 
   static const theme = ScrapbookTheme.terracottaClassic;
 
@@ -1063,14 +1066,16 @@ class BookplatePage extends StatelessWidget {
               const SizedBox(height: 28),
               Semantics(
                 header: true,
-                child: Text('Recipe Journal', textAlign: TextAlign.center, style: _serif(38, c.contentPrimary)),
+                child: Text(title ?? 'Recipe Journal', textAlign: TextAlign.center, style: _serif(38, c.contentPrimary)),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'A keepsake of everything you cook',
-                textAlign: TextAlign.center,
-                style: _serif(16, c.contentSecondary, italic: true),
-              ),
+              if (title == null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'A keepsake of everything you cook',
+                  textAlign: TextAlign.center,
+                  style: _serif(16, c.contentSecondary, italic: true),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: 140,

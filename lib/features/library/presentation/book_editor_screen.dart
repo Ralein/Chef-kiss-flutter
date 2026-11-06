@@ -8,21 +8,23 @@ import 'package:recipe_domain/recipe_domain.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
-import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/recipe_image.dart';
-import '../../journal/application/recipe_edits.dart';
-import '../../recipe_detail/presentation/widgets/recipe_sheets.dart';
+import '../../recipe_detail/presentation/widgets/recipe_sheets.dart' show showCoverPhotoSheet;
+import '../domain/book_covers.dart';
+import '../domain/cookbook.dart';
 import '../domain/shelf_style.dart';
 import 'widgets/library_books.dart';
 import 'widgets/shelf_art.dart';
 import 'widgets/spine_from_photo.dart';
 
-/// How a recipe stands in the library: its title, cover photo, whether it
-/// shows its spine or its cover, and the spine's cloth, lettering, size and
-/// pattern — previewed on a shelf. A new cover photo binds the spine to match.
+/// How a book stands in the library — My Recipes or a cookbook: its title,
+/// cover photo, spine and lettering, and whether it shows its spine or its
+/// cover, previewed on a shelf. A new photo prints the spine in the photo's
+/// colours; Shuffle tries another pattern.
 class BookEditorScreen extends ConsumerStatefulWidget {
-  final String recipeId;
-  const BookEditorScreen({super.key, required this.recipeId});
+  /// A cookbook's id, or [myRecipesId].
+  final String bookId;
+  const BookEditorScreen({super.key, required this.bookId});
 
   @override
   ConsumerState<BookEditorScreen> createState() => _BookEditorScreenState();
@@ -30,14 +32,18 @@ class BookEditorScreen extends ConsumerStatefulWidget {
 
 class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
   final _title = TextEditingController();
-  Recipe? _original;
-  BookStyle _style = const BookStyle();
-  ScrapbookTheme _theme = ScrapbookTheme.terracottaClassic;
-  String? _cover;
+  BookCover? _original;
+  BookCover _draft = const BookCover();
+  String _name = '';
+
+  /// How far Shuffle has gone through the photo's patterns.
+  int _turn = 0;
   bool _saving = false;
 
-  /// True once the spine was made from a newly added photo.
-  bool _spineFromPhoto = false;
+  /// Reading a new photo's colours.
+  bool _reading = false;
+
+  bool get _isMyRecipes => widget.bookId == myRecipesId;
 
   @override
   void dispose() {
@@ -45,77 +51,88 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
     super.dispose();
   }
 
-  void _load(Recipe r) {
+  void _load(BookCover cover, String name) {
     if (_original != null) return;
-    _original = r;
-    _style = r.bookStyle;
-    _theme = r.theme;
-    _cover = r.coverImage;
-    _title.text = r.title;
+    _original = cover;
+    _draft = cover;
+    _name = name;
+    _title.text = name;
+    _turn = SpinePattern.printed.indexOf(cover.style.pattern).clamp(0, SpinePattern.printed.length);
   }
 
-  Recipe get _draft => _original!.copyWith(
-    title: _title.text.trim().isEmpty ? _original!.title : _title.text.trim(),
-    bookStyle: _style,
-    theme: _theme,
-    coverImage: _cover,
-    clearCoverImage: _cover == null,
-  );
+  String get _titleText => _title.text.trim().isEmpty ? _name : _title.text.trim();
 
-  bool get _dirty {
-    final o = _original;
-    if (o == null) return false;
-    return _title.text.trim() != o.title || _style != o.bookStyle || _theme != o.theme || _cover != o.coverImage;
-  }
+  bool get _dirty => _original != null && (_draft != _original || _titleText != _name);
 
-  void _restyle(BookStyle style) => setState(() => _style = style);
+  void _restyle(BookStyle style) => setState(() => _draft = _draft.copyWith(style: style));
 
   Future<void> _save() async {
-    final o = _original;
-    if (o == null || _saving) return;
+    if (_original == null || _saving) return;
     setState(() => _saving = true);
-    final draft = _draft;
-    final res = await ref
-        .read(recipeEditQueueProvider)
-        .apply(
-          o,
-          (r) => r.copyWith(
-            title: draft.title,
-            bookStyle: draft.bookStyle,
-            theme: draft.theme,
-            coverImage: draft.coverImage,
-            clearCoverImage: draft.coverImage == null,
-          ),
-        );
+    final name = _titleText;
+    final cover = _isMyRecipes
+        ? BookCover(
+            title: name == 'My Recipes' ? null : name,
+            photo: _draft.photo,
+            style: _draft.style,
+            palette: _draft.palette,
+          )
+        : _draft;
+    var ok = (await saveBookCover(ref.read(preferencesRepositoryProvider), widget.bookId, cover)).isSuccess;
+    if (ok && !_isMyRecipes && name != _name) {
+      final books = ref.read(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+      final book = books.where((b) => b.id == widget.bookId).firstOrNull;
+      if (book != null) {
+        final renamed = await ref
+            .read(collectionRepositoryProvider)
+            .updateCollection(book.copyWith(name: name, updatedAt: DateTime.now().millisecondsSinceEpoch));
+        ok = renamed.isSuccess;
+      }
+    }
     if (!mounted) return;
     setState(() => _saving = false);
-    if (res.isFailure) {
+    if (!ok) {
       ChefToastService.show(context: context, title: 'Could not save the book', type: ChefToastType.error);
       return;
     }
     context.pop();
   }
 
-  /// A new photo becomes the spine too: a strip of it, edged in its colour.
-  Future<void> _changeCover() async {
-    final choice = await showCoverPhotoSheet(context, theme: _theme);
+  /// A new photo prints the spine in its colours, in a pattern of this
+  /// book's own; Shuffle tries the others.
+  Future<void> _changePhoto() async {
+    final choice = await showCoverPhotoSheet(context, theme: ScrapbookTheme.terracottaClassic);
     if (choice == null || !mounted) return;
     final source = choice.source;
+    if (source == null) {
+      // The spine keeps its print; only the photo goes.
+      setState(() {
+        _draft = _draft.copyWith(clearPhoto: true, palette: const []);
+        _reading = false;
+      });
+      return;
+    }
     setState(() {
-      _cover = source;
-      if (source == null && _style.pattern == SpinePattern.photo) {
-        _style = _style.copyWith(pattern: SpinePattern.bands, clearSpineColor: _spineFromPhoto);
-        _spineFromPhoto = false;
-      }
+      _draft = _draft.copyWith(photo: source);
+      _reading = true;
     });
-    if (source == null) return;
-    final cloth = await clothFromPhoto(source);
-    if (!mounted || _cover != source) return;
+    final palette = paletteHex(await paletteFromPhoto(source));
+    if (!mounted || _draft.photo != source) return;
     setState(() {
-      _style = _style.copyWith(pattern: SpinePattern.photo, spineColor: cloth == null ? null : colorToHex(cloth));
-      _spineFromPhoto = true;
+      _reading = false;
+      if (palette.isEmpty) return;
+      _turn = widget.bookId.hashCode.abs() % SpinePattern.printed.length;
+      _draft = _draft.copyWith(
+        palette: palette,
+        style: spineFromPalette(_draft.style, palette, turn: _turn),
+      );
     });
   }
+
+  void _shuffle() => setState(() {
+    _turn++;
+    _draft = _draft.copyWith(style: spineFromPalette(_draft.style, _draft.palette, turn: _turn));
+  });
 
   Future<bool> _confirmDiscard() async =>
       await showDialog<bool>(
@@ -134,9 +151,16 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final shelf = ref.watch(shelfStyleProvider).valueOrNull ?? const ShelfStyle();
-    final async = ref.watch(singleRecipeProvider(widget.recipeId));
-    final recipe = async.valueOrNull;
-    if (recipe != null) _load(recipe);
+    final coversAsync = ref.watch(bookCoversProvider);
+    final booksAsync = ref.watch(collectionsStreamProvider);
+    final all = ref.watch(allRecipesProvider).valueOrNull ?? const <Recipe>[];
+    final books = booksAsync.valueOrNull;
+    final covers = coversAsync.valueOrNull;
+    final book = books?.where((b) => b.id == widget.bookId).firstOrNull;
+    final missing = books != null && !_isMyRecipes && book == null;
+    if (covers != null && books != null && !missing) {
+      _load(covers[widget.bookId] ?? const BookCover(), bookName(widget.bookId, books, covers));
+    }
 
     return PopScope(
       canPop: !_dirty,
@@ -164,46 +188,55 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
           ],
         ),
         body: _original == null
-            ? (async.hasError ? const ErrorView(message: 'This recipe could not be loaded.') : const LoadingView())
-            : _body(context, shelf),
+            ? (missing || coversAsync.hasError || booksAsync.hasError
+                  ? const ErrorView(message: 'This book could not be found.')
+                  : const LoadingView())
+            : _body(context, shelf, _volume(all, books ?? const [], book)),
       ),
     );
   }
 
-  Widget _body(BuildContext context, ShelfStyle shelf) {
-    final c = context.chefColors;
+  /// The book as it stands on the shelf, with the edits so far.
+  Recipe _volume(List<Recipe> all, List<RecipeCollection> books, RecipeCollection? book) {
+    if (book == null) {
+      return Cookbook.myRecipes(
+        recipes: unfiledRecipes(all, books).length,
+        cover: _draft.copyWith(title: _titleText),
+      );
+    }
+    final ids = {for (final r in all) r.id};
+    return Cookbook.volume(
+      book.copyWith(name: _titleText),
+      recipes: book.recipeIds.where(ids.contains).length,
+      cover: _draft,
+    );
+  }
+
+  Widget _body(BuildContext context, ShelfStyle shelf, Recipe volume) {
     final t = context.chefText;
-    final draft = _draft;
+    final style = _draft.style;
+    final photo = _draft.photo;
+    final palette = _draft.palette;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
           children: [
-            _Preview(recipe: draft, shelf: shelf),
+            _Preview(recipe: volume, shelf: shelf),
             const SizedBox(height: 20),
             TextField(
               controller: _title,
               onChanged: (_) => setState(() {}),
-              textCapitalization: TextCapitalization.sentences,
-              maxLines: 2,
-              minLines: 1,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Title'),
             ),
             const SizedBox(height: 6),
-            Text(
-              '${KitchenFormat.minutes(draft.totalMinutes)} · serves ${draft.baseServings.toDisplayString()} · '
-              '${draft.ingredients.length} ingredients',
-              style: t.bodySmall,
-            ),
+            Text(volume.summary ?? '', style: t.bodySmall),
             const SizedBox(height: 24),
             _Section(
               label: 'Cover photo',
-              hint: _cover == null
-                  ? 'Add a photo and the spine is made from it too.'
-                  : _spineFromPhoto
-                  ? 'The spine now matches your photo.'
-                  : null,
+              hint: photo == null ? 'Add a photo and the spine is printed in its colours.' : null,
               child: Row(
                 children: [
                   ClipRRect(
@@ -211,57 +244,79 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
                     child: SizedBox(
                       width: 52,
                       height: 68,
-                      child: RecipeImage(source: _cover, theme: _theme),
+                      child: RecipeImage(source: photo, theme: volume.theme),
                     ),
                   ),
                   const SizedBox(width: 14),
                   OutlinedButton.icon(
-                    onPressed: _changeCover,
-                    icon: const Icon(LucideIcons.imagePlus, size: 18),
-                    label: Text(_cover == null ? 'Add photo' : 'Change photo'),
+                    onPressed: _reading ? null : _changePhoto,
+                    icon: _reading
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(LucideIcons.imagePlus, size: 18),
+                    label: Text(photo == null ? 'Add photo' : 'Change photo'),
                   ),
+                ],
+              ),
+            ),
+            _Section(
+              label: 'Spine',
+              trailing: palette.isEmpty
+                  ? null
+                  : TextButton.icon(
+                      onPressed: _shuffle,
+                      icon: const Icon(LucideIcons.shuffle, size: 18),
+                      label: const Text('Shuffle'),
+                    ),
+              hint: palette.isEmpty ? null : 'Printed in your photo’s colours.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 12,
+                    children: [
+                      for (final p in SpinePattern.values)
+                        _PatternChoice(
+                          volume: volume,
+                          pattern: p,
+                          selected: style.pattern == p,
+                          onTap: () => _restyle(style.copyWith(pattern: p)),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text('Cloth', style: t.labelLarge),
+                  const SizedBox(height: 8),
+                  _swatches(
+                    selected: style.spineColor,
+                    fromPhoto: palette,
+                    options: spineCloths,
+                    onPick: (hex) =>
+                        _restyle(hex == null ? style.copyWith(clearSpineColor: true) : style.copyWith(spineColor: hex)),
+                  ),
+                  if (SpinePattern.printed.contains(style.pattern)) ...[
+                    const SizedBox(height: 18),
+                    Text('Pattern', style: t.labelLarge),
+                    const SizedBox(height: 8),
+                    _swatches(
+                      selected: style.accentColor,
+                      fromPhoto: palette.skip(1).toList(),
+                      options: spineInks,
+                      onPick: (hex) => _restyle(
+                        hex == null ? style.copyWith(clearAccentColor: true) : style.copyWith(accentColor: hex),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
             _Section(
               label: 'On the shelf',
-              hint: 'Automatic stands one favorite per shelf face-out.',
               child: _segments<BookDisplay>(
-                values: BookDisplay.values,
-                selected: _style.display,
-                label: (d) => d.label,
-                onPick: (d) => _restyle(_style.copyWith(display: d)),
-              ),
-            ),
-            _Section(
-              label: 'Spine',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _segments<SpinePattern>(
-                    values: [
-                      for (final p in SpinePattern.values)
-                        if (p != SpinePattern.photo || _cover != null) p,
-                    ],
-                    selected: _style.pattern,
-                    label: (p) => switch (p) {
-                      SpinePattern.plain => 'Plain',
-                      SpinePattern.bands => 'Bands',
-                      SpinePattern.ribs => 'Ribs',
-                      SpinePattern.photo => 'Photo',
-                    },
-                    onPick: (p) => _restyle(_style.copyWith(pattern: p)),
-                  ),
-                  const SizedBox(height: 14),
-                  _swatches(
-                    selected: _style.spineColor,
-                    auto: 'Theme colour',
-                    options: spineCloths,
-                    onPick: (hex) => _restyle(
-                      hex == null ? _style.copyWith(clearSpineColor: true) : _style.copyWith(spineColor: hex),
-                    ),
-                  ),
-                ],
+                values: const [BookDisplay.spine, BookDisplay.cover],
+                selected: style.display == BookDisplay.cover ? BookDisplay.cover : BookDisplay.spine,
+                label: (d) => d == BookDisplay.cover ? 'Cover out' : 'Spine out',
+                onPick: (d) => _restyle(style.copyWith(display: d)),
               ),
             ),
             _Section(
@@ -271,21 +326,20 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
                 children: [
                   _segments<SpineFont>(
                     values: SpineFont.values,
-                    selected: _style.font,
+                    selected: style.font,
                     label: (f) => switch (f) {
                       SpineFont.serif => 'Serif',
-                      SpineFont.serifItalic => 'Italic serif',
+                      SpineFont.serifItalic => 'Italic',
                       SpineFont.sans => 'Sans',
                     },
-                    onPick: (f) => _restyle(_style.copyWith(font: f)),
+                    onPick: (f) => _restyle(style.copyWith(font: f)),
                   ),
                   const SizedBox(height: 14),
                   _swatches(
-                    selected: _style.textColor,
-                    auto: 'Automatic',
+                    selected: style.textColor,
                     options: spineInks,
                     onPick: (hex) =>
-                        _restyle(hex == null ? _style.copyWith(clearTextColor: true) : _style.copyWith(textColor: hex)),
+                        _restyle(hex == null ? style.copyWith(clearTextColor: true) : style.copyWith(textColor: hex)),
                   ),
                 ],
               ),
@@ -294,26 +348,8 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
               label: 'Size',
               child: Column(
                 children: [
-                  _sizeRow('Height', _style.height, (v) => _style.copyWith(height: v)),
-                  _sizeRow('Thickness', _style.width, (v) => _style.copyWith(width: v)),
-                  _sizeRow('Lettering', _style.textSize, (v) => _style.copyWith(textSize: v)),
-                ],
-              ),
-            ),
-            _Section(
-              label: 'Journal colour',
-              hint: 'The accent of this recipe’s journal pages.',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final th in ScrapbookTheme.values)
-                    ChoiceChip(
-                      avatar: CircleAvatar(backgroundColor: th.accent(c), radius: 8),
-                      label: Text(th.label),
-                      selected: _theme == th,
-                      onSelected: (_) => setState(() => _theme = th),
-                    ),
+                  _sizeRow('Height', style.height, (v) => style.copyWith(height: v)),
+                  _sizeRow('Thickness', style.width, (v) => style.copyWith(width: v)),
                 ],
               ),
             ),
@@ -355,13 +391,15 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
     ),
   );
 
+  /// Automatic, then the photo's colours, then the standard ones.
   Widget _swatches({
     required String? selected,
-    required String auto,
+    List<String> fromPhoto = const [],
     required List<({String name, String hex})> options,
     required ValueChanged<String?> onPick,
   }) {
     final c = context.chefColors;
+    Color colorOf(String hex) => Color(0xFF000000 | int.parse(hex.substring(1), radix: 16));
     Widget dot(Color? color, String label, bool isSelected, VoidCallback onTap) => Tooltip(
       message: label,
       child: Semantics(
@@ -385,32 +423,114 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
         ),
       ),
     );
-    // A colour picked from a photo isn't one of the cloths: show it too.
-    final custom = selected != null && !options.any((o) => o.hex == selected) ? selected : null;
+    final known = {...fromPhoto, for (final o in options) o.hex};
+    // A colour picked from an earlier photo: show it too.
+    final custom = selected != null && !known.contains(selected) ? selected : null;
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: [
-        dot(null, auto, selected == null, () => onPick(null)),
-        if (custom != null)
-          dot(Color(0xFF000000 | int.parse(custom.substring(1), radix: 16)), 'From photo', true, () => onPick(custom)),
-        for (final o in options)
-          dot(
-            Color(0xFF000000 | int.parse(o.hex.substring(1), radix: 16)),
-            o.name,
-            selected == o.hex,
-            () => onPick(o.hex),
-          ),
+        dot(null, 'Automatic', selected == null, () => onPick(null)),
+        for (final hex in [...fromPhoto, ?custom]) dot(colorOf(hex), 'From photo', selected == hex, () => onPick(hex)),
+        for (final o in options) dot(colorOf(o.hex), o.name, selected == o.hex, () => onPick(o.hex)),
       ],
     );
   }
+}
+
+/// One spine pattern to pick: a short spine printed with it, named below.
+class _PatternChoice extends StatelessWidget {
+  final Recipe volume;
+  final SpinePattern pattern;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PatternChoice({required this.volume, required this.pattern, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    final look = BookLook.of(volume.copyWith(bookStyle: volume.bookStyle.copyWith(pattern: pattern)));
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: pattern.label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: SizedBox(
+          width: 62,
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: ChefMotion.quick,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: selected ? c.accentTomato : Colors.transparent, width: 2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2.5),
+                  child: SizedBox(width: 26, height: 64, child: CustomPaint(painter: _SwatchPainter(look))),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                pattern.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.chefText.labelSmall?.copyWith(
+                  color: selected ? c.contentPrimary : c.contentSecondary,
+                  fontWeight: selected ? FontWeight.w700 : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwatchPainter extends CustomPainter {
+  final BookLook look;
+  _SwatchPainter(this.look);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = look.cloth);
+    paintBookPattern(canvas, size, look, margin: size.height * 0.13);
+    if (look.printed) {
+      // The label a printed spine's title sits on.
+      final label = RRect.fromRectAndRadius(
+        Rect.fromLTRB(3, size.height * 0.3, size.width - 3, size.height * 0.7),
+        const Radius.circular(2),
+      );
+      canvas.drawRRect(label, Paint()..color = look.cloth);
+      canvas.drawRRect(
+        label,
+        Paint()
+          ..color = look.ink.withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.8,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SwatchPainter old) =>
+      old.look.pattern != look.pattern ||
+      old.look.cloth != look.cloth ||
+      old.look.accent != look.accent ||
+      old.look.ink != look.ink;
 }
 
 class _Section extends StatelessWidget {
   final String label;
   final Widget child;
   final String? hint;
-  const _Section({required this.label, required this.child, this.hint});
+  final Widget? trailing;
+  const _Section({required this.label, required this.child, this.hint, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -419,10 +539,20 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Semantics(header: true, child: Text(label, style: context.chefText.titleMedium)),
-          const SizedBox(height: 10),
+          SizedBox(
+            height: 40,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Semantics(header: true, child: Text(label, style: context.chefText.titleMedium)),
+                ),
+                ?trailing,
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
           child,
-          if (hint != null) ...[const SizedBox(height: 6), Text(hint!, style: context.chefText.bodySmall)],
+          if (hint != null) ...[const SizedBox(height: 8), Text(hint!, style: context.chefText.bodySmall)],
         ],
       ),
     );

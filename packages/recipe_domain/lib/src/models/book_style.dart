@@ -26,11 +26,19 @@ enum SpinePattern {
   bands('Gilt bands'),
   ribs('Raised ribs'),
 
-  /// A strip of the cover photo, cropped to the spine.
-  photo('Photo');
+  // Printed patterns in the book's accent colour, made to match a photo.
+  leaves('Leaves'),
+  florals('Flowers'),
+  stripes('Stripes'),
+  waves('Waves'),
+  dots('Dots'),
+  chevrons('Chevrons');
 
   final String label;
   const SpinePattern(this.label);
+
+  /// The printed patterns, as opposed to plain cloth or bindings.
+  static const printed = [leaves, florals, stripes, waves, dots, chevrons];
 }
 
 /// How the book stands on the shelf.
@@ -55,6 +63,9 @@ T _byName<T extends Enum>(List<T> values, Object? name, T fallback) =>
 class BookStyle {
   final String? spineColor;
   final String? textColor;
+
+  /// The colour a printed pattern is drawn in.
+  final String? accentColor;
   final SpineFont font;
   final SpineScale textSize;
   final SpineScale height;
@@ -65,6 +76,7 @@ class BookStyle {
   const BookStyle({
     this.spineColor,
     this.textColor,
+    this.accentColor,
     this.font = SpineFont.serif,
     this.textSize = SpineScale.medium,
     this.height = SpineScale.medium,
@@ -78,8 +90,10 @@ class BookStyle {
   BookStyle copyWith({
     String? spineColor,
     String? textColor,
+    String? accentColor,
     bool clearSpineColor = false,
     bool clearTextColor = false,
+    bool clearAccentColor = false,
     SpineFont? font,
     SpineScale? textSize,
     SpineScale? height,
@@ -89,6 +103,7 @@ class BookStyle {
   }) => BookStyle(
     spineColor: clearSpineColor ? null : (spineColor ?? this.spineColor),
     textColor: clearTextColor ? null : (textColor ?? this.textColor),
+    accentColor: clearAccentColor ? null : (accentColor ?? this.accentColor),
     font: font ?? this.font,
     textSize: textSize ?? this.textSize,
     height: height ?? this.height,
@@ -100,6 +115,7 @@ class BookStyle {
   Map<String, dynamic> toJson() => {
     if (spineColor != null) 'spineColor': spineColor,
     if (textColor != null) 'textColor': textColor,
+    if (accentColor != null) 'accentColor': accentColor,
     'font': font.name,
     'textSize': textSize.name,
     'height': height.name,
@@ -114,6 +130,7 @@ class BookStyle {
     return BookStyle(
       spineColor: color(json['spineColor']),
       textColor: color(json['textColor']),
+      accentColor: color(json['accentColor']),
       font: _byName(SpineFont.values, json['font'], SpineFont.serif),
       textSize: _byName(SpineScale.values, json['textSize'], SpineScale.medium),
       height: _byName(SpineScale.values, json['height'], SpineScale.medium),
@@ -128,6 +145,7 @@ class BookStyle {
       other is BookStyle &&
       other.spineColor == spineColor &&
       other.textColor == textColor &&
+      other.accentColor == accentColor &&
       other.font == font &&
       other.textSize == textSize &&
       other.height == height &&
@@ -136,5 +154,5 @@ class BookStyle {
       other.display == display;
 
   @override
-  int get hashCode => Object.hash(spineColor, textColor, font, textSize, height, width, pattern, display);
+  int get hashCode => Object.hash(spineColor, textColor, accentColor, font, textSize, height, width, pattern, display);
 }

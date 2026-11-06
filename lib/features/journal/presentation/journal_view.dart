@@ -41,9 +41,13 @@ class JournalView extends ConsumerStatefulWidget {
   /// Open straight into decorate mode (from "Decorate page" elsewhere).
   final bool startDecorating;
 
+  /// The book's name on its bookplate; null for the whole journal.
+  final String? title;
+
   const JournalView({
     super.key,
     required this.recipes,
+    this.title,
     this.initialRecipeId,
     this.onRecipeShown,
     this.onDecoratingChanged,
@@ -438,7 +442,7 @@ class JournalViewState extends ConsumerState<JournalView> {
     }
 
     // The bottom bar already offers "Contents" on the bookplate.
-    if (pageIndex == 0) return BookplatePage(recipes: widget.recipes, dogEar: ear);
+    if (pageIndex == 0) return BookplatePage(recipes: widget.recipes, title: widget.title, dogEar: ear);
     if (pageIndex == 1) return ContentsPage(recipes: widget.recipes, onOpen: openRecipe, dogEar: ear);
 
     final index = (pageIndex - _frontPages) ~/ 2;
@@ -684,7 +688,7 @@ class JournalViewState extends ConsumerState<JournalView> {
           case 'details':
             context.push('/recipe/${recipe.id}');
           case 'collection':
-            showAddToCollectionSheet(context, recipe);
+            showMoveToBookSheet(context, recipe);
           case 'edit':
             context.push('/editor/${recipe.id}');
         }
@@ -696,7 +700,7 @@ class JournalViewState extends ConsumerState<JournalView> {
         ),
         PopupMenuItem(
           value: 'collection',
-          child: ListTile(leading: Icon(LucideIcons.bookPlus), title: Text('Add to a cookbook')),
+          child: ListTile(leading: Icon(LucideIcons.folderInput), title: Text('Move to a book')),
         ),
         PopupMenuItem(
           value: 'edit',

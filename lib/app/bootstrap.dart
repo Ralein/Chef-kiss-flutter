@@ -135,7 +135,7 @@ class ChefApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: ChefTheme.light(),
       darkTheme: ChefTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(appearanceProvider).valueOrNull ?? ThemeMode.system,
       scaffoldMessengerKey: ChefToastService.messengerKey,
       routerConfig: ref.watch(routerProvider),
     );

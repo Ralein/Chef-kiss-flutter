@@ -14,6 +14,7 @@ import '../../../../core/media/image_store.dart';
 import '../../../../core/media/local_image_store.dart';
 import '../../../../core/media/photo_picker.dart';
 import '../../../../core/media/recipe_art.dart';
+import '../../../library/domain/book_covers.dart';
 
 /// Result of the cover picker: a new image source, or [remove].
 class CoverChoice {
@@ -151,55 +152,106 @@ class _CoverSheetState extends ConsumerState<_CoverSheet> {
 }
 
 /// Adds a recipe to cookbooks (or takes it out), or starts a new cookbook.
-Future<void> showAddToCollectionSheet(BuildContext context, Recipe recipe) {
+/// Moves [recipe] to another book — My Recipes, one of your cookbooks, or a
+/// new one. A recipe is in one book at a time.
+Future<void> showMoveToBookSheet(BuildContext context, Recipe recipe) {
   return showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    builder: (_) => _CollectionsSheet(recipe: recipe),
+    showDragHandle: true,
+    builder: (_) => _MoveToBookSheet(recipe: recipe),
   );
 }
 
-class _CollectionsSheet extends ConsumerWidget {
+/// Asks for a name and makes a new, empty book.
+Future<RecipeCollection?> createBook(BuildContext context, WidgetRef ref) async {
+  final name = await showTextPromptDialog(context, title: 'New book', hint: 'e.g. French', confirmLabel: 'Create');
+  if (name == null || name.trim().isEmpty) return null;
+  final res = await ref
+      .read(collectionRepositoryProvider)
+      .createCollection(profileId: 'default', name: name.trim(), colorToken: 'accent.herb');
+  return res.orNull;
+}
+
+class _MoveToBookSheet extends ConsumerWidget {
   final Recipe recipe;
-  const _CollectionsSheet({required this.recipe});
+  const _MoveToBookSheet({required this.recipe});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = context.chefText;
-    final collections = ref.watch(collectionsStreamProvider).valueOrNull ?? const [];
-    final repo = ref.read(collectionRepositoryProvider);
+    final c = context.chefColors;
+    final books = ref.watch(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+    final covers = ref.watch(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
+    final current = bookOf(books, recipe.id);
 
+    Future<void> moveTo(String bookId) async {
+      final navigator = Navigator.of(context);
+      final name = bookName(bookId, books, covers);
+      if (bookId != current) {
+        await moveRecipeToBook(ref.read(collectionRepositoryProvider), books, recipe.id, bookId);
+      }
+      navigator.pop();
+      if (bookId != current) {
+        // The sheet is gone: the app's own messenger shows it.
+        ChefToastService.show(
+          title: 'Moved to $name',
+          description: recipe.title,
+          type: ChefToastType.success,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    }
+
+    Widget tile(String bookId, String name, String count) => ListTile(
+      leading: Icon(bookId == myRecipesId ? LucideIcons.bookHeart : LucideIcons.book),
+      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(count),
+      trailing: bookId == current ? Icon(LucideIcons.check, color: c.accentTomato) : null,
+      selected: bookId == current,
+      onTap: () => moveTo(bookId),
+    );
+
+    String count(int n) => n == 1 ? '1 recipe' : '$n recipes';
+    final filed = {for (final b in books) ...b.recipeIds};
+    final all = ref.watch(allRecipesProvider).valueOrNull ?? const <Recipe>[];
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text('Add to a cookbook', style: t.headlineSmall),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 2),
+              child: Text('Move to a book', style: t.titleLarge),
             ),
-            const SizedBox(height: 8),
-            for (final col in collections)
-              CheckboxListTile(
-                value: col.recipeIds.contains(recipe.id),
-                title: Text(col.name),
-                subtitle: Text('${col.recipeIds.length} recipes'),
-                onChanged: (checked) => checked == true
-                    ? repo.addRecipeToCollection(col.id, recipe.id)
-                    : repo.removeRecipeFromCollection(col.id, recipe.id),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(recipe.title, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            tile(
+              myRecipesId,
+              bookName(myRecipesId, books, covers),
+              count(all.where((r) => !filed.contains(r.id)).length),
+            ),
+            for (final b in books) tile(b.id, b.name, count(b.recipeIds.length)),
             ListTile(
               leading: const Icon(LucideIcons.bookPlus),
-              title: const Text('New cookbook'),
+              title: const Text('New book'),
               onTap: () async {
-                final name = await showTextPromptDialog(context, title: 'New cookbook', hint: 'e.g. French');
-                if (name == null || name.trim().isEmpty) return;
-                final res = await repo.createCollection(profileId: 'default', name: name.trim(), colorToken: 'accent.herb');
-                final created = res.orNull;
-                if (created != null) await repo.addRecipeToCollection(created.id, recipe.id);
+                final created = await createBook(context, ref);
+                if (created != null && context.mounted) {
+                  await moveRecipeToBook(ref.read(collectionRepositoryProvider), books, recipe.id, created.id);
+                  if (context.mounted) Navigator.of(context).pop();
+                  ChefToastService.show(
+                    title: 'Moved to ${created.name}',
+                    description: recipe.title,
+                    type: ChefToastType.success,
+                    duration: const Duration(seconds: 2),
+                  );
+                }
               },
             ),
           ],

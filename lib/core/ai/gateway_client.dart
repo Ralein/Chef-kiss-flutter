@@ -22,12 +22,16 @@ class GatewayConfig {
   final Duration timeout;
   final int maxRetries;
 
+  /// Sent with every chat request, such as `{'reasoning': {'enabled': false}}`.
+  final Map<String, Object?> extraBody;
+
   const GatewayConfig({
     required this.baseUri,
     this.apiKey,
     required this.model,
     this.timeout = const Duration(seconds: 150),
     this.maxRetries = 2,
+    this.extraBody = const {},
   });
 
   /// The address as typed, tidied: scheme added, `/v1` and slashes dropped.
@@ -161,6 +165,7 @@ class GatewayClient implements AiClient {
         {'role': 'user', 'content': user},
       ],
       if (jsonMode) 'response_format': {'type': 'json_object'},
+      ...config.extraBody,
     });
 
     final started = DateTime.now();

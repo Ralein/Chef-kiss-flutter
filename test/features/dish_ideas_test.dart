@@ -81,18 +81,15 @@ void main() {
     expect(ai.asked.single, allOf(contains('- spinach'), contains('- eggs')));
   });
 
-  testWidgets('without AI set up, the screen says how to turn it on', (tester) async {
+  testWidgets('Chef’s Kiss AI needs no setup: the screen is ready to use', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          secretStoreProvider.overrideWithValue(InMemorySecretStore()),
-          collectionsStreamProvider.overrideWith((ref) => Stream.value(const <RecipeCollection>[])),
-        ],
+        overrides: [collectionsStreamProvider.overrideWith((ref) => Stream.value(const <RecipeCollection>[]))],
         child: MaterialApp(theme: ChefTheme.light(), home: const DishIdeasScreen()),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Suggest dishes'), findsNothing);
-    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Suggest dishes'), findsOneWidget);
   });
 }

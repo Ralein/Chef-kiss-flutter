@@ -49,7 +49,24 @@ class BookLook {
   final TextStyle title;
   final SpinePattern pattern;
 
-  const BookLook({required this.cloth, required this.ink, required this.title, required this.pattern});
+  /// What a printed pattern is drawn in.
+  final Color accent;
+
+  /// Varies a printed pattern from book to book.
+  final int seed;
+
+  const BookLook({
+    required this.cloth,
+    required this.ink,
+    required this.title,
+    required this.pattern,
+    required this.accent,
+    this.seed = 0,
+  });
+
+  /// Leaves, flowers, stripes…: a pattern printed over the whole cloth, with
+  /// the title on a label.
+  bool get printed => SpinePattern.printed.contains(pattern);
 
   static const _themeCloth = {
     ScrapbookTheme.terracottaClassic: Color(0xFF7E3324),
@@ -71,15 +88,8 @@ class BookLook {
       final base = _themeCloth[recipe.theme]!;
       cloth = jitter >= 0 ? Color.lerp(base, Colors.white, jitter)! : Color.lerp(base, Colors.black, -jitter)!;
     }
-    // On a photo spine the title sits on a dark scrim: light ink reads best.
-    final photo = style.pattern == SpinePattern.photo && (recipe.coverImage?.isNotEmpty ?? false);
     final ink =
-        _hex(style.textColor) ??
-        (photo
-            ? const Color(0xFFF7F1E6)
-            : cloth.computeLuminance() > 0.45
-            ? const Color(0xFF2A221C)
-            : const Color(0xFFE3C77F));
+        _hex(style.textColor) ?? (cloth.computeLuminance() > 0.45 ? const Color(0xFF2A221C) : const Color(0xFFE3C77F));
     final size =
         baseSize *
         switch (style.textSize) {
@@ -105,10 +115,15 @@ class BookLook {
         height: 1,
       ),
     };
-    final shadowed = photo
-        ? title.copyWith(shadows: [Shadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 3)])
-        : title;
-    return BookLook(cloth: cloth, ink: ink, title: shadowed, pattern: style.pattern);
+    return BookLook(
+      cloth: cloth,
+      ink: ink,
+      title: title,
+      pattern: style.pattern,
+      // Without an accent of its own a pattern is printed a shade lighter.
+      accent: _hex(style.accentColor) ?? Color.lerp(cloth, Colors.white, 0.32)!,
+      seed: recipe.id.hashCode,
+    );
   }
 
   /// "Tokyo Shoyu Craft Ramen with Ajitsuke Egg" → "Tokyo Shoyu Craft Ramen":
@@ -246,9 +261,9 @@ class BookSpine extends StatelessWidget {
         final h = box.maxHeight;
         final w = box.maxWidth;
         final margin = h * 0.13;
-        // The title runs between the bands, or nearly end to end on a plain spine.
-        final titleInset = look.pattern == SpinePattern.plain || look.pattern == SpinePattern.photo ? 10.0 : margin + 1;
-        final photo = look.pattern == SpinePattern.photo ? recipe.coverImage : null;
+        // The title runs between the bands, nearly end to end on a plain
+        // spine, or on a label in the middle of a printed one.
+        final titleInset = look.printed ? h * 0.27 : (look.pattern == SpinePattern.plain ? 10.0 : margin + 1);
         return ClipRRect(
           borderRadius: BorderRadius.circular(2.5),
           child: DecoratedBox(
@@ -265,25 +280,6 @@ class BookSpine extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                if (photo != null && photo.isNotEmpty) ...[
-                  Positioned.fill(
-                    child: RecipeImage(source: photo, theme: recipe.theme),
-                  ),
-                  // A scrim in the photo's own colour keeps the title readable.
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color.lerp(cloth, Colors.black, 0.45)!.withValues(alpha: 0.7),
-                            cloth.withValues(alpha: 0.35),
-                            Color.lerp(cloth, Colors.black, 0.5)!.withValues(alpha: 0.75),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
                 // Page tops peeking above the cloth.
                 Positioned(
                   top: 0,
@@ -292,7 +288,32 @@ class BookSpine extends StatelessWidget {
                   height: 2,
                   child: ColoredBox(color: Colors.white.withValues(alpha: 0.12)),
                 ),
-                CustomPaint(size: Size(w, h), painter: _SpinePatternPainter(look.pattern, look.ink, margin)),
+                CustomPaint(size: Size(w, h), painter: _SpinePatternPainter(look, margin)),
+                if (look.printed) ...[
+                  Positioned(
+                    left: 3,
+                    right: 3,
+                    top: h * 0.24,
+                    bottom: h * 0.24,
+                    child: _Label(look: look),
+                  ),
+                  // The spine's curve, over the print.
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withValues(alpha: 0.24),
+                            Colors.white.withValues(alpha: 0.06),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.26),
+                          ],
+                          stops: const [0, 0.32, 0.66, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 Positioned.fill(
                   top: titleInset,
                   bottom: titleInset,
@@ -437,47 +458,151 @@ class SpineTitle extends StatelessWidget {
 }
 
 class _SpinePatternPainter extends CustomPainter {
-  final SpinePattern pattern;
-  final Color ink;
+  final BookLook look;
   final double margin;
-  _SpinePatternPainter(this.pattern, this.ink, this.margin);
+  _SpinePatternPainter(this.look, this.margin);
 
   @override
-  void paint(Canvas canvas, Size size) {
-    switch (pattern) {
-      case SpinePattern.plain || SpinePattern.photo:
-        return;
-      case SpinePattern.bands:
-        final p = Paint()
-          ..color = ink.withValues(alpha: 0.85)
-          ..strokeWidth = 1.1;
-        for (final y in [
-          margin * 0.55,
-          margin * 0.55 + 4,
-          size.height - margin * 0.55,
-          size.height - margin * 0.55 - 4,
-        ]) {
-          canvas.drawLine(Offset(3, y), Offset(size.width - 3, y), p);
-        }
-      case SpinePattern.ribs:
-        for (final y in [margin * 0.4, margin * 0.85, size.height - margin * 0.85, size.height - margin * 0.4]) {
-          canvas.drawRect(
-            Rect.fromLTWH(0, y - 2, size.width, 3),
-            Paint()..color = Colors.black.withValues(alpha: 0.28),
-          );
-          canvas.drawRect(
-            Rect.fromLTWH(0, y - 2, size.width, 1),
-            Paint()..color = Colors.white.withValues(alpha: 0.18),
-          );
-        }
-    }
-  }
+  void paint(Canvas canvas, Size size) => paintBookPattern(canvas, size, look, margin: margin);
 
   @override
-  bool shouldRepaint(_SpinePatternPainter old) => old.pattern != pattern || old.ink != ink || old.margin != margin;
+  bool shouldRepaint(_SpinePatternPainter old) =>
+      old.look.pattern != look.pattern ||
+      old.look.ink != look.ink ||
+      old.look.cloth != look.cloth ||
+      old.look.accent != look.accent ||
+      old.look.seed != look.seed ||
+      old.margin != margin;
 }
 
-/// A face-out book: the recipe's cover art, or a cloth cover with the title.
+/// Draws [look]'s pattern over a spine or a cover of [size]: gilt bands,
+/// raised ribs, or a pattern printed in the accent colour.
+void paintBookPattern(Canvas canvas, Size size, BookLook look, {required double margin}) {
+  final w = size.width, h = size.height;
+  final rnd = math.Random(look.seed);
+  final fill = Paint()..color = look.accent.withValues(alpha: 0.82);
+  final line = Paint()
+    ..color = look.accent.withValues(alpha: 0.75)
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  // A print is sized to a spine, so a cover gets more of it, not a bigger one.
+  final unit = math.max(18.0, math.min(w, 34.0));
+  canvas.save();
+  canvas.clipRect(Offset.zero & size);
+  switch (look.pattern) {
+    case SpinePattern.plain:
+      break;
+    case SpinePattern.bands:
+      final p = Paint()
+        ..color = look.ink.withValues(alpha: 0.85)
+        ..strokeWidth = 1.1;
+      for (final y in [margin * 0.55, margin * 0.55 + 4, h - margin * 0.55, h - margin * 0.55 - 4]) {
+        canvas.drawLine(Offset(3, y), Offset(w - 3, y), p);
+      }
+    case SpinePattern.ribs:
+      for (final y in [margin * 0.4, margin * 0.85, h - margin * 0.85, h - margin * 0.4]) {
+        canvas.drawRect(Rect.fromLTWH(0, y - 2, w, 3), Paint()..color = Colors.black.withValues(alpha: 0.28));
+        canvas.drawRect(Rect.fromLTWH(0, y - 2, w, 1), Paint()..color = Colors.white.withValues(alpha: 0.18));
+      }
+    case SpinePattern.leaves:
+      // Leaves at a slant, each with a vein, in staggered rows.
+      final vein = Paint()
+        ..color = look.cloth.withValues(alpha: 0.55)
+        ..strokeWidth = math.max(0.6, unit * 0.025);
+      final step = unit * 0.55;
+      for (var row = 0; row * step * 0.7 < h + step; row++) {
+        for (var x = row.isOdd ? step * 0.5 : 0.0; x < w + step; x += step) {
+          final len = unit * (0.34 + rnd.nextDouble() * 0.1);
+          canvas.save();
+          canvas.translate(x + (rnd.nextDouble() - 0.5) * step * 0.2, row * step * 0.7);
+          canvas.rotate((row.isOdd ? 0.7 : -0.7) + (rnd.nextDouble() - 0.5) * 0.5);
+          final leaf = Path()
+            ..moveTo(0, len * 0.5)
+            ..quadraticBezierTo(len * 0.34, 0, 0, -len * 0.5)
+            ..quadraticBezierTo(-len * 0.34, 0, 0, len * 0.5)
+            ..close();
+          canvas.drawPath(leaf, fill);
+          canvas.drawLine(Offset(0, len * 0.42), Offset(0, -len * 0.36), vein);
+          canvas.restore();
+        }
+      }
+    case SpinePattern.florals:
+      // Five-petal flowers with a darker heart.
+      final heart = Paint()..color = Color.lerp(look.accent, look.cloth, 0.55)!;
+      final step = unit * 0.62;
+      for (var row = 0; row * step * 0.78 < h + step; row++) {
+        for (var x = row.isOdd ? step * 0.5 : 0.0; x < w + step; x += step) {
+          final c = Offset(x + (rnd.nextDouble() - 0.5) * step * 0.2, row * step * 0.78);
+          final r = unit * (0.1 + rnd.nextDouble() * 0.03);
+          final turn = rnd.nextDouble() * math.pi;
+          for (var k = 0; k < 5; k++) {
+            final a = turn + k * math.pi * 2 / 5;
+            canvas.drawCircle(c + Offset(math.cos(a), math.sin(a)) * r, r * 0.72, fill);
+          }
+          canvas.drawCircle(c, r * 0.5, heart);
+        }
+      }
+    case SpinePattern.stripes:
+      // Bold diagonal stripes.
+      line
+        ..strokeWidth = unit * 0.13
+        ..strokeCap = StrokeCap.butt;
+      for (var y = -w; y < h + w; y += unit * 0.36) {
+        canvas.drawLine(Offset(0, y), Offset(w, y + w * 0.75), line);
+      }
+    case SpinePattern.waves:
+      line.strokeWidth = math.max(1.2, unit * 0.06);
+      final gap = unit * 0.3;
+      for (var y = gap * 0.5; y < h + gap; y += gap) {
+        final wave = Path()..moveTo(0, y);
+        for (var x = 0.0; x <= w + 2; x += 1.5) {
+          wave.lineTo(x, y + math.sin(x / unit * math.pi * 2.4) * unit * 0.07);
+        }
+        canvas.drawPath(wave, line);
+      }
+    case SpinePattern.dots:
+      final gap = unit * 0.34;
+      for (var row = 0; row * gap * 0.87 < h + gap; row++) {
+        for (var x = row.isOdd ? gap / 2 : gap * 0.1; x < w + gap; x += gap) {
+          canvas.drawCircle(Offset(x, row * gap * 0.87), unit * 0.08, fill);
+        }
+      }
+    case SpinePattern.chevrons:
+      line
+        ..strokeWidth = math.max(1.4, unit * 0.075)
+        ..strokeJoin = StrokeJoin.miter;
+      final gap = unit * 0.32, rise = unit * 0.14, run = unit * 0.2;
+      for (var y = gap * 0.6; y < h + gap; y += gap) {
+        final zig = Path()..moveTo(-run, y);
+        var up = true;
+        for (var x = 0.0; x <= w + run; x += run) {
+          zig.lineTo(x, up ? y - rise : y);
+          up = !up;
+        }
+        canvas.drawPath(zig, line);
+      }
+  }
+  canvas.restore();
+}
+
+/// The cloth label a printed spine's title sits on.
+class _Label extends StatelessWidget {
+  final BookLook look;
+  const _Label({required this.look});
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: look.cloth,
+      borderRadius: BorderRadius.circular(2.5),
+      border: Border.all(color: look.ink.withValues(alpha: 0.55), width: 0.8),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 2, offset: const Offset(0, 0.5))],
+    ),
+  );
+}
+
+/// A face-out book: cloth printed like its spine, with its photo framed on
+/// the front above the title, or the title alone in a frame.
 class BookCoverFace extends StatelessWidget {
   final Recipe recipe;
   const BookCoverFace({super.key, required this.recipe});
@@ -485,36 +610,54 @@ class BookCoverFace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final look = BookLook.of(recipe);
-    final hasArt = recipe.coverImage?.isNotEmpty ?? false;
+    final photo = recipe.coverImage;
+    final hasArt = photo != null && photo.isNotEmpty;
+    final frame = Border.all(color: look.ink.withValues(alpha: 0.7), width: 0.8);
+    final title = Text(
+      recipe.title,
+      textAlign: TextAlign.center,
+      maxLines: hasArt ? 2 : 5,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontFamily: kSerifFamily, color: look.ink, fontSize: hasArt ? 11 : 13, height: 1.15),
+    );
     return ClipRRect(
       borderRadius: const BorderRadius.horizontal(left: Radius.circular(2), right: Radius.circular(4)),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (hasArt)
-            RecipeImage(source: recipe.coverImage, theme: recipe.theme)
-          else
-            ColoredBox(
-              color: look.cloth,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(border: Border.all(color: look.ink.withValues(alpha: 0.7), width: 0.8)),
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Text(
-                        recipe.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 5,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontFamily: kSerifFamily, color: look.ink, fontSize: 13, height: 1.15),
+          ColoredBox(color: look.cloth),
+          if (look.printed) CustomPaint(painter: _SpinePatternPainter(look, 0)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 9, 9),
+            child: hasArt
+                ? Column(
+                    children: [
+                      Expanded(
+                        child: DecoratedBox(
+                          position: DecorationPosition.foreground,
+                          decoration: BoxDecoration(border: frame),
+                          child: SizedBox.expand(
+                            child: RecipeImage(source: photo, theme: recipe.theme),
+                          ),
+                        ),
                       ),
+                      const SizedBox(height: 5),
+                      DecoratedBox(
+                        decoration: BoxDecoration(color: look.cloth, border: frame),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                          child: SizedBox(width: double.infinity, child: title),
+                        ),
+                      ),
+                    ],
+                  )
+                : DecoratedBox(
+                    decoration: BoxDecoration(color: look.printed ? look.cloth : null, border: frame),
+                    child: Center(
+                      child: Padding(padding: const EdgeInsets.all(6), child: title),
                     ),
                   ),
-                ),
-              ),
-            ),
+          ),
           // Hinge shadow along the spine edge.
           Positioned(
             left: 0,

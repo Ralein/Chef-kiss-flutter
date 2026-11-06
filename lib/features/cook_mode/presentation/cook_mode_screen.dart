@@ -39,7 +39,8 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   final PageController _pages = PageController();
   int _index = 0;
   bool _finished = false;
-  bool _night = false;
+  /// Light or dark for this cooking session; null follows the app.
+  bool? _dark;
   String? _sessionId;
   late final ScreenAwakeService _awake = ref.read(screenAwakeServiceProvider);
   late final CookingSessionRepository _sessions = ref.read(cookingSessionRepositoryProvider);
@@ -165,7 +166,8 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(singleRecipeProvider(widget.recipeId));
-    final theme = _night ? ChefTheme.dark() : Theme.of(context);
+    final dark = _dark ?? Theme.of(context).brightness == Brightness.dark;
+    final theme = dark ? ChefTheme.dark() : ChefTheme.light();
 
     return Theme(
       data: theme,
@@ -185,6 +187,7 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
   }
 
   Widget _buildCooking(BuildContext context, Recipe recipe) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final c = context.chefColors;
     final t = context.chefText;
     final steps = recipe.steps;
@@ -237,9 +240,9 @@ class _CookModeScreenState extends ConsumerState<CookModeScreen> {
                 onPressed: () => _showIngredients(context, recipe, servings),
               ),
               IconButton(
-                tooltip: _night ? 'Light kitchen mode' : 'Night kitchen mode',
-                icon: Icon(_night ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
-                onPressed: () => setState(() => _night = !_night),
+                tooltip: dark ? 'Light kitchen mode' : 'Night kitchen mode',
+                icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+                onPressed: () => setState(() => _dark = !dark),
               ),
               const SizedBox(width: 4),
             ],

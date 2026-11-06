@@ -4,6 +4,8 @@ import 'package:app_contracts/app_contracts.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import 'tts_voices.dart';
+
 /// Text-to-speech through the platform engine: Android TextToSpeech,
 /// AVSpeechSynthesizer on iOS/macOS, the Web Speech API in browsers.
 ///
@@ -27,6 +29,61 @@ class FlutterTtsSpeechService implements SpeechOutputService {
   Timer? _watchdog;
   int _token = 0;
 
+  /// The voice picked in Settings; null picks the most natural one.
+  String? _preferred;
+  TtsVoice? _previewing;
+  bool _voiceDirty = true;
+  List<TtsVoice>? _voices;
+
+  /// The voice to read with, by name; null for the most natural available.
+  set preferredVoice(String? name) {
+    if (name == _preferred) return;
+    _preferred = name;
+    _voiceDirty = true;
+  }
+
+  /// English voices worth offering, most natural first.
+  Future<List<TtsVoice>> voices() async {
+    if (_voices != null) return _voices!;
+    if (!await (_ready ??= _init())) return const [];
+    try {
+      final raw = await _engine!.getVoices;
+      final all = raw is List ? raw.map(TtsVoice.fromPlatform).nonNulls : const <TtsVoice>[];
+      return _voices = rankVoices(all, region: PlatformDispatcher.instance.locale.countryCode);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Reads [text] once in [voice], to hear it before choosing it.
+  Future<Result<void, AppFailure>> preview(TtsVoice voice, String text) {
+    _previewing = voice;
+    _voiceDirty = true;
+    return speak(text);
+  }
+
+  Future<void> _applyVoice(FlutterTts tts) async {
+    if (!_voiceDirty) return;
+    final previewing = _previewing;
+    _previewing = null;
+    final list = await voices();
+    final pick =
+        previewing ??
+        list.where((v) => v.name == _preferred).firstOrNull ??
+        // Automatic: the most natural voice that works offline.
+        list.where((v) => !v.needsNetwork).firstOrNull ??
+        list.firstOrNull;
+    if (pick != null) {
+      try {
+        await tts.setVoice({'name': pick.name, 'locale': pick.locale});
+      } catch (_) {
+        // Keep the engine's voice.
+      }
+    }
+    // After a preview, the chosen voice comes back next time.
+    _voiceDirty = previewing != null;
+  }
+
   /// Engines cap utterance length (Android: ~4000 chars); stay well below.
   static const maxChunkLength = 1200;
 
@@ -48,6 +105,7 @@ class FlutterTtsSpeechService implements SpeechOutputService {
     } catch (_) {
       return Result.err(_unavailable());
     }
+    await _applyVoice(tts);
 
     for (final chunk in chunks(clean)) {
       if (token != _token) return const Result.ok(null); // stopped or superseded

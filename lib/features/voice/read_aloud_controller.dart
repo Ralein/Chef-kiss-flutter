@@ -29,18 +29,34 @@ class VoiceSettings {
   /// Speak "Your pasta timer is done" when a kitchen timer finishes.
   final bool announceTimers;
 
-  const VoiceSettings({this.pace = SpeechPace.normal, this.readStepsInCookMode = false, this.announceTimers = true});
+  /// The device voice to read with, by name; null picks the most natural.
+  final String? voice;
 
-  VoiceSettings copyWith({SpeechPace? pace, bool? readStepsInCookMode, bool? announceTimers}) => VoiceSettings(
+  const VoiceSettings({
+    this.pace = SpeechPace.normal,
+    this.readStepsInCookMode = false,
+    this.announceTimers = true,
+    this.voice,
+  });
+
+  VoiceSettings copyWith({
+    SpeechPace? pace,
+    bool? readStepsInCookMode,
+    bool? announceTimers,
+    String? voice,
+    bool automaticVoice = false,
+  }) => VoiceSettings(
     pace: pace ?? this.pace,
     readStepsInCookMode: readStepsInCookMode ?? this.readStepsInCookMode,
     announceTimers: announceTimers ?? this.announceTimers,
+    voice: automaticVoice ? null : (voice ?? this.voice),
   );
 
   Map<String, dynamic> toJson() => {
     'pace': pace.name,
     'readStepsInCookMode': readStepsInCookMode,
     'announceTimers': announceTimers,
+    if (voice != null) 'voice': voice,
   };
 
   factory VoiceSettings.fromJson(Object? json) {
@@ -49,6 +65,7 @@ class VoiceSettings {
       pace: SpeechPace.fromKey(json['pace']),
       readStepsInCookMode: json['readStepsInCookMode'] == true,
       announceTimers: json['announceTimers'] != false,
+      voice: json['voice'] is String ? json['voice'] as String : null,
     );
   }
 
@@ -57,10 +74,11 @@ class VoiceSettings {
       other is VoiceSettings &&
       other.pace == pace &&
       other.readStepsInCookMode == readStepsInCookMode &&
-      other.announceTimers == announceTimers;
+      other.announceTimers == announceTimers &&
+      other.voice == voice;
 
   @override
-  int get hashCode => Object.hash(pace, readStepsInCookMode, announceTimers);
+  int get hashCode => Object.hash(pace, readStepsInCookMode, announceTimers, voice);
 }
 
 /// Plays read-aloud "sessions" (a recipe, a step, the ingredient list) one

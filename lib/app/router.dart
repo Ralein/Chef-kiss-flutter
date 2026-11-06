@@ -93,7 +93,7 @@ GoRouter createRouter({String initialLocation = '/'}) {
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,
         path: '/book/:id',
-        builder: (context, state) => BookEditorScreen(recipeId: state.pathParameters['id']!),
+        builder: (context, state) => BookEditorScreen(bookId: state.pathParameters['id']!),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

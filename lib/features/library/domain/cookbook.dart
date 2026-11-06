@@ -1,40 +1,63 @@
 import 'package:recipe_domain/recipe_domain.dart';
 
-/// A cookbook on the shelf: a collection of recipes standing as one book,
-/// like a "French" cookbook holding every French recipe.
+import 'book_covers.dart';
+
+/// A book on the shelf: My Recipes, or a cookbook like "French", holding
+/// many recipes.
 ///
 /// It passes through the shelf's layout, arranging and painting as a
-/// stand-in [Recipe] whose id is the collection's id behind a prefix; the
-/// library opens it as a journal of its own recipes.
+/// stand-in [Recipe] whose id is the book's id behind a prefix; the library
+/// opens it as a journal of its own recipes.
 abstract final class Cookbook {
   static const _prefix = 'cookbook:';
 
   static bool isCookbook(Recipe r) => r.id.startsWith(_prefix);
 
-  /// The collection a stand-in was made from.
+  /// The book a stand-in stands for: a collection id, or [myRecipesId].
   static String collectionIdOf(Recipe r) => r.id.substring(_prefix.length);
 
-  static String volumeId(String collectionId) => '$_prefix$collectionId';
+  static String volumeId(String bookId) => '$_prefix$bookId';
 
-  /// Cloths a cookbook is bound in, picked by its id so each keeps its own.
+  /// Cloths a book is bound in until it's given its own, picked by its id so
+  /// each keeps one.
   static const _cloths = ['#7A2E2A', '#A04E3B', '#B8862D', '#2F4A3A', '#2F5E61', '#273A5C', '#5B3A6B', '#8C6B47'];
 
-  /// [collection] as a book holding [recipes] recipes: tall, thick and ribbed.
-  static Recipe volume(RecipeCollection collection, {required int recipes}) => Recipe(
-    id: volumeId(collection.id),
+  /// [collection] as a book holding [recipes] recipes, as [cover] dresses it.
+  static Recipe volume(RecipeCollection collection, {required int recipes, BookCover? cover}) => _volume(
+    collection.id,
+    collection.name,
+    recipes: recipes,
+    cover: cover,
     profileId: collection.profileId,
-    title: collection.name,
-    summary: recipes == 1 ? '1 recipe' : '$recipes recipes',
-    status: RecipeStatus.ready,
-    baseServings: Rational(1),
     createdAt: collection.createdAt,
     updatedAt: collection.updatedAt,
-    bookStyle: BookStyle(
-      spineColor: _cloths[collection.id.hashCode.abs() % _cloths.length],
-      height: SpineScale.large,
-      width: SpineScale.large,
-      pattern: SpinePattern.ribs,
-      display: BookDisplay.spine,
-    ),
   );
+
+  /// My Recipes: every recipe not moved to a book of its own.
+  static Recipe myRecipes({required int recipes, BookCover? cover}) =>
+      _volume(myRecipesId, cover?.title ?? 'My Recipes', recipes: recipes, cover: cover);
+
+  static Recipe _volume(
+    String id,
+    String title, {
+    required int recipes,
+    BookCover? cover,
+    String profileId = 'default',
+    int createdAt = 0,
+    int updatedAt = 0,
+  }) {
+    final style = cover?.style ?? BookCover.defaultStyle;
+    return Recipe(
+      id: volumeId(id),
+      profileId: profileId,
+      title: title,
+      summary: recipes == 1 ? '1 recipe' : '$recipes recipes',
+      status: RecipeStatus.ready,
+      baseServings: Rational(1),
+      coverImage: cover?.photo,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      bookStyle: style.spineColor != null ? style : style.copyWith(spineColor: _cloths[id.hashCode.abs() % _cloths.length]),
+    );
+  }
 }

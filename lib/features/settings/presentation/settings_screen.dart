@@ -1,6 +1,5 @@
 import 'package:app_contracts/app_contracts.dart';
 import 'package:design_tokens/design_tokens.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,8 +11,9 @@ import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
 import '../../../app/widgets/kitchen_format.dart';
-import '../../../core/ai/ai_connection.dart';
 import '../../../core/ai/ai_usage.dart';
+import '../../../core/platform/tts_voices.dart';
+import '../../../core/platform/flutter_tts_speech_service.dart';
 import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
 import '../../illustrations/presentation/illustration_approval_screen.dart';
@@ -33,17 +33,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
-  void initState() {
-    super.initState();
-    if (widget.initialSection == 'ai') {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final state = await ref.read(aiConnectionProvider.future);
-        if (mounted && state.canEditKey && !state.isAvailable) showApiKeySheet(context);
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final t = context.chefText;
     final env = ref.watch(appEnvironmentProvider);
@@ -60,6 +49,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Semantics(header: true, child: Text('Settings', style: t.headlineMedium)),
                 const SizedBox(height: 16),
                 const _AiSection(),
+                const SizedBox(height: 16),
+                const _AppearanceSection(),
                 const SizedBox(height: 16),
                 const _VoiceSection(),
                 const SizedBox(height: 16),
@@ -119,112 +110,25 @@ class _AiSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.chefColors;
     final t = context.chefText;
-    final async = ref.watch(aiConnectionProvider);
-    final state = async.valueOrNull;
-    final mode = state?.mode;
-
-    final (IconData icon, Color color, String status) = switch (mode) {
-      AiConnectionMode.proxy => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected · managed by Chef’s Kiss'),
-      AiConnectionMode.gateway => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected to your free-model gateway'),
-      AiConnectionMode.userKey => (LucideIcons.badgeCheck, c.stateSuccess, 'Connected with your Claude key'),
-      _ => (LucideIcons.cloudOff, c.contentSecondary, 'Not set up'),
-    };
-    final detail = switch (mode) {
-      AiConnectionMode.gateway => '${state!.gateway!.model} · ${state.gateway!.baseUri.authority}',
-      AiConnectionMode.userKey => '${state!.maskedKey} · ${state.config?.model ?? AiEnvironment.model}',
-      AiConnectionMode.proxy => state!.model ?? '',
-      _ => 'Powers food scanning, recipe photos, AI recipes, what-to-cook ideas and nutrition gap-filling.',
-    };
-    final ownConnection = mode == AiConnectionMode.gateway || mode == AiConnectionMode.userKey;
-
     return _Section(
       title: 'AI & Scanning',
       icon: LucideIcons.sparkles,
       children: [
-        if (async.isLoading) const LinearProgressIndicator(),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(icon, color: color),
-          title: Text(status),
-          subtitle: Text(
-            '$detail${state?.persistentStorage == false ? '\nCould not use the device keychain — the connection will be forgotten when the app closes.' : ''}',
+          leading: Icon(LucideIcons.badgeCheck, color: c.stateSuccess),
+          title: const Text('Chef’s Kiss AI · free'),
+          subtitle: const Text(
+            'Scans food, reads recipe photos, writes recipes, suggests what to cook and fills in nutrition. '
+            'Nothing to set up.',
           ),
         ),
-        if (state?.isAvailable ?? false) const _RateLimitTile(),
-        if (ownConnection)
-          Wrap(
-            spacing: 8,
-            children: [
-              TextButton.icon(
-                onPressed: () async {
-                  final res = await ref.read(aiConnectionProvider.notifier).testConnection();
-                  ChefToastService.show(
-                    title: res.isSuccess ? 'Connection works' : res.error!.message,
-                    description: res.isSuccess ? null : res.error!.recoveryAction,
-                    type: res.isSuccess ? ChefToastType.success : ChefToastType.error,
-                  );
-                },
-                icon: const Icon(LucideIcons.activity),
-                label: const Text('Test'),
-              ),
-              TextButton.icon(
-                onPressed: () => mode == AiConnectionMode.gateway ? showGatewaySheet(context) : showApiKeySheet(context),
-                icon: const Icon(LucideIcons.slidersHorizontal),
-                label: const Text('Change'),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Disconnect AI?'),
-                      content: const Text('AI features stop working until you connect again.'),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Disconnect')),
-                      ],
-                    ),
-                  );
-                  if (ok != true) return;
-                  final notifier = ref.read(aiConnectionProvider.notifier);
-                  await (mode == AiConnectionMode.gateway ? notifier.removeGateway() : notifier.removeApiKey());
-                },
-                icon: const Icon(LucideIcons.unlink),
-                label: const Text('Disconnect'),
-              ),
-            ],
-          )
-        else if (mode != AiConnectionMode.proxy) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              FilledButton.icon(
-                onPressed: () => showGatewaySheet(context),
-                icon: const Icon(LucideIcons.plug),
-                label: const Text('Connect free models'),
-              ),
-              if (state?.canEditKey ?? false)
-                TextButton(onPressed: () => showApiKeySheet(context), child: const Text('Use a Claude key instead')),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
+        const _RateLimitTile(),
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            switch (mode) {
-              AiConnectionMode.gateway =>
-                'Photos and text you choose to analyze go to your gateway, which passes them to free models. '
-                    'Free models may log what they are sent: leave personal details out. '
-                    'Your recipes and food log stay on this device.',
-              AiConnectionMode.userKey || AiConnectionMode.proxy =>
-                'Photos and text you choose to analyze are sent to Anthropic’s Claude API. '
-                    'Everything else — your recipes and food log — stays on this device.',
-              _ => 'Use free models through a gateway you run, or your own Claude key. '
-                  'Only what you choose to analyze leaves this device.',
-            },
+            'Runs on free, shared AI models through Kilo’s AI gateway. What you choose to analyze is sent to them '
+            'and may be logged, so leave personal details out. Your recipes and food log stay on this device.',
             style: t.bodySmall,
           ),
         ),
@@ -233,8 +137,8 @@ class _AiSection extends ConsumerWidget {
   }
 }
 
-/// The AI service's rate limit as last reported, and this session's
-/// requests: shown so a busy free model isn't a mystery.
+/// How busy Chef's Kiss AI is: requests this session, and when it's free
+/// again after every model was busy.
 class _RateLimitTile extends ConsumerWidget {
   const _RateLimitTile();
 
@@ -243,328 +147,132 @@ class _RateLimitTile extends ConsumerWidget {
     final c = context.chefColors;
     final usage = ref.watch(aiUsageProvider).usage;
     final now = DateTime.now();
-    String at(DateTime time) => TimeOfDay.fromDateTime(time).format(context);
     final limited = usage.limitedAt(now);
     final requests = '${usage.requests} request${usage.requests == 1 ? '' : 's'} this session';
-    final (String title, String? subtitle) = limited
-        ? ('Rate limited — try again after ${at(usage.limitedUntil!)}', requests)
-        : usage.limit != null && usage.remaining != null
-        ? (
-            '${usage.remaining} of ${usage.limit} requests left',
-            [if (usage.resetsAt != null && usage.resetsAt!.isAfter(now)) 'resets at ${at(usage.resetsAt!)}', requests]
-                .join(' · '),
-          )
+    final (String title, String subtitle) = limited
+        ? ('Busy — free again after ${TimeOfDay.fromDateTime(usage.limitedUntil!).format(context)}', requests)
         : usage.requests > 0
-        ? ('No rate limit reported', requests)
-        : ('Rate limit: shown after the first request', null);
+        ? ('Ready', requests)
+        : ('Ready', 'Shared free models can get busy; the app switches models when one does.');
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
       leading: Icon(LucideIcons.gauge, color: limited ? c.stateWarning : c.contentSecondary),
       title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle),
+      subtitle: Text(subtitle),
     );
   }
 }
 
-Future<void> showGatewaySheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    builder: (_) => const _GatewaySheet(),
-  );
-}
+/// The reading voice: automatic (the most natural on this phone) or one
+/// picked from a short list, each with a sample to hear.
+class _VoiceTile extends ConsumerWidget {
+  const _VoiceTile();
 
-/// Connects to an OpenAI-compatible gateway — such as a free-model gateway
-/// running on the user's computer — and picks which of its models to use.
-class _GatewaySheet extends ConsumerStatefulWidget {
-  const _GatewaySheet();
+  static const sample = 'Toast the brioche until golden, then pile on the smashed avocado.';
 
   @override
-  ConsumerState<_GatewaySheet> createState() => _GatewaySheetState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final voices = ref.watch(ttsVoicesProvider).valueOrNull ?? const <TtsVoice>[];
+    if (voices.isEmpty) return const SizedBox.shrink();
+    final chosen = ref.watch(voiceSettingsProvider).valueOrNull?.voice;
+    final labels = voiceLabels(voices);
+    final current = voices.where((v) => v.name == chosen).firstOrNull;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Voice'),
+      subtitle: Text(current == null ? 'Automatic · the most natural on this phone' : labels[current]!),
+      trailing: const Icon(LucideIcons.chevronRight),
+      onTap: () => showModalBottomSheet<void>(
+        context: context,
+        useRootNavigator: true,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (ctx) => _VoicePicker(voices: voices, labels: labels),
+      ),
+    );
+  }
 }
 
-class _GatewaySheetState extends ConsumerState<_GatewaySheet> {
-  late final _address = TextEditingController(
-    text: ref.read(aiConnectionProvider).valueOrNull?.gateway?.baseUri.toString() ?? '',
-  );
-  final _key = TextEditingController();
-  bool _obscure = true;
-  bool _busy = false;
-  String? _error;
-  List<String>? _models;
-  String? _model;
+class _VoicePicker extends ConsumerWidget {
+  final List<TtsVoice> voices;
+  final Map<TtsVoice, String> labels;
+  const _VoicePicker({required this.voices, required this.labels});
 
   @override
-  void dispose() {
-    _address.dispose();
-    _key.dispose();
-    super.dispose();
-  }
-
-  Future<void> _findModels() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final res = await ref.read(aiConnectionProvider.notifier).gatewayModels(_address.text, _key.text);
-    if (!mounted) return;
-    final current = ref.read(aiConnectionProvider).valueOrNull?.gateway?.model;
-    setState(() {
-      _busy = false;
-      if (res.isSuccess) {
-        final models = res.orNull!;
-        _models = models;
-        _model = models.contains(current) ? current : models.firstOrNull;
-        if (models.isEmpty) _error = 'The gateway has no models to offer right now.';
-      } else {
-        _error = [res.error!.message, if (res.error!.recoveryAction != null) res.error!.recoveryAction!].join(' ');
-      }
-    });
-  }
-
-  Future<void> _connect() async {
-    final model = _model;
-    if (model == null) return;
-    setState(() => _busy = true);
-    final navigator = Navigator.of(context);
-    final res = await ref
-        .read(aiConnectionProvider.notifier)
-        .saveGateway(address: _address.text, key: _key.text, model: model);
-    if (!mounted) return;
-    if (res.isSuccess) {
-      navigator.pop();
-      ChefToastService.show(title: 'AI is ready', description: 'Using $model.', type: ChefToastType.success);
-    } else {
-      setState(() {
-        _busy = false;
-        _error = res.error!.message;
-      });
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(voiceSettingsProvider).valueOrNull ?? const VoiceSettings();
+    final service = ref.read(speechOutputServiceProvider);
+    void choose(String? name) {
+      saveVoiceSettings(ref, name == null ? settings.copyWith(automaticVoice: true) : settings.copyWith(voice: name));
+      Navigator.pop(context);
     }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final t = context.chefText;
-    final c = context.chefColors;
-    final models = _models;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+    Widget hear(TtsVoice voice) => IconButton(
+      tooltip: 'Hear it',
+      icon: const Icon(LucideIcons.play),
+      onPressed: service is FlutterTtsSpeechService ? () => service.preview(voice, _VoiceTile.sample) : null,
+    );
+
+    return SafeArea(
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Connect free models', style: t.headlineSmall),
-            const SizedBox(height: 6),
-            Text(
-              'Run an OpenAI-compatible gateway, such as dsh-our-free-model, on your computer. With this phone on USB, '
-              'run “adb reverse tcp:18899 tcp:18899” there and use http://127.0.0.1:18899. A gateway with an https '
-              'address works from anywhere.',
-              style: t.bodySmall,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Voice', style: context.chefText.headlineSmall),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _address,
-              autofocus: _address.text.isEmpty,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.url,
-              onChanged: (_) => setState(() => _models = null),
-              decoration: const InputDecoration(labelText: 'Gateway address', hintText: 'http://127.0.0.1:18899'),
+            ListTile(
+              leading: Icon(settings.voice == null ? LucideIcons.circleCheck : LucideIcons.circle),
+              title: const Text('Automatic'),
+              subtitle: const Text('The most natural voice on this phone'),
+              onTap: () => choose(null),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _key,
-              obscureText: _obscure,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.visiblePassword,
-              onChanged: (_) => setState(() => _models = null),
-              decoration: InputDecoration(
-                labelText: 'Key, if the gateway asks for one',
-                errorText: _error,
-                errorMaxLines: 3,
-                suffixIcon: IconButton(
-                  tooltip: _obscure ? 'Show key' : 'Hide key',
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff),
-                ),
+            for (final v in voices)
+              ListTile(
+                leading: Icon(settings.voice == v.name ? LucideIcons.circleCheck : LucideIcons.circle),
+                title: Text(labels[v]!),
+                trailing: hear(v),
+                onTap: () => choose(v.name),
               ),
-            ),
-            if (models != null && models.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _model,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Model'),
-                items: [for (final m in models) DropdownMenuItem(value: m, child: Text(m, overflow: TextOverflow.ellipsis))],
-                onChanged: (m) => setState(() => _model = m),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(LucideIcons.info, size: 16, color: c.stateWarning),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('Free models may log what they are sent. Leave personal details out.', style: t.bodySmall),
-                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Light, dark, or following the phone.
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(appearanceProvider).valueOrNull ?? ThemeMode.system;
+    return _Section(
+      title: 'Appearance',
+      icon: LucideIcons.sunMoon,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
               ],
+              selected: {mode},
+              onSelectionChanged: (s) =>
+                  ref.read(preferencesRepositoryProvider).writeJson(appearanceKey, s.first.name),
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: _busy ? null : (models == null || models.isEmpty ? _findModels : _connect),
-              child: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : Text(models == null || models.isEmpty ? 'Find models' : 'Connect'),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-Future<void> showApiKeySheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    isScrollControlled: true,
-    builder: (_) => const _ApiKeySheet(),
-  );
-}
-
-class _ApiKeySheet extends ConsumerStatefulWidget {
-  const _ApiKeySheet();
-
-  @override
-  ConsumerState<_ApiKeySheet> createState() => _ApiKeySheetState();
-}
-
-class _ApiKeySheetState extends ConsumerState<_ApiKeySheet> {
-  final _key = TextEditingController();
-  final _workspace = TextEditingController();
-  bool _obscure = true;
-  bool _saving = false;
-  bool _advanced = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _key.dispose();
-    _workspace.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    final navigator = Navigator.of(context);
-    final res = await ref
-        .read(aiConnectionProvider.notifier)
-        .saveApiKey(_key.text, workspaceId: _workspace.text.trim().isEmpty ? null : _workspace.text);
-    if (!mounted) return;
-    if (res.isSuccess) {
-      navigator.pop();
-      ChefToastService.show(title: 'AI is ready', description: 'Scanning and AI recipes are now on.', type: ChefToastType.success);
-    } else {
-      setState(() {
-        _saving = false;
-        _error = [res.error!.message, if (res.error!.recoveryAction != null) res.error!.recoveryAction!].join(' ');
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.chefText;
-    final c = context.chefColors;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Use your Claude key', style: t.headlineSmall),
-            const SizedBox(height: 6),
-            Text(
-              'Create an API key in the Claude Console (platform.claude.com → Settings → API keys) and paste it here. '
-              'It is checked with Anthropic before it is saved.',
-              style: t.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _key,
-              autofocus: true,
-              obscureText: _obscure,
-              autocorrect: false,
-              enableSuggestions: false,
-              keyboardType: TextInputType.visiblePassword,
-              decoration: InputDecoration(
-                labelText: 'API key',
-                hintText: 'sk-ant-…',
-                errorText: _error,
-                errorMaxLines: 3,
-                suffixIcon: IconButton(
-                  tooltip: _obscure ? 'Show key' : 'Hide key',
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(_obscure ? LucideIcons.eye : LucideIcons.eyeOff),
-                ),
-              ),
-              onSubmitted: (_) => _saving ? null : _save(),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => setState(() => _advanced = !_advanced),
-                child: Text(_advanced ? 'Hide advanced' : 'Advanced'),
-              ),
-            ),
-            if (_advanced)
-              TextField(
-                controller: _workspace,
-                autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Workspace ID (optional)',
-                  hintText: 'wrkspc_…',
-                  helperText: 'Only needed for organization-level keys that are not tied to one workspace.',
-                  helperMaxLines: 2,
-                ),
-              ),
-            if (kIsWeb) ...[
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(LucideIcons.info, size: 16, color: c.stateWarning),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'In a browser the key is stored in this browser’s storage. '
-                      'For better protection use the mobile or desktop app.',
-                      style: t.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _saving ? null : _save,
-              icon: _saving
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(LucideIcons.badgeCheck),
-              label: Text(_saving ? 'Checking…' : 'Save & verify'),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
@@ -606,6 +314,7 @@ class _VoiceSection extends ConsumerWidget {
           onSelectionChanged: (s) => save(settings.copyWith(pace: s.first)),
         ),
         const SizedBox(height: 4),
+        const _VoiceTile(),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Read steps in Cook Mode'),

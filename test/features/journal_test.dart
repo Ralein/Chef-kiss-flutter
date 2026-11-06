@@ -253,7 +253,12 @@ void main() {
   testWidgets('journal: decorate a page — add, remove and undo a sticker', (tester) async {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('soup', 'Tomato soup')]);
 
-    await tester.tap(_book('Tomato soup'));
+    // The book opens at its bookplate; the contents lead to the recipe.
+    await tester.tap(_book('My Recipes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Contents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('p. 3'));
     await tester.pumpAndSettle();
     expect(find.text('Ingredients'), findsOneWidget);
 
@@ -302,7 +307,11 @@ void main() {
     final (db, _) = await _pumpApp(tester, recipes: [_recipe('a', 'Apple pie'), _recipe('b', 'Banana bread')]);
     // The journal keeps the order recipes were added (ties: A–Z), so editing
     // never reshuffles it: Apple pie is page 1, Banana bread follows.
-    await tester.tap(_book('Apple pie'));
+    await tester.tap(_book('My Recipes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Contents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('p. 3'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Ingredients  ·  1 of 2'), findsOneWidget);
     // The page carries the title; the toolbar doesn't repeat it.
@@ -386,7 +395,7 @@ void main() {
     // Back returns to where the journal was opened from.
     await tester.binding.handlePopRoute(); // system Back button
     await tester.pumpAndSettle();
-    expect(find.byType(ShelfBook), findsNWidgets(2));
+    expect(find.byType(ShelfBook), findsOneWidget, reason: 'both recipes are in My Recipes');
     expect(tester.takeException(), isNull);
     await _teardown(tester, db);
   });

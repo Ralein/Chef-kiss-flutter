@@ -17,7 +17,8 @@ import '../../nutrition/presentation/recipe_insights.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../journal/presentation/journal_view.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sheets.dart'
-    show showAddToCollectionSheet, showTextPromptDialog;
+    show createBook, showMoveToBookSheet, showTextPromptDialog;
+import '../domain/book_covers.dart';
 import '../domain/cookbook.dart';
 import '../domain/shelf_style.dart';
 import 'widgets/library_bookcase.dart';
@@ -117,16 +118,25 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   late String? _journalRecipeId = widget.initialRecipeId;
   GlobalKey<JournalViewState> _journalKey = GlobalKey<JournalViewState>();
 
-  /// The cookbook being read in the journal; null for the whole journal.
+  /// The book being read in the journal — a cookbook's id or [myRecipesId];
+  /// null for the whole journal.
   String? _journalBook;
 
   /// While searching, the search field takes the title's place.
   bool _searching = false;
 
-  void _openInJournal(Recipe recipe) => _openJournal(recipeId: recipe.id);
+  /// The recipe each book was last open at: a book reopens there.
+  final _bookmarks = <String, String>{};
 
-  /// A cookbook opens as a journal of its own recipes.
-  void _openCookbook(String collectionId) => _openJournal(book: collectionId);
+  /// A recipe opens in its book, at its page.
+  void _openInJournal(Recipe recipe) => _openJournal(
+    recipeId: recipe.id,
+    book: bookOf(ref.read(collectionsStreamProvider).valueOrNull ?? const [], recipe.id),
+  );
+
+  /// A book opens as a journal of its own recipes, at its bookplate or
+  /// where it was left.
+  void _openCookbook(String bookId) => _openJournal(book: bookId, recipeId: _bookmarks[bookId]);
 
   void _openFromShelf(Recipe item) =>
       Cookbook.isCookbook(item) ? _openCookbook(Cookbook.collectionIdOf(item)) : _openInJournal(item);
@@ -174,6 +184,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Future<void> _showBookActions(Recipe recipe) async {
+    final books = ref.read(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+    final inBook = bookName(bookOf(books, recipe.id), books, ref.read(bookCoversProvider).valueOrNull ?? const {});
     final action = await showModalBottomSheet<String>(
       context: context,
       useRootNavigator: true,
@@ -215,24 +227,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   onTap: () => Navigator.pop(ctx, 'cook'),
                 ),
               ListTile(
-                leading: const Icon(LucideIcons.paintbrush),
-                title: const Text('Edit book'),
-                subtitle: const Text('Spine colour, lettering, cover or spine'),
-                onTap: () => Navigator.pop(ctx, 'book'),
-              ),
-              ListTile(
-                leading: const Icon(LucideIcons.bookPlus),
-                title: const Text('Add to a cookbook'),
-                subtitle: const Text('Keep it with others, like a French cookbook'),
+                leading: const Icon(LucideIcons.folderInput),
+                title: const Text('Move to a book'),
+                subtitle: Text('In $inBook'),
                 onTap: () => Navigator.pop(ctx, 'cookbook'),
               ),
-              if (_view == LibraryView.shelf)
-                ListTile(
-                  leading: const Icon(LucideIcons.move),
-                  title: const Text('Move on the shelves'),
-                  subtitle: const Text('Hold a book, then drag it to a new spot'),
-                  onTap: () => Navigator.pop(ctx, 'move'),
-                ),
               ListTile(
                 leading: Icon(recipe.isFavorite ? LucideIcons.heartOff : LucideIcons.heart),
                 title: Text(recipe.isFavorite ? 'Remove from favorites' : 'Add to favorites'),
@@ -251,12 +250,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         context.push('/recipe/${recipe.id}');
       case 'cook':
         context.push('/cook/${recipe.id}');
-      case 'book':
-        context.push('/book/${recipe.id}');
-      case 'move':
-        _startStyling(_shelfStyle, collapsed: true);
       case 'cookbook':
-        await showAddToCollectionSheet(context, recipe);
+        await showMoveToBookSheet(context, recipe);
       case 'favorite':
         _toggleFavorite(recipe);
     }
@@ -470,10 +465,24 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _buildJournal(BuildContext context, List<Recipe> all) {
     final t = context.chefText;
     final books = ref.watch(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
-    final book = _journalBook == null ? null : books.where((b) => b.id == _journalBook).firstOrNull;
+    final covers = ref.watch(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
+    final bookId = _journalBook;
+    final book = books.where((b) => b.id == bookId).firstOrNull;
+    final isMine = bookId == myRecipesId;
     final byId = {for (final r in all) r.id: r};
-    // A cookbook keeps the journal's order: as the recipes were added.
-    final recipes = _bookOrder(book == null ? all : [for (final id in book.recipeIds) ?byId[id]]);
+    // A book keeps the journal's order: as the recipes were added.
+    final recipes = _bookOrder(
+      isMine
+          ? unfiledRecipes(all, books)
+          : book != null
+          ? [for (final id in book.recipeIds) ?byId[id]]
+          : all,
+    );
+    final volume = isMine
+        ? Cookbook.myRecipes(recipes: recipes.length, cover: covers[myRecipesId])
+        : book != null
+        ? Cookbook.volume(book, recipes: recipes.length, cover: covers[book.id])
+        : null;
     return Column(
       children: [
         Padding(
@@ -483,9 +492,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               Expanded(
                 child: Semantics(
                   header: true,
-                  child: Text(book?.name ?? 'Recipe journal', style: t.titleLarge, overflow: TextOverflow.ellipsis),
+                  child: Text(volume?.title ?? 'Recipe journal', style: t.titleLarge, overflow: TextOverflow.ellipsis),
                 ),
               ),
+              if (volume != null)
+                IconButton(
+                  tooltip: 'Book options',
+                  onPressed: () => _showVolumeActions(Cookbook.collectionIdOf(volume), volume),
+                  icon: const Icon(LucideIcons.ellipsis, size: 20),
+                ),
               _ViewToggle(view: LibraryView.journal, onChanged: _chooseView),
             ],
           ),
@@ -495,9 +510,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ? EmptyStateScene(
                   icon: LucideIcons.bookOpen,
                   title: '${book.name} is empty',
-                  message: 'Add recipes to this cookbook and they fill its pages.',
+                  message: 'Add recipes to this book and they fill its pages.',
                   actionLabel: 'Add recipes',
                   onAction: () => _pickRecipesFor(book, all),
+                )
+              : recipes.isEmpty && volume != null
+              ? EmptyStateScene(
+                  icon: LucideIcons.bookHeart,
+                  title: '${volume.title} is empty',
+                  message: 'New recipes start here, until you move them to a book of their own.',
+                  actionLabel: 'Add a recipe',
+                  onAction: () => showAddRecipeSheet(context, ref),
                 )
               : recipes.isEmpty
               ? EmptyStateScene(
@@ -510,9 +533,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               : JournalView(
                   key: _journalKey,
                   recipes: recipes,
+                  title: volume?.title,
                   initialRecipeId: _journalRecipeId,
                   startDecorating: widget.startDecorating && _journalRecipeId == widget.initialRecipeId,
-                  onRecipeShown: (id) => _journalRecipeId = id,
+                  onRecipeShown: (id) {
+                    _journalRecipeId = id;
+                    if (bookId != null) _bookmarks[bookId] = id;
+                  },
                 ),
         ),
       ],
@@ -526,6 +553,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   List<Widget> _header(BuildContext context, List<Recipe> all, LibraryView view, List<_Filter> filters, int visible) {
     final t = context.chefText;
     final sort = _sortFor(_shelfStyle);
+    // Chips before the filters: New book on the shelf, then the sort.
+    final lead = view == LibraryView.shelf ? 2 : 1;
     return [
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(20, 12, 12, 0),
@@ -583,9 +612,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               scrollDirection: Axis.horizontal,
-              itemCount: filters.length + 1,
+              itemCount: filters.length + lead,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
+                if (view == LibraryView.shelf && i == 0) {
+                  return ActionChip(
+                    avatar: const Icon(LucideIcons.bookPlus, size: 16),
+                    label: const Text('New book'),
+                    onPressed: _newBook,
+                  );
+                }
+                i -= lead - 1;
                 if (i == 0) {
                   return PopupMenuButton<_Sort>(
                     tooltip: 'Sort recipes',
@@ -626,36 +663,58 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     ];
   }
 
-  /// What stands on the shelf: each cookbook as one book, then the recipes
-  /// in no cookbook. While filtering or searching, the matching recipes
-  /// themselves.
+  /// What stands on the shelf: My Recipes, holding every recipe in no
+  /// cookbook, then each cookbook. While filtering or searching, the
+  /// matching recipes themselves.
   List<Recipe> _shelfItems(
     List<Recipe> all,
     List<Recipe> shown,
-    List<RecipeCollection> books, {
+    List<RecipeCollection> books,
+    Map<String, BookCover> covers,
+    ShelfStyle style, {
     required bool narrowed,
   }) {
-    if (narrowed || books.isEmpty) return shown;
+    if (narrowed) return shown;
     final ids = {for (final r in all) r.id};
-    final inBooks = {for (final b in books) ...b.recipeIds};
+    final loose = unfiledRecipes(all, books).length;
+    final volumes = [
+      for (final b in books) Cookbook.volume(b, recipes: b.recipeIds.where(ids.contains).length, cover: covers[b.id]),
+    ];
+    if (_sortFor(style) == _Sort.alphabetical) {
+      volumes.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    } else {
+      volumes.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    }
     return [
-      for (final b in books) Cookbook.volume(b, recipes: b.recipeIds.where(ids.contains).length),
-      for (final r in shown)
-        if (!inBooks.contains(r.id)) r,
+      // Once every recipe is in a book of its own, My Recipes steps aside.
+      if (loose > 0 || books.isEmpty) Cookbook.myRecipes(recipes: loose, cover: covers[myRecipesId]),
+      ...volumes,
     ];
   }
 
   void _showShelfActions(Recipe item) {
-    if (!Cookbook.isCookbook(item)) {
+    if (Cookbook.isCookbook(item)) {
+      _showVolumeActions(Cookbook.collectionIdOf(item), item);
+    } else {
       _showBookActions(item);
-      return;
     }
-    final books = ref.read(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
-    final book = books.where((b) => b.id == Cookbook.collectionIdOf(item)).firstOrNull;
-    if (book != null) _showCookbookActions(book, item.summary ?? '');
   }
 
-  Future<void> _showCookbookActions(RecipeCollection book, String count) async {
+  /// Makes a book, then fills it.
+  Future<void> _newBook() async {
+    final book = await createBook(context, ref);
+    if (book == null || !mounted) return;
+    await _pickRecipesFor(book, ref.read(allRecipesProvider).valueOrNull ?? const []);
+  }
+
+  /// A book's menu: open it, dress it, turn it, fill it, name it, move it.
+  Future<void> _showVolumeActions(String bookId, Recipe volume) async {
+    final books = ref.read(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+    final book = books.where((b) => b.id == bookId).firstOrNull;
+    final isMine = bookId == myRecipesId;
+    if (!isMine && book == null) return;
+    final covers = ref.read(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
+    final cover = covers[bookId] ?? const BookCover();
     final action = await showModalBottomSheet<String>(
       context: context,
       useRootNavigator: true,
@@ -669,22 +728,36 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-                child: Text(book.name, style: ctx.chefText.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+                child: Text(volume.title, style: ctx.chefText.titleLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text('Cookbook · $count', style: ctx.chefText.bodySmall),
+                child: Text(volume.summary ?? '', style: ctx.chefText.bodySmall),
+              ),
+              if (_view != LibraryView.journal)
+                ListTile(
+                  leading: const Icon(LucideIcons.bookOpen),
+                  title: const Text('Open'),
+                  onTap: () => Navigator.pop(ctx, 'open'),
+                ),
+              ListTile(
+                leading: const Icon(LucideIcons.paintbrush),
+                title: const Text('Edit book'),
+                subtitle: const Text('Cover photo, spine pattern, lettering'),
+                onTap: () => Navigator.pop(ctx, 'edit'),
               ),
               ListTile(
-                leading: const Icon(LucideIcons.bookOpen),
-                title: const Text('Open'),
-                onTap: () => Navigator.pop(ctx, 'open'),
+                leading: Icon(cover.facesOut ? LucideIcons.bookCopy : LucideIcons.bookImage),
+                title: Text(cover.facesOut ? 'Show the spine' : 'Show the cover'),
+                subtitle: Text(cover.facesOut ? 'Stand it spine-out' : 'Stand it face-out on the shelf'),
+                onTap: () => Navigator.pop(ctx, 'face'),
               ),
-              ListTile(
-                leading: const Icon(LucideIcons.listPlus),
-                title: const Text('Add or remove recipes'),
-                onTap: () => Navigator.pop(ctx, 'recipes'),
-              ),
+              if (!isMine)
+                ListTile(
+                  leading: const Icon(LucideIcons.listPlus),
+                  title: const Text('Add or remove recipes'),
+                  onTap: () => Navigator.pop(ctx, 'recipes'),
+                ),
               ListTile(
                 leading: const Icon(LucideIcons.pencil),
                 title: const Text('Rename'),
@@ -694,14 +767,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 ListTile(
                   leading: const Icon(LucideIcons.move),
                   title: const Text('Move on the shelves'),
+                  subtitle: const Text('Hold a book, then drag it to a new spot'),
                   onTap: () => Navigator.pop(ctx, 'move'),
                 ),
-              ListTile(
-                leading: const Icon(LucideIcons.trash2),
-                title: const Text('Delete cookbook'),
-                subtitle: const Text('Its recipes stay in your library'),
-                onTap: () => Navigator.pop(ctx, 'delete'),
-              ),
+              if (!isMine)
+                ListTile(
+                  leading: const Icon(LucideIcons.trash2),
+                  title: const Text('Delete book'),
+                  subtitle: Text('Its recipes go back to ${bookName(myRecipesId, books, covers)}'),
+                  onTap: () => Navigator.pop(ctx, 'delete'),
+                ),
             ],
           ),
         ),
@@ -709,38 +784,55 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
     if (!mounted || action == null) return;
     final repo = ref.read(collectionRepositoryProvider);
+    final prefs = ref.read(preferencesRepositoryProvider);
     switch (action) {
       case 'open':
-        _openCookbook(book.id);
+        _openCookbook(bookId);
+      case 'edit':
+        await context.push('/book/$bookId');
+      case 'face':
+        final display = cover.facesOut ? BookDisplay.spine : BookDisplay.cover;
+        await saveBookCover(prefs, bookId, cover.copyWith(style: cover.style.copyWith(display: display)));
       case 'recipes':
-        await _pickRecipesFor(book, ref.read(allRecipesProvider).valueOrNull ?? const []);
+        await _pickRecipesFor(book!, ref.read(allRecipesProvider).valueOrNull ?? const []);
       case 'rename':
-        final name = await showTextPromptDialog(context, title: 'Rename cookbook', initial: book.name);
-        if (name != null && name.trim().isNotEmpty) {
-          await repo.updateCollection(
-            book.copyWith(name: name.trim(), updatedAt: DateTime.now().millisecondsSinceEpoch),
+        final name = (await showTextPromptDialog(context, title: 'Rename book', initial: volume.title))?.trim();
+        if (name == null || name.isEmpty) return;
+        if (isMine) {
+          final title = name == 'My Recipes' ? null : name;
+          await saveBookCover(
+            prefs,
+            bookId,
+            BookCover(title: title, photo: cover.photo, style: cover.style, palette: cover.palette),
           );
+        } else {
+          await repo.updateCollection(book!.copyWith(name: name, updatedAt: DateTime.now().millisecondsSinceEpoch));
         }
       case 'move':
         _startStyling(_shelfStyle, collapsed: true);
       case 'delete':
-        if (!mounted) return;
+        final home = bookName(myRecipesId, books, covers);
         final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Delete cookbook?'),
-            content: Text('“${book.name}” comes off the shelf. Its recipes stay in your library.'),
+            title: const Text('Delete book?'),
+            content: Text('“${book!.name}” comes off the shelf. Its recipes go back to $home.'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
               FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
             ],
           ),
         );
-        if (ok == true) await repo.deleteCollection(book.id);
+        if (ok != true) return;
+        await repo.deleteCollection(book!.id);
+        await forgetBookCover(prefs, book.id);
+        // Reading it? Back to the shelf.
+        if (mounted && _journalBook == book.id) _chooseView(_browseView);
     }
   }
 
-  /// Ticks recipes in or out of [book]; each change applies at once.
+  /// Ticks recipes into [book], or back out to My Recipes. A recipe is in
+  /// one book at a time, so ticking one moves it here.
   Future<void> _pickRecipesFor(RecipeCollection book, List<Recipe> all) {
     final recipes = [...all]..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return showModalBottomSheet<void>(
@@ -756,23 +848,34 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           builder: (ctx, ref, _) {
             final repo = ref.read(collectionRepositoryProvider);
             final books = ref.watch(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
-            final inBook = (books.where((b) => b.id == book.id).firstOrNull ?? book).recipeIds.toSet();
+            final covers = ref.watch(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
+            final current = books.where((b) => b.id == book.id).firstOrNull ?? book;
+            final inBook = current.recipeIds.toSet();
             return ListView(
               controller: scroll,
               padding: const EdgeInsets.only(bottom: 24),
               children: [
                 Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 2),
+                  child: Text('Recipes in ${current.name}', style: ctx.chefText.titleLarge),
+                ),
+                Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text('Recipes in ${book.name}', style: ctx.chefText.headlineSmall),
+                  child: Text(
+                    'A recipe is in one book at a time: ticking one moves it here.',
+                    style: ctx.chefText.bodySmall,
+                  ),
                 ),
                 for (final r in recipes)
                   CheckboxListTile(
                     value: inBook.contains(r.id),
                     title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(KitchenFormat.minutes(r.totalMinutes)),
-                    onChanged: (on) => on == true
-                        ? repo.addRecipeToCollection(book.id, r.id)
-                        : repo.removeRecipeFromCollection(book.id, r.id),
+                    subtitle: Text(
+                      inBook.contains(r.id)
+                          ? KitchenFormat.minutes(r.totalMinutes)
+                          : 'In ${bookName(bookOf(books, r.id), books, covers)}',
+                    ),
+                    onChanged: (on) => moveRecipeToBook(repo, books, r.id, on == true ? book.id : myRecipesId),
                   ),
               ],
             );
@@ -844,6 +947,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _shelfRoom(BuildContext context, List<Recipe> all, ShelfStyle style, ShelfEditController? edit) {
     final filters = _filtersFor(all);
     final books = ref.watch(collectionsStreamProvider).valueOrNull ?? const <RecipeCollection>[];
+    final covers = ref.watch(bookCoversProvider).valueOrNull ?? const <String, BookCover>{};
     final visible = _apply(all, filters, style);
     final theme = style.isDark ? ChefTheme.dark() : ChefTheme.light();
 
@@ -881,6 +985,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           all,
                           edit != null ? _apply(all, filters, style, unfiltered: true) : visible,
                           books,
+                          covers,
+                          style,
                           narrowed: edit == null && _narrowed,
                         ),
                         style: style,

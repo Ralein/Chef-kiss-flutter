@@ -51,7 +51,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
   Future<void> _onMenu(_MenuAction action, Recipe recipe) async {
     switch (action) {
       case _MenuAction.collection:
-        await showAddToCollectionSheet(context, recipe);
+        await showMoveToBookSheet(context, recipe);
       case _MenuAction.journal:
         context.go('/?view=journal&recipe=${recipe.id}');
       case _MenuAction.decorate:
@@ -312,7 +312,7 @@ class _HeroAppBar extends StatelessWidget {
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: _MenuAction.collection,
-                child: ListTile(leading: Icon(LucideIcons.bookPlus), title: Text('Add to a cookbook')),
+                child: ListTile(leading: Icon(LucideIcons.folderInput), title: Text('Move to a book')),
               ),
               PopupMenuItem(
                 value: _MenuAction.cover,
