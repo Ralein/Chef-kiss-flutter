@@ -11,12 +11,8 @@
   </defs>
   <!-- Squircle Base -->
   <rect x="32" y="32" width="960" height="960" rx="216" ry="216" fill="url(#iconBg)" filter="url(#iconGlow)" />
-  <!-- Terracotta Border Frame -->
-  <rect x="32" y="32" width="960" height="960" rx="216" ry="216" fill="none" stroke="#C35B3B" stroke-width="36" />
-  <!-- Inner Subtle Accent Ring -->
-  <rect x="64" y="64" width="896" height="896" rx="186" ry="186" fill="none" stroke="#858247" stroke-width="3" stroke-opacity="0.3" stroke-dasharray="8,8" />
   <!-- Vector Artwork (Scale slightly to fit inside framed squircle: 0.86 scale centered) -->
-  <g transform="translate(71.68, 952.32) scale(0.086, -0.086)" stroke="none">
+  <g transform="translate(-10.24, 1034.24) scale(0.102, -0.102)" stroke="none">
     <!-- Chef Hat & Hand Solid Silhouette Base -->
     <g id="layer-chef_base" class="vector-layer layer-chef_base" fill="#FCF9F3" fill-opacity="1.0">
       <path d="M5865 7019 c-243 -31 -465 -228 -535 -474 -16 -56 -29 -77 -88 -140
