@@ -127,7 +127,7 @@ class _AiSection extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
           child: Text(
-            'Runs on free, shared AI models through Kilo’s AI gateway. What you choose to analyze is sent to them '
+            'Runs on free, shared AI models. What you choose to analyze is sent to them '
             'and may be logged, so leave personal details out. Your recipes and food log stay on this device.',
             style: t.bodySmall,
           ),
@@ -145,21 +145,40 @@ class _RateLimitTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.chefColors;
-    final usage = ref.watch(aiUsageProvider).usage;
-    final now = DateTime.now();
-    final limited = usage.limitedAt(now);
-    final requests = '${usage.requests} request${usage.requests == 1 ? '' : 's'} this session';
-    final (String title, String subtitle) = limited
-        ? ('Busy — free again after ${TimeOfDay.fromDateTime(usage.limitedUntil!).format(context)}', requests)
-        : usage.requests > 0
-        ? ('Ready', requests)
-        : ('Ready', 'Shared free models can get busy; the app switches models when one does.');
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: Icon(LucideIcons.gauge, color: limited ? c.stateWarning : c.contentSecondary),
-      title: Text(title),
-      subtitle: Text(subtitle),
+    final t = context.chefText;
+    final meter = ref.watch(aiUsageProvider);
+    final usage = meter.usage;
+    final limited = usage.limitedAt(DateTime.now());
+    final left = limited ? 0 : meter.leftThisHour;
+    const limit = AiUsageMeter.hourlyLimit;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Free requests this hour', style: t.bodyMedium)),
+              Text('$left of $limit left', style: t.labelLarge),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: left / limit,
+            minHeight: 6,
+            borderRadius: BorderRadius.circular(3),
+            color: limited || left < limit * 0.1 ? c.stateWarning : c.accentHerb,
+            backgroundColor: c.meterTrack(c.accentHerb),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            limited
+                ? 'Busy — free again after ${TimeOfDay.fromDateTime(usage.limitedUntil!).format(context)}'
+                : 'Counted on this phone; phones on the same Wi-Fi share the allowance.',
+            style: t.bodySmall,
+          ),
+        ],
+      ),
     );
   }
 }

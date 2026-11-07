@@ -16,13 +16,16 @@ import '../../../app/widgets/kitchen_format.dart';
 import '../../../core/ai/ai_connection.dart';
 import '../../../core/media/photo_picker.dart';
 import '../../imports/presentation/import_flows.dart';
+import '../../recipe_detail/presentation/widgets/recipe_sheets.dart' show showTextPromptDialog;
 
 /// What the analysis screen needs: the photo, what it shows, and any note.
 class ScanRequest {
   final ScanMode mode;
-  final Uint8List bytes;
+
+  /// The photo; null when the food was described in [note] instead.
+  final Uint8List? bytes;
   final String? note;
-  const ScanRequest({required this.mode, required this.bytes, this.note});
+  const ScanRequest({required this.mode, this.bytes, this.note});
 }
 
 extension ScanModeCopy on ScanMode {
@@ -94,6 +97,31 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     }
   }
 
+  /// Typing instead of a photo: a meal is described, ingredients listed,
+  /// a recipe pasted.
+  Future<void> _type() async {
+    switch (_mode) {
+      case ScanMode.ingredients:
+        await context.push('/ideas');
+      case ScanMode.recipeCard:
+        await showPasteTextSheet(context, ref);
+      case ScanMode.meal:
+        final text = await showTextPromptDialog(
+          context,
+          title: 'What did you eat?',
+          hint: 'e.g. A bowl of chicken chow mein and a glass of orange juice',
+          confirmLabel: 'Analyze',
+          maxLines: 4,
+        );
+        if (text == null || text.trim().isEmpty || !mounted) return;
+        final detail = _note.text.trim();
+        await context.push(
+          '/analyze',
+          extra: ScanRequest(mode: ScanMode.meal, note: detail.isEmpty ? text.trim() : '${text.trim()}. $detail'),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.chefColors;
@@ -140,8 +168,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                   busy: _busy,
                   onCamera: PhotoPicker.cameraAvailable ? () => _capture(ImageSource.camera) : null,
                   onGallery: () => _capture(ImageSource.gallery),
-                  // No photo needed: list what you have instead.
-                  onType: _mode == ScanMode.ingredients ? () => context.push('/ideas') : null,
+                  // No photo needed: every mode can be typed instead.
+                  typeLabel: switch (_mode) {
+                    ScanMode.meal => 'Describe it instead',
+                    ScanMode.ingredients => 'Type them instead',
+                    ScanMode.recipeCard => 'Type or paste it instead',
+                  },
+                  onType: aiReady && !_busy ? _type : null,
                 ),
                 if (_mode != ScanMode.recipeCard) ...[
                   const SizedBox(height: 16),
@@ -230,8 +263,9 @@ class _CaptureCard extends StatelessWidget {
   final VoidCallback? onCamera;
   final VoidCallback onGallery;
 
-  /// Ingredients can be typed instead of photographed.
+  /// Typing instead of a photo, and what the button says.
   final VoidCallback? onType;
+  final String typeLabel;
 
   const _CaptureCard({
     required this.mode,
@@ -240,6 +274,7 @@ class _CaptureCard extends StatelessWidget {
     required this.onCamera,
     required this.onGallery,
     this.onType,
+    this.typeLabel = 'Type it instead',
   });
 
   @override
@@ -290,14 +325,12 @@ class _CaptureCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (onType != null) ...[
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: onType,
-              icon: const Icon(LucideIcons.keyboard, size: 18),
-              label: const Text('Type them instead'),
-            ),
-          ],
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onType,
+            icon: const Icon(LucideIcons.keyboard, size: 18),
+            label: Text(typeLabel),
+          ),
         ],
       ),
     );

@@ -58,7 +58,18 @@ class _ScanAnalysisScreenState extends ConsumerState<ScanAnalysisScreen> {
       });
       return;
     }
-    final prepared = await ImagePrep.prepare(request.bytes, maxEdge: 1568);
+    final bytes = request.bytes;
+    if (bytes == null) {
+      // Described in words: nothing to prepare.
+      final res = await service.analyze(request.mode, null, hint: request.note);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        res.when(ok: (a) => _analysis = a, err: (f) => _error = f);
+      });
+      return;
+    }
+    final prepared = await ImagePrep.prepare(bytes, maxEdge: 1568);
     if (prepared.isFailure) {
       if (mounted) {
         setState(() {
@@ -128,13 +139,15 @@ class _Photo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bytes = request.bytes;
+    if (bytes == null) return const SizedBox.shrink();
     return ClipRRect(
       borderRadius: BorderRadius.circular(ChefRadius.tile),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: SizedBox(
           width: double.infinity,
-          child: Image.memory(request.bytes, fit: BoxFit.cover, semanticLabel: 'Your photo', gaplessPlayback: true),
+          child: Image.memory(bytes, fit: BoxFit.cover, semanticLabel: 'Your photo', gaplessPlayback: true),
         ),
       ),
     );

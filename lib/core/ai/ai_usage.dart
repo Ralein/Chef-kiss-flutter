@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../app/providers.dart' show preferencesRepositoryProvider;
 import 'package:http_parser/http_parser.dart' show parseHttpDate;
 
 /// How much this session has asked of the AI service, and what the service
@@ -19,21 +23,66 @@ class AiUsage {
   /// Set after the service turned a request away for going too fast.
   final DateTime? limitedUntil;
 
-  const AiUsage({this.requests = 0, this.limit, this.remaining, this.resetsAt, this.limitedUntil});
+  /// Requests this phone sent in the last hour, for the free hourly limit.
+  final int usedThisHour;
+
+  const AiUsage({
+    this.requests = 0,
+    this.limit,
+    this.remaining,
+    this.resetsAt,
+    this.limitedUntil,
+    this.usedThisHour = 0,
+  });
 
   static const none = AiUsage();
 
   bool limitedAt(DateTime now) => limitedUntil != null && limitedUntil!.isAfter(now);
 }
 
-/// Collects [AiUsage] from every AI response's status and headers.
+/// Collects [AiUsage] from every AI response's status and headers, and
+/// counts this phone's requests over the last hour.
 class AiUsageMeter extends ChangeNotifier {
-  AiUsageMeter({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  AiUsageMeter({DateTime Function()? clock, List<DateTime> recent = const [], this.onRecent})
+    : _clock = clock ?? DateTime.now,
+      _recent = [...recent];
+
+  /// Free models allow this many requests an hour from one internet address.
+  static const hourlyLimit = 200;
 
   final DateTime Function() _clock;
   AiUsage _usage = AiUsage.none;
 
-  AiUsage get usage => _usage;
+  /// When each request of the last hour was sent.
+  final List<DateTime> _recent;
+
+  /// Told the last hour's requests whenever they change, to keep them.
+  final void Function(List<DateTime> recent)? onRecent;
+
+  AiUsage get usage {
+    final cutoff = _clock().subtract(const Duration(hours: 1));
+    _recent.removeWhere((t) => !t.isAfter(cutoff));
+    return AiUsage(
+      requests: _usage.requests,
+      limit: _usage.limit,
+      remaining: _usage.remaining,
+      resetsAt: _usage.resetsAt,
+      limitedUntil: _usage.limitedUntil,
+      usedThisHour: _recent.length,
+    );
+  }
+
+  /// About how many of the hour's free requests are left on this phone.
+  int get leftThisHour => (hourlyLimit - usage.usedThisHour).clamp(0, hourlyLimit);
+
+  /// Notes one request sent, whatever comes back.
+  void noteRequest() {
+    _recent.add(_clock());
+    final cutoff = _clock().subtract(const Duration(hours: 1));
+    _recent.removeWhere((t) => !t.isAfter(cutoff));
+    onRecent?.call(List.unmodifiable(_recent));
+    notifyListeners();
+  }
 
   /// Notes one response: its [status] and rate-limit [headers] (lower-case
   /// names, as package:http gives them).
@@ -62,6 +111,14 @@ class AiUsageMeter extends ChangeNotifier {
           ? now.add(retryAfter ?? const Duration(minutes: 1))
           : (_usage.limitedAt(now) ? _usage.limitedUntil : null),
     );
+    notifyListeners();
+  }
+
+  /// Brings back requests kept from before the app restarted.
+  void restore(List<DateTime> recent) {
+    _recent
+      ..addAll(recent.where((t) => !_recent.contains(t)))
+      ..sort();
     notifyListeners();
   }
 
@@ -123,4 +180,22 @@ class AiUsageMeter extends ChangeNotifier {
   }
 }
 
-final aiUsageProvider = ChangeNotifierProvider<AiUsageMeter>((ref) => AiUsageMeter());
+const _recentKey = 'ai.recentRequests';
+
+/// The meter, with the last hour's requests kept across restarts.
+final aiUsageProvider = ChangeNotifierProvider<AiUsageMeter>((ref) {
+  final prefs = ref.read(preferencesRepositoryProvider);
+  final meter = AiUsageMeter(
+    onRecent: (recent) =>
+        unawaited(prefs.writeJson(_recentKey, [for (final t in recent) t.millisecondsSinceEpoch])),
+  );
+  unawaited(
+    prefs.readJson(_recentKey).then((json) {
+      if (json is! List) return;
+      meter.restore([
+        for (final ms in json.whereType<int>()) DateTime.fromMillisecondsSinceEpoch(ms),
+      ]);
+    }),
+  );
+  return meter;
+});

@@ -6,6 +6,7 @@ import '../features/collections/presentation/collection_detail_screen.dart';
 import '../features/collections/presentation/collections_screen.dart';
 import '../features/cook_mode/presentation/cook_mode_screen.dart';
 import '../features/food_log/presentation/food_log_screen.dart';
+import '../features/imports/presentation/dish_ideas_screen.dart';
 import '../features/imports/presentation/import_review_screen.dart';
 import '../features/library/presentation/book_editor_screen.dart';
 import '../features/library/presentation/library_screen.dart';
@@ -122,6 +123,11 @@ GoRouter createRouter({String initialLocation = '/'}) {
           jobId: state.pathParameters['id']!,
           cookbookId: state.uri.queryParameters['cookbook'],
         ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/ideas',
+        builder: (context, state) => const DishIdeasScreen(),
       ),
       GoRoute(
         parentNavigatorKey: rootNavigatorKey,

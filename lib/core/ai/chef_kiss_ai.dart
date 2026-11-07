@@ -6,8 +6,9 @@ import 'ai_usage.dart';
 import 'claude_client.dart';
 import 'gateway_client.dart';
 
-/// Chef's Kiss AI: free, shared models through Kilo's public AI gateway — no
-/// account or key needed.
+/// Chef's Kiss AI: free, shared models through a public AI gateway — no
+/// account or key needed. The gateway allows each internet address a set
+/// number of free requests an hour; every request is counted on [meter].
 ///
 /// Each request goes to the first model that isn't resting; a model that is
 /// busy (429), failing (5xx), gone (404), slow or answers in the wrong shape
@@ -96,6 +97,8 @@ class ChefKissAi implements AiClient {
         if (!(_resting[m]?.isAfter(now) ?? false)) m,
     ];
     for (final model in ready) {
+      // Every try counts against the hourly allowance, answered or not.
+      meter?.noteRequest();
       final res = await _client(model).createStructured(
         system: system,
         content: content,

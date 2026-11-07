@@ -161,9 +161,9 @@ class _DishIdeasScreenState extends ConsumerState<DishIdeasScreen> {
                   const SizedBox(height: 20),
                   DropdownButtonFormField<String?>(
                     initialValue: _cookbookId,
-                    decoration: const InputDecoration(labelText: 'Put the recipe in'),
+                    decoration: const InputDecoration(labelText: 'Save it in'),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('No cookbook')),
+                      const DropdownMenuItem(value: null, child: Text('My Recipes')),
                       for (final b in books) DropdownMenuItem(value: b.id, child: Text(b.name)),
                     ],
                     onChanged: (v) => setState(() => _cookbookId = v),

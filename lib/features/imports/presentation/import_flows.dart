@@ -345,6 +345,7 @@ Future<void> showAiStudioSheet(BuildContext context, WidgetRef ref, {String? ini
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (_) => _AiStudioSheet(initialPrompt: initialPrompt),
   );
   if (prompt != null && prompt.isNotEmpty && context.mounted) {
@@ -363,13 +364,15 @@ class _AiStudioSheet extends ConsumerStatefulWidget {
 class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
   late final TextEditingController _controller = TextEditingController(text: widget.initialPrompt);
 
+  /// A few dishes to start from: a short name on the chip, a fuller ask
+  /// behind it.
   static const _ideas = [
-    'A cozy weeknight pasta with what’s in a typical pantry',
-    'High-protein vegetarian lunch bowl, ready in 20 minutes',
-    'Crispy sheet-pan chicken thighs with lemon and potatoes',
-    'Classic French crêpes for four, sweet and savory fillings',
-    'Beginner sourdough boule with a simple schedule',
-    'Shoyu ramen with jammy eggs, from scratch',
+    ('Chow mein', 'Chicken chow mein for 2, ready in 25 minutes'),
+    ('Butter chicken', 'Butter chicken with basmati rice for 4'),
+    ('Carbonara', 'Classic spaghetti carbonara for 2, no cream'),
+    ('Shakshuka', 'Shakshuka with feta for a weekend brunch'),
+    ('Pad thai', 'Prawn pad thai for 2'),
+    ('Banana bread', 'Moist banana bread with walnuts'),
   ];
 
   @override
@@ -385,25 +388,19 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.chefColors;
     final t = context.chefText;
     final ai = ref.watch(aiConnectionProvider).valueOrNull;
 
-    return Padding(
+    // Scrolls rather than spilling over when the keyboard is up.
+    return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(LucideIcons.chefHat, color: c.accentTomato),
-              const SizedBox(width: 8),
-              Text('Create with AI', style: t.headlineSmall),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text('Describe what you’d like to cook. You’ll review the recipe before it’s saved.', style: t.bodySmall),
+          Text('Create with AI', style: t.titleLarge),
+          const SizedBox(height: 4),
+          Text('Name a dish or describe what you’d like. You’ll check the recipe before it’s saved.', style: t.bodySmall),
           const SizedBox(height: 16),
           if (ai?.isAvailable != true) ...[
             const AiSetupCard(feature: 'recipe generation'),
@@ -411,30 +408,33 @@ class _AiStudioSheetState extends ConsumerState<_AiStudioSheet> {
             TextField(
               controller: _controller,
               autofocus: true,
-              minLines: 3,
-              maxLines: 6,
+              minLines: 2,
+              maxLines: 5,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'e.g. Saffron risotto with roasted mushrooms for 4, no wine',
+              decoration: const InputDecoration(hintText: 'e.g. Mushroom risotto for 4, no wine'),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 14),
+            Text('Ideas', style: t.labelLarge),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _ideas.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, i) => ActionChip(
+                  label: Text(_ideas[i].$1),
+                  onPressed: () => setState(() {
+                    _controller.text = _ideas[i].$2;
+                    _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+                  }),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            Text('Need inspiration?', style: t.labelLarge),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final idea in _ideas)
-                  ActionChip(
-                    label: Text(idea, overflow: TextOverflow.ellipsis),
-                    onPressed: () => setState(() => _controller.text = idea),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: _generate,
+              onPressed: _controller.text.trim().isEmpty ? null : _generate,
               icon: const Icon(LucideIcons.chefHat),
               label: const Text('Create recipe'),
             ),
