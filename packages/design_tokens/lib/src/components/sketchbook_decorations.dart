@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../tokens/chef_spacing.dart';
 import '../tokens/chef_theme.dart';
 
@@ -441,10 +442,10 @@ class ChefBrandBadge extends StatelessWidget {
             ],
           ),
           clipBehavior: Clip.antiAlias,
-          child: Image.asset(
-            'assets/illustrations/app_logo_chef_kiss.jpg',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Icon(Icons.restaurant_menu, size: size * 0.6, color: colors.accentTomato),
+          child: SvgPicture.asset(
+            'assets/illustrations/chef_kiss_logo.svg',
+            fit: BoxFit.contain,
+            placeholderBuilder: (_) => Icon(Icons.restaurant_menu, size: size * 0.6, color: colors.accentTomato),
           ),
         ),
         if (showTitle) ...[

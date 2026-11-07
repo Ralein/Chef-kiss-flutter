@@ -116,8 +116,9 @@ class AiUsageMeter extends ChangeNotifier {
 
   /// Brings back requests kept from before the app restarted.
   void restore(List<DateTime> recent) {
+    // Kept ones are all from before this run, so none is counted twice.
     _recent
-      ..addAll(recent.where((t) => !_recent.contains(t)))
+      ..addAll(recent)
       ..sort();
     notifyListeners();
   }
