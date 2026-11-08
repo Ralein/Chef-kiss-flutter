@@ -94,9 +94,14 @@ by 20 % or more; the UI says so and never presents them as medical advice.
 
 ## 7. Welcome tour and starter recipes
 
-- A new install opens on the welcome tour: the cook's name, a few questions, a look for the shelves, starter
-  recipes to begin with and a goal for the year. It runs once (`onboarding.done` in preferences); *Erase all
-  data* keeps preferences, so it doesn't run again.
+- A new install opens on the welcome tour: the cook's name, a few questions about their cooking, a look for the
+  shelves, starter recipes to begin with and a goal for the year. It runs once: `onboarding.done` in preferences
+  holds the tour version (`tourVersion` in `lib/features/onboarding/application/onboarding.dart`). Bumping that
+  version shows a redesigned tour once more, starting from what the cook already set. *Erase all data* keeps
+  preferences, so the tour doesn't run again.
+- Launch screens match on every platform: the app icon's cream disc on the app's canvas colour (Android
+  `res/drawable/launch_background.xml` and `values-v31` splash attributes, iOS `LaunchScreen.storyboard`, web
+  `index.html`), handing over to the app's own `SplashView`.
 - Starter recipes are added only when picked in the tour. Name and goal can be changed in Settings → Profile.
 - Updating from a version that added sample recipes moves those five samples to *Recently deleted*
   (Settings → Your data), where they can be restored or removed for good.
