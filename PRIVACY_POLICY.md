@@ -76,3 +76,4 @@ If you have any questions or concerns regarding this Privacy Policy or your data
 - **Developer:** Ralein Nova
 - **Email:** [raleinnova@gmail.com](mailto:raleinnova@gmail.com)
 - **Project Repository:** [https://github.com/Ralein/Chef-kiss-flutter](https://github.com/Ralein/Chef-kiss-flutter)
+

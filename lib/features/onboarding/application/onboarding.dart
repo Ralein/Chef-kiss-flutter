@@ -6,13 +6,21 @@ import '../../../app/providers.dart';
 import '../../../data/seed/starter_recipes.dart';
 import '../../library/domain/shelf_style.dart';
 
-/// Set once the welcome tour is finished; until then the app opens on it.
+/// The welcome tour finished on this device: the tour's version once it's
+/// done. Until then the app opens on the tour.
 const onboardingDoneKey = 'onboarding.done';
+
+/// Bump when the tour changes enough to show it again; it then opens once
+/// more, starting from what the cook already set.
+const tourVersion = 2;
+
+/// Whether the stored [value] means the current tour has been finished.
+bool isTourDone(Object? value) => value is int && value >= tourVersion;
 
 /// How many new recipes the cook wants to try this year.
 const cookingGoalKey = 'profile.cooking_goal';
 
-/// What the cook told the welcome tour about their kitchen.
+/// What the cook told the welcome tour about their cooking.
 const cookingHabitsKey = 'profile.habits';
 
 /// The home screen's welcome card, once closed or followed.
@@ -23,7 +31,7 @@ const defaultCookName = 'Local Cook';
 
 /// Whether the welcome tour has been finished on this device.
 final onboardingDoneProvider = StreamProvider<bool>((ref) {
-  return ref.watch(preferencesRepositoryProvider).watchJson(onboardingDoneKey).map((v) => v == true);
+  return ref.watch(preferencesRepositoryProvider).watchJson(onboardingDoneKey).map(isTourDone);
 });
 
 final cookingGoalProvider = StreamProvider<int?>((ref) {
@@ -48,7 +56,13 @@ class OnboardingAnswers {
   String? frequency;
   final Set<String> wants = {};
   String? keeps;
-  ShelfLook look = shelfLooks.first;
+
+  /// A ready-made look for the shelves, or null to keep them as they are.
+  ShelfLook? look = shelfLooks.first;
+
+  /// The shelves as the cook already dressed them, when that's none of the
+  /// ready-made looks.
+  ShelfStyle? ownShelves;
   final Set<String> starterIds = {};
   int goal = 52;
 
@@ -57,11 +71,31 @@ class OnboardingAnswers {
     if (wants.isNotEmpty) 'wants': wants.toList(),
     if (keeps != null) 'keeps': keeps,
   };
+
+  /// Starts from what's already set, for a cook seeing a new tour.
+  void prefill({String? name, int? goal, Object? habits, ShelfStyle? shelves}) {
+    if (name != null && name != defaultCookName) this.name = name;
+    if (goal != null && goal > 0) this.goal = goal;
+    if (habits is Map) {
+      final f = habits['frequency'], k = habits['keeps'], w = habits['wants'];
+      if (f is String) frequency = f;
+      if (k is String) keeps = k;
+      if (w is List) wants.addAll(w.whereType<String>());
+    }
+    if (shelves != null) {
+      look = shelfLooks.where((l) => shelves.looksLike(l.style)).firstOrNull;
+      // Shelves dressed by hand stay as they are unless a look is picked.
+      if (look == null) ownShelves = shelves;
+    }
+  }
+
+  /// The shelves as they'll look once the tour is saved.
+  ShelfStyle get shelves => look?.style ?? ownShelves ?? const ShelfStyle();
 }
 
 /// Saves the cook's answers: their name, the shelves' look, the starter
 /// recipes they picked and their goal. The tour is marked done separately,
-/// once its last screen has played.
+/// when the cook opens their kitchen.
 Future<void> saveOnboarding(
   OnboardingAnswers answers, {
   required List<Recipe> starters,
@@ -73,8 +107,10 @@ Future<void> saveOnboarding(
   if (name.isNotEmpty) await saveCookName(settings, name);
 
   // A fresh look for the shelves; books already arranged stay where they are.
-  final current = ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey));
-  await prefs.writeJson(shelfStyleKey, current.withLook(answers.look.style).toJson());
+  if (answers.look case final look?) {
+    final current = ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey));
+    if (!current.looksLike(look.style)) await prefs.writeJson(shelfStyleKey, current.withLook(look.style).toJson());
+  }
 
   final picked = [
     for (final r in starters)
@@ -90,3 +126,5 @@ Future<void> saveCookName(SettingsRepository settings, String name) async {
   final profile = (await settings.getProfile()).orNull;
   if (profile != null) await settings.updateProfile(profile.copyWith(displayName: name.trim()));
 }
+
+Future<void> markTourDone(PreferencesRepository prefs) => prefs.writeJson(onboardingDoneKey, tourVersion);

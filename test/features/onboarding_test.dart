@@ -80,14 +80,20 @@ void main() {
     });
   });
 
-  group('saving the welcome tour', () {
-    test('keeps the name, the look, the picked recipes and the goal', () async {
+  group('the welcome tour', () {
+    test('a finished tour counts only for its own version', () {
+      expect(isTourDone(null), isFalse);
+      expect(isTourDone(true), isFalse, reason: 'the first tour stored true; the redesign shows once more');
+      expect(isTourDone(tourVersion), isTrue);
+      expect(isTourDone(tourVersion + 1), isTrue);
+    });
+
+    test('saving keeps the name, the look, the picked recipes and the goal', () async {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
       final prefs = DriftPreferencesRepository(db);
       final settings = DriftSettingsRepository(db);
       final recipes = DriftRecipeRepository(db);
-      final starters = _starters();
 
       final answers = OnboardingAnswers()
         ..name = '  Ana '
@@ -98,7 +104,7 @@ void main() {
       answers.wants.add('ideas');
       answers.starterIds.addAll(['starter-dal-tadka', 'starter-guacamole']);
 
-      await saveOnboarding(answers, starters: starters, prefs: prefs, settings: settings, recipes: recipes);
+      await saveOnboarding(answers, starters: _starters(), prefs: prefs, settings: settings, recipes: recipes);
 
       expect((await settings.getProfile()).orNull!.displayName, 'Ana');
       expect(ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey)).looksLike(shelfLooks[2].style), isTrue);
@@ -106,7 +112,29 @@ void main() {
       expect(saved.map((r) => r.id).toSet(), {'starter-dal-tadka', 'starter-guacamole'});
       expect(await prefs.readJson(cookingGoalKey), 30);
       expect(await prefs.readJson(cookingHabitsKey), {'frequency': '3-4', 'wants': ['ideas'], 'keeps': 'memory'});
-      expect(await prefs.readJson(onboardingDoneKey), isNull, reason: 'the last screen marks it done');
+      expect(await prefs.readJson(onboardingDoneKey), isNull, reason: 'opening the kitchen marks it done');
+    });
+
+    test('shelves dressed by hand stay as they are unless a look is picked', () async {
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
+      final prefs = DriftPreferencesRepository(db);
+      const mine = ShelfStyle(wall: WallStyle.brick, tint: 5, decor: [PlacedDecor(id: 'p', piece: DecorPiece.pot, shelf: 0, x: 0.5)]);
+      await prefs.writeJson(shelfStyleKey, mine.toJson());
+
+      final answers = OnboardingAnswers()..prefill(name: defaultCookName, shelves: mine);
+      expect(answers.look, isNull);
+      expect(answers.ownShelves, mine);
+      expect(answers.name, isEmpty, reason: 'the default profile name is no name');
+
+      await saveOnboarding(
+        answers,
+        starters: const [],
+        prefs: prefs,
+        settings: DriftSettingsRepository(db),
+        recipes: DriftRecipeRepository(db),
+      );
+      expect(ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey)), mine);
     });
   });
 
@@ -127,85 +155,73 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The logo, then the welcome.
-    expect(find.byType(OnboardingScreen), findsOneWidget);
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
-    Finder words(String text) => find.textContaining(text, findRichText: true);
-    expect(words('Welcome, chef'), findsOneWidget);
+    // Settles quickly or fails, naming the step that didn't.
+    Future<void> settle() => tester.pumpAndSettle(
+      const Duration(milliseconds: 100),
+      EnginePhase.sendSemanticsUpdate,
+      const Duration(seconds: 30),
+    );
 
     Future<void> tap(Finder finder) async {
+      await tester.ensureVisible(finder);
+      await settle();
       await tester.tap(finder);
-      await tester.pumpAndSettle();
+      await settle();
       expect(tester.takeException(), isNull);
     }
 
-    Future<void> next() => tap(find.text('Continue'));
+    Future<void> next() => tap(find.widgetWithText(FilledButton, 'Continue'));
 
-    await tap(find.text('Start your journey'));
-    expect(words('stayed with you'), findsOneWidget);
+    // Welcome: the policies are a tap away.
+    expect(find.byType(OnboardingScreen), findsOneWidget);
+    expect(find.text('Welcome to Chef’s Kiss'), findsOneWidget);
+    expect(find.textContaining('Privacy Policy', findRichText: true), findsOneWidget);
+    await tap(find.text('Get started'));
+
     // Back returns to the previous screen.
-    await tap(find.byTooltip('Back'));
-    expect(words('Welcome, chef'), findsOneWidget);
-    await tap(find.text('Start your journey'));
-    await next();
-    expect(words('the home your recipes'), findsOneWidget);
-    await next();
+    expect(find.text('What should we call you?'), findsOneWidget);
+    await tap(find.byType(BackButton));
+    expect(find.text('Welcome to Chef’s Kiss'), findsOneWidget);
+    await tap(find.text('Get started'));
 
-    // A name is needed to go on; the policies are a tap away.
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Continue')).onPressed, isNull);
     await tester.enterText(find.byType(TextField), 'Ana');
     await tester.pumpAndSettle();
     await next();
-    expect(words('Nice to meet you, Ana!'), findsOneWidget);
-    await next();
 
+    // About their cooking: every question is optional.
+    expect(find.text('About your cooking'), findsOneWidget);
     await tap(find.text('3–4 days a week'));
-    await next();
-    await tap(find.text('One place for all my recipes'));
-    await tap(find.text('Ideas for what to cook tonight'));
-    await next();
-    await tap(find.text('In my head'));
-    await next();
-    expect(words('someone’s memory'), findsOneWidget);
-    await next();
-    expect(words('It doesn’t have to be this way, Ana'), findsOneWidget);
+    await tap(find.text('Ideas for what to cook'));
+    await tap(find.text('Screenshots and bookmarks'));
     await next();
 
-    // A full shelf of the starter recipes, then a look for the cook's own.
-    expect(find.byType(ShelfBook), findsWidgets);
-    await tap(find.text('Let’s begin'));
-    expect(find.text('Cozy kitchen'), findsOneWidget);
-    await tap(find.byTooltip('Next look'));
-    expect(find.text('Herb garden'), findsOneWidget);
-    // "Great taste" moves on by itself.
-    await tester.tap(find.text('I like it!'));
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(words('great taste'), findsOneWidget);
-    await tester.pumpAndSettle();
+    // A look for the shelves.
+    expect(find.text('Pick a look for your shelves'), findsOneWidget);
+    await tap(find.text('Herb garden'));
+    await next();
 
     // Starter recipes: nothing is added unless picked.
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Add to my cookbook')).onPressed, isNull);
-    await tap(find.text('Dal Tadka'));
-    await tap(find.text('Shakshuka'));
-    await tap(find.text('Add 2 recipes'));
-    expect(words('Your kitchen is alive, Ana!'), findsOneWidget);
-    await tap(find.text('I’m so happy!'));
+    expect(find.widgetWithText(FilledButton, 'Continue'), findsOneWidget);
+    await tap(find.widgetWithText(CheckboxListTile, 'Dal Tadka').first);
+    await tap(find.widgetWithText(CheckboxListTile, 'Shakshuka').first);
+    expect(find.widgetWithText(FilledButton, 'Add 2 recipes'), findsOneWidget);
+    await tap(find.widgetWithText(FilledButton, 'Add 2 recipes'));
 
+    // The goal starts from how often they cook.
+    expect(find.text('52'), findsOneWidget);
+    await tap(find.text('Two a week'));
+    expect(find.text('104'), findsOneWidget);
     await tap(find.byTooltip('More'));
-    await tap(find.byTooltip('More'));
-    expect(find.text('54'), findsOneWidget);
-    expect(find.text('About one new dish a week'), findsOneWidget);
+    expect(find.text('105'), findsOneWidget);
     await next();
-    expect(words('~1.08 m tall'), findsOneWidget);
 
-    // Building the kitchen, then the library with the picked recipes.
-    await tester.tap(find.text('Continue'));
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(words('Building your'), findsOneWidget);
-    expect(find.text('Adding Shakshuka'), findsOneWidget);
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
+    // Ready: their kitchen and where to begin, from what they said.
+    expect(find.text('Your kitchen is ready, Ana'), findsOneWidget);
+    expect(find.text('Shakshuka and 1 more are waiting in My Recipes.'), findsOneWidget);
+    expect(find.text('Scan the recipes you have'), findsOneWidget);
+    expect(find.text('Find something to cook'), findsOneWidget);
+    await tap(find.text('Open my kitchen'));
+
     expect(find.byType(OnboardingScreen), findsNothing);
     expect(find.byType(LibraryScreen), findsOneWidget);
     expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'My Recipes'), findsOneWidget);
@@ -221,8 +237,8 @@ void main() {
         recipes: (await container.read(recipeRepositoryProvider).getRecipes()).orNull!,
       );
     });
-    expect(stored!.done, isTrue);
-    expect(stored.goal, 54);
+    expect(stored!.done, tourVersion);
+    expect(stored.goal, 105);
     expect(stored.style.looksLike(shelfLooks[1].style), isTrue);
     expect(stored.recipes.map((r) => r.title).toSet(), {'Dal Tadka', 'Shakshuka'});
 

@@ -16,6 +16,7 @@ import 'audio_chime_service.dart';
 import 'chef_toast_service.dart';
 import 'providers.dart';
 import 'router.dart';
+import 'widgets/splash_view.dart';
 
 /// Bump when the bundled sample content changes. v1–v3 added sample recipes
 /// on first launch; v4 offers real starter recipes in the welcome tour
@@ -24,7 +25,11 @@ const _starterSeedVersion = 4;
 const _starterSeedKey = 'seed.starter_version';
 
 Future<void> bootstrapAndRun() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  // The system launch screen stays up until the splash's medallion is ready
+  // to draw, so the two meet without a blink.
+  binding.deferFirstFrame();
+  unawaited(precacheSplashArt().whenComplete(binding.allowFirstFrame));
   final container = ProviderContainer();
   final logger = container.read(appLoggerProvider);
   _installErrorHandlers(logger);
@@ -121,8 +126,8 @@ class ChefApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Until it's known whether the welcome tour is done, a plain canvas
-    // rather than a glimpse of the wrong screen.
+    // Until it's known whether the welcome tour is done: the splash, rather
+    // than a glimpse of the wrong screen.
     final deciding = ref.watch(onboardingDoneProvider).isLoading;
     return MaterialApp.router(
       title: 'Chef’s Kiss',
@@ -132,8 +137,13 @@ class ChefApp extends ConsumerWidget {
       themeMode: ref.watch(appearanceProvider).valueOrNull ?? ThemeMode.system,
       scaffoldMessengerKey: ChefToastService.messengerKey,
       routerConfig: ref.watch(routerProvider),
-      builder: (context, child) =>
-          deciding ? ColoredBox(color: Theme.of(context).scaffoldBackgroundColor) : child!,
+      // The launch screen carries on until the app knows whether to open the
+      // welcome tour or the kitchen, then gives way to it.
+      builder: (context, child) => AnimatedSwitcher(
+        duration: ChefMotion.emphasis,
+        switchInCurve: ChefMotion.easeExit,
+        child: deciding ? const SplashView(key: ValueKey('splash')) : KeyedSubtree(key: const ValueKey('app'), child: child!),
+      ),
     );
   }
 }

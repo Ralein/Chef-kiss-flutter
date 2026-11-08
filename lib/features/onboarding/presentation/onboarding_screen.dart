@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:recipe_domain/recipe_domain.dart';
@@ -13,38 +11,19 @@ import 'package:recipe_domain/recipe_domain.dart';
 import '../../../app/app_info.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/kitchen_format.dart';
+import '../../../app/widgets/splash_view.dart';
 import '../../library/domain/cookbook.dart';
 import '../../library/domain/shelf_style.dart';
 import '../../library/presentation/widgets/library_books.dart';
 import '../../library/presentation/widgets/shelf_scene.dart';
+import '../../scan/presentation/scan_screen.dart' show ScanModeCopy;
 import '../application/onboarding.dart';
-import 'widgets/onboarding_widgets.dart';
 
-/// The screens of the welcome tour, in order.
-enum _Step {
-  intro,
-  welcome,
-  cooked,
-  home,
-  name,
-  greet,
-  frequency,
-  wants,
-  keeps,
-  honest,
-  reassure,
-  hero,
-  vibe,
-  taste,
-  recipes,
-  alive,
-  goal,
-  plates,
-  building;
+/// The tour's screens, in order. Those between the welcome and the end are
+/// the steps the progress line counts.
+enum _Step { welcome, name, cooking, look, recipes, goal, ready }
 
-  /// Screens that move on by themselves; Back skips over them.
-  bool get passes => this == intro || this == taste;
-}
+const _steps = 5;
 
 typedef _Option = ({String id, IconData icon, String label});
 
@@ -53,30 +32,39 @@ const List<_Option> _frequencies = [
   (id: '1-2', icon: LucideIcons.egg, label: '1–2 days a week'),
   (id: '3-4', icon: LucideIcons.soup, label: '3–4 days a week'),
   (id: 'most', icon: LucideIcons.flame, label: 'Most days'),
-  (id: 'daily', icon: LucideIcons.chefHat, label: 'Every single day'),
+  (id: 'daily', icon: LucideIcons.chefHat, label: 'Every day'),
 ];
 
 const List<_Option> _wants = [
-  (id: 'one-place', icon: LucideIcons.bookHeart, label: 'One place for all my recipes'),
+  (id: 'one-place', icon: LucideIcons.bookHeart, label: 'All my recipes in one place'),
   (id: 'remember', icon: LucideIcons.notebookPen, label: 'Remembering what I’ve cooked'),
-  (id: 'ideas', icon: LucideIcons.lightbulb, label: 'Ideas for what to cook tonight'),
+  (id: 'ideas', icon: LucideIcons.lightbulb, label: 'Ideas for what to cook'),
   (id: 'eating', icon: LucideIcons.salad, label: 'Keeping an eye on what I eat'),
 ];
 
 const List<_Option> _keeps = [
-  (id: 'nowhere', icon: LucideIcons.wind, label: 'Nowhere, really'),
+  (id: 'nowhere', icon: LucideIcons.sparkles, label: 'Nowhere yet'),
   (id: 'screenshots', icon: LucideIcons.images, label: 'Screenshots and bookmarks'),
-  (id: 'notebook', icon: LucideIcons.notebookText, label: 'A notebook or recipe cards'),
+  (id: 'notebook', icon: LucideIcons.notebookText, label: 'A notebook or cards'),
   (id: 'memory', icon: LucideIcons.brain, label: 'In my head'),
   (id: 'apps', icon: LucideIcons.smartphone, label: 'Other apps'),
 ];
 
-/// Plates stack about 2 cm apiece.
-const _plateCm = 2;
+/// Paces to set the goal with one tap.
+const _paces = [
+  (goal: 12, label: 'One a month'),
+  (goal: 26, label: 'Every other week'),
+  (goal: 52, label: 'One a week'),
+  (goal: 104, label: 'Two a week'),
+];
 
-/// The welcome tour, shown once on a new install: a few warm words, the
-/// cook's name and habits, a look for their shelves, starter recipes to
-/// begin with and a goal for the year — then into their kitchen.
+/// How often someone cooks suggests a goal, until they set one.
+const _goalFor = {'now-and-then': 12, '1-2': 26, '3-4': 52, 'most': 52, 'daily': 104};
+
+/// The welcome tour, shown once on a new install: a name, a little about
+/// their cooking, a look for their shelves, starter recipes and a goal for
+/// the year, then into their kitchen. It wears the app's own theme, so it
+/// follows light and dark like everything else.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -84,491 +72,343 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with TickerProviderStateMixin {
-  _Step _step = _Step.intro;
-  final _history = <_Step>[];
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  _Step _step = _Step.welcome;
+  bool _forward = true;
   final _answers = OnboardingAnswers();
   final _name = TextEditingController();
-  final _looks = PageController();
-  Timer? _auto;
+
+  /// A goal the cook set (or saved before): how often they cook no longer
+  /// suggests one.
+  bool _goalSet = false;
+  bool _saving = false;
 
   late final _privacyTap = TapGestureRecognizer()..onTap = () => context.push('/privacy');
   late final _termsTap = TapGestureRecognizer()..onTap = () => context.push('/terms');
 
-  /// The last screen's progress ring.
-  late final _progress = AnimationController(vsync: this, duration: const Duration(milliseconds: 4200));
-
-  String get _cook => TourHeadline.plain(_answers.name.isEmpty ? 'chef' : _answers.name);
-
   @override
   void initState() {
     super.initState();
-    _auto = Timer(const Duration(milliseconds: 1900), () {
-      if (mounted && _step == _Step.intro) _go(_Step.welcome);
-    });
+    unawaited(_prefill());
   }
 
   @override
   void dispose() {
-    _auto?.cancel();
     _name.dispose();
-    _looks.dispose();
     _privacyTap.dispose();
     _termsTap.dispose();
-    _progress.dispose();
     super.dispose();
   }
 
+  /// A cook seeing a new version of the tour starts from what they set.
+  Future<void> _prefill() async {
+    try {
+      final prefs = ref.read(preferencesRepositoryProvider);
+      final profile = await ref.read(settingsRepositoryProvider).watchProfile().first;
+      final goal = await prefs.readJson(cookingGoalKey);
+      final habits = await prefs.readJson(cookingHabitsKey);
+      final shelves = ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey));
+      if (!mounted) return;
+      setState(() {
+        _answers.prefill(name: profile.displayName, goal: goal is int ? goal : null, habits: habits, shelves: shelves);
+        _goalSet = goal is int;
+        if (_name.text.isEmpty) _name.text = _answers.name;
+      });
+    } catch (_) {
+      // A fresh start is fine too.
+    }
+  }
+
   void _go(_Step next) {
-    _auto?.cancel();
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      if (!_step.passes) _history.add(_step);
+      _forward = next.index > _step.index;
       _step = next;
     });
-    if (next == _Step.taste) {
-      _auto = Timer(const Duration(milliseconds: 2300), () {
-        if (mounted && _step == _Step.taste) _go(_Step.recipes);
-      });
-    }
-    if (next == _Step.building) unawaited(_finish());
   }
 
   void _next() => _go(_Step.values[_step.index + 1]);
 
-  /// Back goes to the previous screen; on the first one it leaves the app.
+  bool get _canGoBack => _step != _Step.welcome && _step != _Step.ready && !_saving;
+
+  /// Back goes a step back; from the last screen it opens the kitchen, and
+  /// from the first it leaves the app.
   Future<bool> _back() async {
-    if (_history.isEmpty || _step == _Step.building) return false;
-    _auto?.cancel();
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => _step = _history.removeLast());
+    if (_step == _Step.ready) {
+      unawaited(_openKitchen());
+      return true;
+    }
+    if (!_canGoBack) return false;
+    _go(_Step.values[_step.index - 1]);
     return true;
   }
 
-  /// Saves everything while the ring fills, then opens the kitchen.
-  Future<void> _finish() async {
-    final prefs = ref.read(preferencesRepositoryProvider);
-    Future<void> save() async {
-      try {
-        final starters = _answers.starterIds.isEmpty ? const <Recipe>[] : await ref.read(starterRecipesProvider.future);
-        await saveOnboarding(
-          _answers,
-          starters: starters,
-          prefs: prefs,
-          settings: ref.read(settingsRepositoryProvider),
-          recipes: ref.read(recipeRepositoryProvider),
-        );
-      } catch (e, st) {
-        // The kitchen opens either way; the answers are a nicety.
-        ref.read(appLoggerProvider).error('Saving the welcome tour failed', feature: 'onboarding', error: e, stackTrace: st);
-      }
+  /// Saves the answers, then shows the kitchen they set up.
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final starters = _answers.starterIds.isEmpty ? const <Recipe>[] : await ref.read(starterRecipesProvider.future);
+      await saveOnboarding(
+        _answers,
+        starters: starters,
+        prefs: ref.read(preferencesRepositoryProvider),
+        settings: ref.read(settingsRepositoryProvider),
+        recipes: ref.read(recipeRepositoryProvider),
+      );
+    } catch (e, st) {
+      // The kitchen opens either way; the answers are a nicety.
+      ref.read(appLoggerProvider).error('Saving the welcome tour failed', feature: 'onboarding', error: e, stackTrace: st);
     }
-
-    Future<void> ring() async {
-      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
-        _progress.value = 1;
-        return;
-      }
-      await _progress.forward(from: 0).orCancel.catchError((_) {});
-    }
-
-    await Future.wait([save(), ring()]);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
     if (!mounted) return;
-    // The router takes it from here: a finished tour opens the library.
-    await prefs.writeJson(onboardingDoneKey, true);
+    setState(() => _saving = false);
+    _go(_Step.ready);
   }
+
+  /// The router takes it from here: a finished tour opens the library.
+  Future<void> _openKitchen() => markTourDone(ref.read(preferencesRepositoryProvider));
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: ChefTheme.dark(),
-      child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
-        child: BackButtonListener(
-          onBackButtonPressed: _back,
-          child: Scaffold(
-            backgroundColor: TourColors.background,
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned.fill(child: StarField(restartKey: _step)),
-                Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 520),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
+    final progress = switch (_step) {
+      _Step.welcome || _Step.ready => null,
+      _ => _step.index / _steps,
+    };
+    return BackButtonListener(
+      onBackButtonPressed: _back,
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              _TopBar(onBack: _canGoBack ? _back : null, progress: progress, step: _step.index),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: ChefMotion.emphasis,
+                  switchInCurve: ChefMotion.easeExit,
+                  switchOutCurve: Curves.easeIn,
+                  // Forward slides in from the right, back from the left.
+                  transitionBuilder: (child, animation) {
+                    final incoming = child.key == ValueKey(_step);
+                    final dx = (_forward ? 1 : -1) * (incoming ? 0.06 : -0.06);
+                    return FadeTransition(
                       opacity: animation,
                       child: SlideTransition(
-                        position: Tween(begin: const Offset(0, 0.02), end: Offset.zero).animate(animation),
+                        position: Tween(begin: Offset(dx, 0), end: Offset.zero).animate(animation),
                         child: child,
                       ),
-                    ),
-                    child: KeyedSubtree(key: ValueKey(_step), child: _screen(_step)),
-                  ),
+                    );
+                  },
+                  child: KeyedSubtree(key: ValueKey(_step), child: _page(_step)),
                 ),
-                if (_history.isNotEmpty && _step != _Step.building && _step != _Step.alive)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: IconButton(
-                          tooltip: 'Back',
-                          onPressed: _back,
-                          icon: const Icon(LucideIcons.chevronLeft, color: TourColors.muted),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _screen(_Step step) => switch (step) {
-    _Step.intro => const _Intro(),
-    _Step.welcome => _Words(
-      markup: 'Welcome, *chef*',
-      body: 'Every recipe you’ve cooked, loved or can’t wait to try, finally in one place.',
-      button: 'Start your journey',
-      trailing: LucideIcons.arrowRight,
-      onNext: _next,
-      buttonInline: true,
-    ),
-    _Step.cooked => _Words(
-      markup: 'You’ve cooked meals that *stayed with you*',
-      body: 'The ones you made for someone you love. The ones you still crave. They’re all part of your story.',
-      onNext: _next,
-    ),
-    _Step.home => _Words(
-      markup: '${AppInfo.appName} is the home your recipes *deserve*',
-      body: 'A warm, personal kitchen where every recipe you love lives on.',
-      onNext: _next,
-    ),
-    _Step.name => _nameScreen(),
-    _Step.greet => _Words(
-      markup: 'Nice to meet you, *$_cook!*',
-      body: 'Let’s set up your kitchen.',
-      onNext: _next,
-      centered: true,
-    ),
-    _Step.frequency => _Question(
-      markup: 'How often do you cook *each week?*',
-      options: _frequencies,
-      isSelected: (id) => _answers.frequency == id,
-      onTap: (id) => setState(() {
-        _answers.frequency = id;
-        if (!_goalTouched) _answers.goal = _goalFor[id] ?? _answers.goal;
-      }),
-      canContinue: _answers.frequency != null,
-      onNext: _next,
-    ),
-    _Step.wants => _Question(
-      markup: 'What’s missing in your *kitchen life?*',
-      hint: 'Pick as many as you like.',
-      options: _wants,
-      multi: true,
-      isSelected: _answers.wants.contains,
-      onTap: (id) => setState(() => _answers.wants.contains(id) ? _answers.wants.remove(id) : _answers.wants.add(id)),
-      canContinue: _answers.wants.isNotEmpty,
-      onNext: _next,
-    ),
-    _Step.keeps => _Question(
-      markup: 'Where do your recipes *live right now?*',
-      options: _keeps,
-      isSelected: (id) => _answers.keeps == id,
-      onTap: (id) => setState(() => _answers.keeps = id),
-      canContinue: _answers.keeps != null,
-      onNext: _next,
-    ),
-    _Step.honest => _Words(markup: _honest.markup, body: _honest.body, onNext: _next),
-    _Step.reassure => _Words(
-      markup: 'It doesn’t have to be this way, *$_cook*',
-      body: 'Every dish you love deserves a place to live on, beautifully, for years to come.',
-      onNext: _next,
-    ),
-    _Step.hero => _heroScreen(),
-    _Step.vibe => _vibeScreen(),
-    _Step.taste => const _Words(
-      markup: 'You’ve got great *taste!*',
-      body: 'Your shelves are going to look beautiful.',
-      centered: true,
-    ),
-    _Step.recipes => _recipesScreen(),
-    _Step.alive => _aliveScreen(),
-    _Step.goal => _goalScreen(),
-    _Step.plates => _platesScreen(),
-    _Step.building => _buildingScreen(),
+  Widget _page(_Step step) => switch (step) {
+    _Step.welcome => _welcomePage(),
+    _Step.name => _namePage(),
+    _Step.cooking => _cookingPage(),
+    _Step.look => _lookPage(),
+    _Step.recipes => _recipesPage(),
+    _Step.goal => _goalPage(),
+    _Step.ready => _readyPage(),
   };
 
-  /// A nudge that answers where the cook keeps their recipes now.
-  ({String markup, String body}) get _honest => switch (_answers.keeps) {
-    'screenshots' => (
-      markup: 'Be honest: how many recipes are *lost in your screenshots?*',
-      body: 'Somewhere between the memes and the receipts, a perfect curry is waiting.',
-    ),
-    'notebook' => (
-      markup: 'Be honest: how many recipe cards have *a splash of sauce on them?*',
-      body: 'Paper is lovely, until the page you need goes missing.',
-    ),
-    'apps' => (
-      markup: 'Be honest: how many apps does it take to *cook one dinner?*',
-      body: 'A bookmark here, a note there and a timer somewhere else.',
-    ),
-    'nowhere' => (
-      markup: 'Be honest: how many dishes have you loved and *never made again?*',
-      body: 'A recipe that isn’t kept anywhere slowly slips away.',
-    ),
-    _ => (
-      markup: 'Be honest: how many family recipes live only in *someone’s memory?*',
-      body: 'A recipe that’s never written down is one forgotten dinner away from being lost.',
-    ),
-  };
+  // --- Welcome ----------------------------------------------------------------------
 
-  /// How often they cook suggests a goal, until they set one themselves.
-  static const _goalFor = {'now-and-then': 12, '1-2': 24, '3-4': 52, 'most': 52, 'daily': 104};
-  bool _goalTouched = false;
+  Widget _welcomePage() {
+    final t = context.chefText;
+    final c = context.chefColors;
+    final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
+    final link = TextStyle(color: c.accentTomato, fontWeight: FontWeight.w600);
+    return _Page(
+      centered: true,
+      action: FilledButton(onPressed: _next, child: const Text('Get started')),
+      footer: Text.rich(
+        TextSpan(
+          style: t.bodySmall,
+          children: [
+            const TextSpan(text: 'By continuing, you accept our '),
+            TextSpan(text: 'Privacy Policy', style: link, recognizer: _privacyTap),
+            const TextSpan(text: ' and '),
+            TextSpan(text: 'Terms of Use', style: link, recognizer: _termsTap),
+            const TextSpan(text: '.'),
+          ],
+        ),
+        textAlign: TextAlign.center,
+      ),
+      children: [
+        // The kitchen shelves, with the medallion from the launch screen.
+        Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            _ShelfPreview(style: shelfLooks.first.style, books: starters, height: 300),
+            Positioned(
+              bottom: -38,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: c.surfaceCanvas, shape: BoxShape.circle),
+                child: const Padding(padding: EdgeInsets.all(5), child: BrandMedallion(size: 68)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 54),
+        Semantics(
+          header: true,
+          child: Text('Welcome to ${AppInfo.appName}', style: t.headlineLarge, textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Keep the recipes you love on your own kitchen shelves, cook them step by step and keep an eye on '
+          'what you eat.',
+          style: t.bodyLarge?.copyWith(color: c.contentSecondary),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
 
   // --- Name -------------------------------------------------------------------------
 
   void _submitName() {
-    final name = _name.text.trim();
-    if (name.isEmpty) return;
-    _answers.name = name;
+    _answers.name = _name.text.trim();
     _next();
   }
 
-  Widget _nameScreen() {
-    final ready = _name.text.trim().isNotEmpty;
-    const small = TextStyle(fontSize: 12.5, height: 1.5, color: TourColors.muted);
-    const link = TextStyle(decoration: TextDecoration.underline, color: TourColors.cream);
+  Widget _namePage() {
     return _Page(
-      scroll: true,
+      title: 'What should we call you?',
+      subtitle: 'It’s how ${AppInfo.appName} greets you, and it stays on this phone.',
+      action: FilledButton(onPressed: _submitName, child: const Text('Continue')),
       children: [
-        const Spacer(flex: 2),
-        const Text('First of all…', style: TextStyle(fontSize: 15, color: TourColors.muted)),
-        const SizedBox(height: 6),
-        const TourHeadline('What should we call *you?*', align: TextAlign.start),
-        const SizedBox(height: 22),
         TextField(
           controller: _name,
+          autofocus: _name.text.isEmpty,
           textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.givenName],
           maxLength: 30,
-          cursorColor: TourColors.gold,
-          style: const TextStyle(fontSize: 17, color: TourColors.cream),
-          onChanged: (_) => setState(() {}),
           onSubmitted: (_) => _submitName(),
-          decoration: InputDecoration(
-            hintText: 'Type your name…',
-            hintStyle: TextStyle(color: TourColors.muted.withValues(alpha: 0.7)),
+          decoration: const InputDecoration(
+            hintText: 'Your name',
             counterText: '',
-            filled: true,
-            fillColor: TourColors.tile,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: TourColors.outline),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: TourColors.gold, width: 1.4),
-            ),
+            prefixIcon: Icon(LucideIcons.userRound),
           ),
-        ),
-        const Spacer(flex: 3),
-        TourButton(label: 'Continue', onPressed: ready ? _submitName : null),
-        const SizedBox(height: 12),
-        Text.rich(
-          TextSpan(
-            style: small,
-            children: [
-              const TextSpan(text: 'By continuing, you accept our '),
-              TextSpan(text: 'Privacy Policy', style: link, recognizer: _privacyTap),
-              const TextSpan(text: ' and '),
-              TextSpan(text: 'Terms of Use', style: link, recognizer: _termsTap),
-              const TextSpan(text: '.'),
-            ],
-          ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  // --- Shelves ----------------------------------------------------------------------
+  // --- Cooking ----------------------------------------------------------------------
 
-  Widget _heroScreen() {
-    final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
-    return _Scene(
-      top: const Column(
-        children: [
-          TourHeadline(AppInfo.appName, size: 44),
-          SizedBox(height: 6),
-          TourHeadline('the warm kitchen your recipes *were waiting for.*', size: 23),
-        ],
-      ),
-      scene: ShelfScene(style: shelfLooks.first.style, books: starters, topPadding: 18),
-      bottom: TourButton(label: 'Let’s begin', onPressed: _next),
+  void _setFrequency(String id) => setState(() {
+    _answers.frequency = _answers.frequency == id ? null : id;
+    if (!_goalSet && _answers.frequency != null) _answers.goal = _goalFor[id] ?? _answers.goal;
+  });
+
+  Widget _cookingPage() {
+    return _Page(
+      title: 'About your cooking',
+      subtitle: 'A few taps so ${AppInfo.appName} can suggest where to start. Skip any you like.',
+      action: FilledButton(onPressed: _next, child: const Text('Continue')),
+      children: [
+        _ChipGroup(
+          label: 'How often do you cook?',
+          options: _frequencies,
+          selected: {?_answers.frequency},
+          onTap: _setFrequency,
+        ),
+        const SizedBox(height: 24),
+        _ChipGroup(
+          label: 'What would help most?',
+          options: _wants,
+          selected: _answers.wants,
+          onTap: (id) => setState(() => _answers.wants.contains(id) ? _answers.wants.remove(id) : _answers.wants.add(id)),
+        ),
+        const SizedBox(height: 24),
+        _ChipGroup(
+          label: 'Where do your recipes live now?',
+          options: _keeps,
+          selected: {?_answers.keeps},
+          onTap: (id) => setState(() => _answers.keeps = _answers.keeps == id ? null : id),
+        ),
+      ],
     );
   }
 
-  Widget _vibeScreen() {
-    final index = shelfLooks.indexOf(_answers.look);
-    void show(int i) => _looks.animateToPage(i, duration: ChefMotion.emphasis, curve: ChefMotion.easeStandard);
-    if (!_looks.hasClients && index > 0) {
-      // Back from a later screen: open on the look chosen before.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_looks.hasClients) _looks.jumpToPage(index);
-      });
-    }
-    return _Scene(
-      top: const Column(
-        children: [
-          Text(
-            'Every cook has their vibe.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontFamily: kSerifFamily, fontSize: 19, color: TourColors.muted),
-          ),
-          SizedBox(height: 4),
-          TourHeadline('Which one feels like *yours?*'),
-        ],
-      ),
-      scene: PageView.builder(
-        controller: _looks,
-        itemCount: shelfLooks.length,
-        onPageChanged: (i) => setState(() => _answers.look = shelfLooks[i]),
-        itemBuilder: (context, i) => ShelfScene(style: shelfLooks[i].style, topPadding: 18),
-      ),
-      bottom: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: 'Previous look',
-                onPressed: index > 0 ? () => show(index - 1) : null,
-                icon: const Icon(LucideIcons.chevronLeft),
-                color: TourColors.cream,
-                disabledColor: TourColors.outline,
-              ),
-              SizedBox(
-                width: 170,
-                child: Text(
-                  _answers.look.name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: kSerifFamily,
-                    fontStyle: FontStyle.italic,
-                    fontSize: 24,
-                    color: TourColors.cream,
-                  ),
+  // --- Look -------------------------------------------------------------------------
+
+  Widget _lookPage() {
+    final own = _answers.ownShelves;
+    final options = [
+      if (own != null) (name: 'My shelves', style: own, look: null),
+      for (final look in shelfLooks) (name: look.name, style: look.style, look: look),
+    ];
+    return _Page(
+      title: 'Pick a look for your shelves',
+      subtitle: 'Your recipes live on these shelves. Restyle them any time with the brush on the Recipes tab.',
+      action: FilledButton(onPressed: _next, child: const Text('Continue')),
+      children: [
+        _ShelfPreview(style: _answers.shelves, books: [Cookbook.myRecipes(recipes: 0)], height: 280),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final (i, option) in options.indexed) ...[
+              if (i > 0) const SizedBox(width: 10),
+              Expanded(
+                child: _LookTile(
+                  name: option.name,
+                  style: option.style,
+                  selected: _answers.look == option.look,
+                  onTap: () => setState(() => _answers.look = option.look),
                 ),
               ),
-              IconButton(
-                tooltip: 'Next look',
-                onPressed: index < shelfLooks.length - 1 ? () => show(index + 1) : null,
-                icon: const Icon(LucideIcons.chevronRight),
-                color: TourColors.cream,
-                disabledColor: TourColors.outline,
-              ),
             ],
-          ),
-          const SizedBox(height: 6),
-          _Dots(count: shelfLooks.length, active: index),
-          const SizedBox(height: 18),
-          TourButton(label: 'I like it!', onPressed: _next),
-        ],
-      ),
-    );
-  }
-
-  Widget _recipesScreen() {
-    final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
-    final picked = _answers.starterIds.length;
-    return _Page(
-      children: [
-        const SizedBox(height: 40),
-        const Text(
-          'Every cookbook starts with a recipe.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontFamily: kSerifFamily, fontSize: 19, color: TourColors.muted),
-        ),
-        const SizedBox(height: 4),
-        const TourHeadline('Which ones start *yours?*'),
-        const SizedBox(height: 8),
-        const TourBody('Pick a few classics to begin with. You can add your own any time.'),
-        const SizedBox(height: 18),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.only(bottom: 12),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 132,
-              childAspectRatio: 0.52,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 12,
-            ),
-            itemCount: starters.length,
-            itemBuilder: (context, i) {
-              final r = starters[i];
-              final on = _answers.starterIds.contains(r.id);
-              return _StarterTile(
-                recipe: r,
-                selected: on,
-                onTap: () => setState(() => on ? _answers.starterIds.remove(r.id) : _answers.starterIds.add(r.id)),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        TourButton(
-          label: picked == 0 ? 'Add to my cookbook' : 'Add $picked recipe${picked == 1 ? '' : 's'}',
-          onPressed: picked == 0 ? null : _next,
-        ),
-        TourTextButton(
-          label: 'I’ll add my own',
-          onPressed: () {
-            _answers.starterIds.clear();
-            _next();
-          },
+          ],
         ),
       ],
     );
   }
 
-  Widget _aliveScreen() {
-    final count = _answers.starterIds.length;
-    return Stack(
-      fit: StackFit.expand,
+  // --- Recipes ----------------------------------------------------------------------
+
+  Widget _recipesPage() {
+    final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
+    final owned = {for (final r in ref.watch(allRecipesProvider).valueOrNull ?? const <Recipe>[]) r.id};
+    final available = [
+      for (final r in starters)
+        if (!owned.contains(r.id)) r.id,
+    ];
+    final picked = _answers.starterIds.length;
+    final all = available.isNotEmpty && available.every(_answers.starterIds.contains);
+    return _Page(
+      title: 'Start with a few classics',
+      subtitle: 'Tested recipes you can cook from today. Pick any you like; add your own whenever you want.',
+      action: FilledButton(
+        onPressed: _next,
+        child: Text(picked == 0 ? 'Continue' : 'Add $picked recipe${picked == 1 ? '' : 's'}'),
+      ),
       children: [
-        _Scene(
-          top: Column(
-            children: [
-              TourHeadline('Your kitchen is alive, *$_cook!*'),
-              const SizedBox(height: 8),
-              TourBody(
-                count == 0
-                    ? 'Your cookbook is ready for its first recipe.'
-                    : '${count == 1 ? 'Your first recipe is' : '$count recipes are'} waiting in My Recipes.',
-              ),
-            ],
+        if (available.isNotEmpty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => setState(() => all ? _answers.starterIds.clear() : _answers.starterIds.addAll(available)),
+              child: Text(all ? 'Clear' : 'Select all'),
+            ),
           ),
-          scene: ShelfScene(
-            style: _answers.look.style,
-            books: [Cookbook.myRecipes(recipes: count)],
-            topPadding: 18,
+        for (final r in starters)
+          _StarterRow(
+            recipe: r,
+            owned: owned.contains(r.id),
+            selected: _answers.starterIds.contains(r.id),
+            onChanged: (on) => setState(() => on ? _answers.starterIds.add(r.id) : _answers.starterIds.remove(r.id)),
           ),
-          bottom: TourButton(label: 'I’m so happy!', onPressed: _next),
-        ),
-        const Positioned.fill(child: ConfettiBurst()),
       ],
     );
   }
@@ -576,391 +416,318 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
   // --- Goal -------------------------------------------------------------------------
 
   void _setGoal(int value) => setState(() {
-    _goalTouched = true;
+    _goalSet = true;
     _answers.goal = value.clamp(1, 365);
   });
 
-  String get _goalHint {
-    final n = _answers.goal;
-    final perWeek = n / 52;
-    if (n >= 365) return 'A new dish every single day!';
-    if (perWeek >= 1.5) return 'About ${perWeek.round()} new dishes a week';
-    if (perWeek >= 0.75) return 'About one new dish a week';
-    if (n >= 18) return 'About ${(n / 12).round()} new dishes a month';
-    if (n >= 9) return 'About one new dish a month';
-    return 'A gentle start';
+  Widget _goalPage() {
+    final t = context.chefText;
+    final c = context.chefColors;
+    return _Page(
+      title: 'Set a goal for ${DateTime.now().year}',
+      subtitle: 'How many new recipes would you like to try this year? You can change it in Settings.',
+      action: FilledButton(
+        onPressed: _saving ? null : _save,
+        child: _saving
+            ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
+            : const Text('Continue'),
+      ),
+      children: [
+        Center(child: _GoalStepper(value: _answers.goal, onChanged: _setGoal)),
+        const SizedBox(height: 8),
+        Center(child: Text('new recipes this year', style: t.bodyMedium?.copyWith(color: c.contentSecondary))),
+        const SizedBox(height: 28),
+        Text('Or pick a pace', style: t.titleMedium),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final pace in _paces)
+              FilterChip(
+                label: Text(pace.label),
+                selected: _answers.goal == pace.goal,
+                showCheckmark: false,
+                onSelected: (_) => _setGoal(pace.goal),
+              ),
+          ],
+        ),
+      ],
+    );
   }
 
-  Widget _goalScreen() {
-    final n = _answers.goal;
+  // --- Ready ------------------------------------------------------------------------
+
+  /// Where to begin, from what the cook said about their cooking.
+  List<_Tip> _tips(ChefColors c) {
+    final tips = <_Tip>[];
+    void add(_Tip tip) {
+      if (tips.length < 3 && !tips.any((t) => t.title == tip.title)) tips.add(tip);
+    }
+
+    switch (_answers.keeps) {
+      case 'screenshots' || 'notebook':
+        add((
+          icon: ScanMode.recipeCard.icon,
+          tint: c.accentHerb,
+          title: 'Scan the recipes you have',
+          body: 'On the Scan tab, choose Recipe and snap a cookbook page, a card or a screenshot.',
+        ));
+      case 'apps':
+        add((
+          icon: LucideIcons.link,
+          tint: c.accentYolk,
+          title: 'Bring recipes from the web',
+          body: 'Tap New recipe, then Import from a website, and paste the link.',
+        ));
+      case 'memory' || 'nowhere':
+        add((
+          icon: LucideIcons.notebookPen,
+          tint: c.accentHerb,
+          title: 'Write one down',
+          body: 'Tap New recipe to write it yourself, or describe a dish and let AI write it.',
+        ));
+    }
+    for (final want in _answers.wants) {
+      switch (want) {
+        case 'ideas':
+          add((
+            icon: ScanMode.ingredients.icon,
+            tint: c.accentTomato,
+            title: 'Find something to cook',
+            body: 'On the Scan tab, choose Ingredients and snap your fridge for ideas.',
+          ));
+        case 'eating':
+          add((
+            icon: ScanMode.meal.icon,
+            tint: c.accentYolk,
+            title: 'Log what you eat',
+            body: 'On the Scan tab, choose Meal to see calories and macros, then log it.',
+          ));
+        case 'remember':
+          add((
+            icon: LucideIcons.bookOpen,
+            tint: c.accentTomato,
+            title: 'Read it like a cookbook',
+            body: 'Open My Recipes on your shelf and turn the pages.',
+          ));
+      }
+    }
+    if (_answers.starterIds.isNotEmpty) {
+      add((
+        icon: LucideIcons.chefHat,
+        tint: c.accentTomato,
+        title: 'Cook step by step',
+        body: 'Open a recipe and tap Cook for one step at a time, with timers and read-aloud.',
+      ));
+    }
+    add((
+      icon: LucideIcons.plus,
+      tint: c.accentHerb,
+      title: 'Add your own recipes',
+      body: 'Tap New recipe to scan, import, paste or write one.',
+    ));
+    return tips;
+  }
+
+  Widget _readyPage() {
+    final t = context.chefText;
+    final c = context.chefColors;
+    final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
+    final picked = [
+      for (final r in starters)
+        if (_answers.starterIds.contains(r.id)) r.title,
+    ];
+    final name = _answers.name.trim();
     return _Page(
+      centered: true,
+      action: FilledButton(onPressed: _openKitchen, child: const Text('Open my kitchen')),
       children: [
-        const SizedBox(height: 48),
-        const TourHeadline('How many new recipes do you want to try *this year?*'),
-        const Spacer(),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: 'Fewer',
-              iconSize: 30,
-              color: TourColors.gold,
-              onPressed: n > 1 ? () => _setGoal(n - 1) : null,
-              icon: const Icon(LucideIcons.circleMinus),
-            ),
-            SizedBox(
-              width: 150,
-              child: Semantics(
-                label: '$n recipes this year',
-                excludeSemantics: true,
-                child: Text(
-                  '$n',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 64,
-                    fontWeight: FontWeight.w700,
-                    color: TourColors.cream,
-                    fontFeatures: [FontFeature.tabularFigures()],
+        _ShelfPreview(style: _answers.shelves, books: [Cookbook.myRecipes(recipes: picked.length)], height: 220),
+        const SizedBox(height: 24),
+        Semantics(
+          header: true,
+          child: Text(
+            name.isEmpty || name == defaultCookName ? 'Your kitchen is ready' : 'Your kitchen is ready, $name',
+            style: t.headlineMedium,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          switch (picked.length) {
+            0 => 'Your shelves are set up. Add your first recipe whenever you like.',
+            1 => '${picked.first} is waiting in My Recipes.',
+            final n => '${picked.first} and ${n - 1} more are waiting in My Recipes.',
+          },
+          style: t.bodyLarge?.copyWith(color: c.contentSecondary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 28),
+        Align(alignment: Alignment.centerLeft, child: Text('A good place to start', style: t.titleMedium)),
+        const SizedBox(height: 4),
+        for (final tip in _tips(c)) _TipRow(tip: tip),
+      ],
+    );
+  }
+}
+
+// --- Layout ---------------------------------------------------------------------------
+
+/// Back on the left, and how far along the tour is as a line in the middle.
+class _TopBar extends StatelessWidget {
+  final Future<bool> Function()? onBack;
+  final double? progress;
+  final int step;
+  const _TopBar({required this.onBack, required this.progress, required this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: Row(
+        children: [
+          SizedBox(width: 56, child: onBack == null ? null : BackButton(onPressed: () => onBack!())),
+          Expanded(
+            child: AnimatedOpacity(
+              opacity: progress == null ? 0 : 1,
+              duration: ChefMotion.standard,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  child: Semantics(
+                    label: progress == null ? null : 'Step $step of $_steps',
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: progress ?? 1),
+                      duration: ChefMotion.emphasis,
+                      curve: ChefMotion.easeStandard,
+                      builder: (context, value, _) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-            IconButton(
-              tooltip: 'More',
-              iconSize: 30,
-              color: TourColors.gold,
-              onPressed: n < 365 ? () => _setGoal(n + 1) : null,
-              icon: const Icon(LucideIcons.circlePlus),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: TourColors.gold,
-            inactiveTrackColor: TourColors.outline,
-            thumbColor: TourColors.cream,
-            overlayColor: TourColors.gold.withValues(alpha: 0.15),
           ),
-          child: Slider(
-            value: n.toDouble(),
-            min: 1,
-            max: 365,
-            label: '$n',
-            semanticFormatterCallback: (v) => '${v.round()} recipes',
-            onChanged: (v) => _setGoal(v.round()),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TourBody(_goalHint),
-        const Spacer(),
-        TourButton(label: 'Continue', onPressed: _next),
-      ],
-    );
-  }
-
-  Widget _platesScreen() {
-    final n = _answers.goal;
-    final cm = n * _plateCm;
-    final height = cm < 100 ? '$cm cm' : '${(cm / 100).toStringAsFixed(2)} m';
-    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    return _Page(
-      children: [
-        const SizedBox(height: 48),
-        TourHeadline('By the end of the year, that’s a stack of plates *~$height tall!*'),
-        const SizedBox(height: 10),
-        TourBody('$n new dishes, one plate at a time.'),
-        Expanded(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: still ? n.toDouble() : 0, end: n.toDouble()),
-            duration: Duration(milliseconds: still ? 0 : 2400),
-            curve: Curves.easeOutCubic,
-            builder: (context, plates, _) => PlateStack(plates: plates),
-          ),
-        ),
-        TourButton(label: 'Continue', onPressed: _next),
-      ],
-    );
-  }
-
-  // --- Building ---------------------------------------------------------------------
-
-  Widget _buildingScreen() {
-    final first = ref
-        .watch(starterRecipesProvider)
-        .valueOrNull
-        ?.where((r) => _answers.starterIds.contains(r.id))
-        .firstOrNull;
-    final tasks = [
-      'Setting up your ${_answers.look.name.toLowerCase()} shelves',
-      first == null ? 'Opening your cookbook' : 'Adding ${first.title}',
-      'Saving your ${_answers.goal}-recipe goal',
-      switch (_answers.wants) {
-        final w when w.contains('eating') => 'Opening your food log',
-        final w when w.contains('ideas') => 'Warming up Chef’s Kiss AI',
-        final w when w.contains('remember') => 'Binding your cookbook journal',
-        _ => 'Warming up the kitchen',
-      },
-    ];
-    return _Page(
-      children: [
-        const Spacer(flex: 2),
-        AnimatedBuilder(
-          animation: _progress,
-          builder: (context, _) {
-            final p = _progress.value;
-            return Column(
-              children: [
-                SizedBox.square(
-                  dimension: 150,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CircularProgressIndicator(
-                        value: p,
-                        strokeWidth: 9,
-                        strokeCap: StrokeCap.round,
-                        color: TourColors.gold,
-                        backgroundColor: TourColors.outline,
-                      ),
-                      Center(
-                        child: Text(
-                          '${(p * 100).round()}%',
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w700,
-                            color: TourColors.cream,
-                            fontFeatures: [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const TourHeadline('Building your *kitchen…*'),
-                const SizedBox(height: 22),
-                for (final (i, task) in tasks.indexed)
-                  _Task(label: task, done: p >= (i + 1) / tasks.length, active: p >= i / tasks.length),
-              ],
-            );
-          },
-        ),
-        const Spacer(flex: 3),
-      ],
-    );
-  }
-}
-
-// --- Layouts --------------------------------------------------------------------------
-
-/// A centred column of tour content, never wider than a phone.
-class _Page extends StatelessWidget {
-  final List<Widget> children;
-
-  /// Lets a screen with a text field scroll above the keyboard.
-  final bool scroll;
-  const _Page({required this.children, this.scroll = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-            child: scroll
-                ? LayoutBuilder(
-                    builder: (context, box) => SingleChildScrollView(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: box.maxHeight),
-                        child: IntrinsicHeight(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
-                        ),
-                      ),
-                    ),
-                  )
-                : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A few words and a button: the tour's story screens.
-class _Words extends StatelessWidget {
-  final String markup;
-  final String body;
-  final String button;
-  final IconData? trailing;
-  final VoidCallback? onNext;
-
-  /// Words in the middle of the screen rather than its upper part.
-  final bool centered;
-
-  /// The button sits under the words instead of at the bottom.
-  final bool buttonInline;
-
-  const _Words({
-    required this.markup,
-    required this.body,
-    this.button = 'Continue',
-    this.trailing,
-    this.onNext,
-    this.centered = false,
-    this.buttonInline = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final align = centered ? TextAlign.center : TextAlign.start;
-    final action = onNext == null ? null : TourButton(label: button, onPressed: onNext, trailing: trailing);
-    return _Page(
-      scroll: true,
-      children: [
-        Spacer(flex: centered ? 5 : 3),
-        TourHeadline(markup, align: align, size: centered ? 30 : 32),
-        const SizedBox(height: 14),
-        TourBody(body, align: align),
-        if (buttonInline && action != null) ...[const SizedBox(height: 32), action],
-        Spacer(flex: centered ? 6 : 5),
-        if (!buttonInline && action != null) action,
-      ],
-    );
-  }
-}
-
-/// A question with answers to pick from.
-class _Question extends StatelessWidget {
-  final String markup;
-  final String? hint;
-  final List<_Option> options;
-  final bool multi;
-  final bool Function(String id) isSelected;
-  final ValueChanged<String> onTap;
-  final bool canContinue;
-  final VoidCallback onNext;
-
-  const _Question({
-    required this.markup,
-    this.hint,
-    required this.options,
-    this.multi = false,
-    required this.isSelected,
-    required this.onTap,
-    required this.canContinue,
-    required this.onNext,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _Page(
-      children: [
-        const SizedBox(height: 48),
-        TourHeadline(markup),
-        if (hint != null) ...[const SizedBox(height: 8), TourBody(hint!)],
-        const SizedBox(height: 26),
-        Expanded(
-          child: ListView.separated(
-            itemCount: options.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final o = options[i];
-              return TourChoice(
-                icon: o.icon,
-                label: o.label,
-                multi: multi,
-                selected: isSelected(o.id),
-                onTap: () => onTap(o.id),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        TourButton(label: 'Continue', onPressed: canContinue ? onNext : null),
-      ],
-    );
-  }
-}
-
-/// Words on top, a bookcase filling the middle and a button below: the
-/// bookcase fades into the evening at both edges.
-class _Scene extends StatelessWidget {
-  final Widget top;
-  final Widget scene;
-  final Widget bottom;
-  const _Scene({required this.top, required this.scene, required this.bottom});
-
-  @override
-  Widget build(BuildContext context) {
-    Widget fade(Alignment from) => IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: from,
-            end: -from,
-            colors: [TourColors.background, TourColors.background.withValues(alpha: 0)],
-          ),
-        ),
-      ),
-    );
-    return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(28, 40, 28, 16),
-            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: top),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(child: scene),
-                Positioned(top: 0, left: 0, right: 0, height: 28, child: fade(Alignment.topCenter)),
-                Positioned(bottom: 0, left: 0, right: 0, height: 72, child: fade(Alignment.bottomCenter)),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
-            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: bottom),
-          ),
+          const SizedBox(width: 56),
         ],
       ),
+    );
+  }
+}
+
+/// One screen of the tour: a title and what it's for, its content, and the
+/// one button that moves on, kept at the bottom.
+class _Page extends StatelessWidget {
+  final String? title;
+  final String? subtitle;
+  final List<Widget> children;
+  final Widget action;
+  final Widget? footer;
+
+  /// Content centred on the screen (the welcome and the end).
+  final bool centered;
+
+  const _Page({
+    this.title,
+    this.subtitle,
+    required this.children,
+    required this.action,
+    this.footer,
+    this.centered = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.chefText;
+    final c = context.chefColors;
+    return Column(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: box.maxHeight - 20),
+                child: Align(
+                  alignment: centered ? Alignment.center : Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: centered ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                      children: [
+                        if (title != null) ...[
+                          Semantics(header: true, child: Text(title!, style: t.headlineMedium)),
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 8),
+                            Text(subtitle!, style: t.bodyLarge?.copyWith(color: c.contentSecondary)),
+                          ],
+                          const SizedBox(height: 24),
+                        ],
+                        ...children,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: double.infinity, child: action),
+                  if (footer != null) ...[const SizedBox(height: 12), footer!],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 // --- Pieces -----------------------------------------------------------------------------
 
-/// The logo, coming into the light.
-class _Intro extends StatelessWidget {
-  const _Intro();
+/// The kitchen shelves in a rounded window, drawn as the library draws them.
+class _ShelfPreview extends StatelessWidget {
+  final ShelfStyle style;
+  final List<Recipe> books;
+  final double height;
+  const _ShelfPreview({required this.style, required this.books, required this.height});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 1100),
-        curve: Curves.easeOutCubic,
-        builder: (context, t, child) => Opacity(
-          opacity: t,
-          child: Transform.scale(scale: 0.9 + 0.1 * t, child: child),
-        ),
-        child: Semantics(
-          label: AppInfo.appName,
-          child: Container(
-            width: 132,
-            height: 132,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: TourColors.cream,
-              boxShadow: [BoxShadow(color: TourColors.gold.withValues(alpha: 0.25), blurRadius: 40, spreadRadius: 4)],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: SvgPicture.asset('assets/illustrations/chef_kiss_logo.svg', fit: BoxFit.contain),
+    final c = context.chefColors;
+    final radius = BorderRadius.circular(ChefRadius.card);
+    return Container(
+      width: double.infinity,
+      height: height,
+      decoration: BoxDecoration(borderRadius: radius, color: style.wallColor),
+      foregroundDecoration: BoxDecoration(borderRadius: radius, border: Border.all(color: c.outlineSubtle)),
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedSwitcher(
+        duration: ChefMotion.emphasis,
+        layoutBuilder: (current, previous) => Stack(fit: StackFit.expand, children: [...previous, ?current]),
+        // Laid out at phone width, then fitted to the window.
+        child: FittedBox(
+          key: ValueKey(Object.hash(style, books.length)),
+          fit: BoxFit.cover,
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: 390,
+            height: 430,
+            child: ShelfScene(style: style, books: books, topPadding: 12),
           ),
         ),
       ),
@@ -968,78 +735,83 @@ class _Intro extends StatelessWidget {
   }
 }
 
-/// A starter recipe as a little book: tap to put it in the cookbook.
-class _StarterTile extends StatelessWidget {
-  final Recipe recipe;
-  final bool selected;
-  final VoidCallback onTap;
-  const _StarterTile({required this.recipe, required this.selected, required this.onTap});
+/// A group of answers, as the library's filter chips.
+class _ChipGroup extends StatelessWidget {
+  final String label;
+  final List<_Option> options;
+  final Set<String> selected;
+  final ValueChanged<String> onTap;
+  const _ChipGroup({required this.label, required this.options, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final cuisine = recipe.labels.where((l) => l.kind == 'cuisine').firstOrNull?.displayName;
-    final time = KitchenFormat.minutes(recipe.totalMinutes);
-    final meta = [?cuisine, time].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: context.chefText.titleMedium),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final o in options)
+              FilterChip(
+                avatar: Icon(o.icon, size: 16),
+                label: Text(o.label),
+                selected: selected.contains(o.id),
+                showCheckmark: false,
+                onSelected: (_) => onTap(o.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A look in miniature, as the shelf editor shows it.
+class _LookTile extends StatelessWidget {
+  final String name;
+  final ShelfStyle style;
+  final bool selected;
+  final VoidCallback onTap;
+  const _LookTile({required this.name, required this.style, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    final t = context.chefText;
     return Semantics(
       button: true,
       selected: selected,
-      label: '${recipe.title}, $meta',
+      label: name,
       excludeSemantics: true,
-      child: GestureDetector(
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: selected ? TourColors.gold : Colors.transparent, width: 2),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 6, offset: const Offset(1, 3)),
-                        ],
-                      ),
-                      // Drawn at shelf size and scaled down, so titles break
-                      // where they do on the shelf.
-                      child: FittedBox(
-                        fit: BoxFit.fill,
-                        child: SizedBox(width: 124, height: 177, child: BookCoverFace(recipe: recipe)),
-                      ),
-                    ),
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: AnimatedOpacity(
-                        opacity: selected ? 1 : 0,
-                        duration: const Duration(milliseconds: 160),
-                        child: const CircleAvatar(
-                          radius: 11,
-                          backgroundColor: TourColors.gold,
-                          child: Icon(LucideIcons.check, size: 14, color: TourColors.ink),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+            AnimatedContainer(
+              duration: ChefMotion.quick,
+              height: 64,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: style.wallColor,
+                border: Border.all(color: selected ? c.accentTomato : c.outlineSubtle, width: selected ? 2 : 1),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: ShelfMiniRoom(style),
             ),
             const SizedBox(height: 6),
-            for (final line in [?cuisine, time])
-              Text(
-                line,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11.5, height: 1.3, color: TourColors.muted),
+            Text(
+              name,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              style: t.labelMedium?.copyWith(
+                color: selected ? c.contentPrimary : c.contentSecondary,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
               ),
+            ),
           ],
         ),
       ),
@@ -1047,64 +819,115 @@ class _StarterTile extends StatelessWidget {
   }
 }
 
-class _Dots extends StatelessWidget {
-  final int count;
-  final int active;
-  const _Dots({required this.count, required this.active});
+/// A starter recipe to tick, with its little book beside it.
+class _StarterRow extends StatelessWidget {
+  final Recipe recipe;
+  final bool owned;
+  final bool selected;
+  final ValueChanged<bool> onChanged;
+  const _StarterRow({required this.recipe, required this.owned, required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return ExcludeSemantics(
+    final cuisine = recipe.labels.where((l) => l.kind == 'cuisine').firstOrNull?.displayName;
+    final meta = [?cuisine, KitchenFormat.minutes(recipe.totalMinutes)].join(' · ');
+    return CheckboxListTile(
+      value: owned || selected,
+      onChanged: owned ? null : (on) => onChanged(on ?? false),
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.trailing,
+      secondary: SizedBox(
+        width: 40,
+        height: 56,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(width: 124, height: 177, child: BookCoverFace(recipe: recipe)),
+          ),
+        ),
+      ),
+      title: Text(recipe.title),
+      subtitle: Text(owned ? 'Already in your cookbook' : meta),
+    );
+  }
+}
+
+/// The servings stepper's shape, for a yearly goal.
+class _GoalStepper extends StatelessWidget {
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _GoalStepper({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.chefColors;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: c.surfaceRaised, borderRadius: BorderRadius.circular(ChefRadius.pill)),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < count; i++)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: i == active ? 16 : 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: i == active ? TourColors.cream : TourColors.outline,
-                borderRadius: BorderRadius.circular(3),
+          IconButton(
+            tooltip: 'Fewer',
+            onPressed: value > 1 ? () => onChanged(value - 1) : null,
+            icon: const Icon(Icons.remove_rounded),
+          ),
+          SizedBox(
+            width: 104,
+            child: Semantics(
+              liveRegion: true,
+              label: '$value new recipes',
+              excludeSemantics: true,
+              child: Text(
+                '$value',
+                textAlign: TextAlign.center,
+                style: ChefTypography.numeric(c.contentPrimary, size: 34, weight: FontWeight.w700),
               ),
             ),
+          ),
+          IconButton(
+            tooltip: 'More',
+            onPressed: value < 365 ? () => onChanged(value + 1) : null,
+            icon: const Icon(Icons.add_rounded),
+          ),
         ],
       ),
     );
   }
 }
 
-/// One line of the "building" checklist.
-class _Task extends StatelessWidget {
-  final String label;
-  final bool done;
-  final bool active;
-  const _Task({required this.label, required this.done, required this.active});
+typedef _Tip = ({IconData icon, Color tint, String title, String body});
+
+/// A way to begin, set like the options of the add-recipe sheet.
+class _TipRow extends StatelessWidget {
+  final _Tip tip;
+  const _TipRow({required this.tip});
 
   @override
   Widget build(BuildContext context) {
-    final Widget mark = done
-        ? const Icon(LucideIcons.circleCheck, size: 18, color: TourColors.gold)
-        : active
-        ? const SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: TourColors.gold),
-          )
-        : Icon(Icons.circle_outlined, size: 18, color: TourColors.outline.withValues(alpha: 0.9));
+    final c = context.chefColors;
+    final t = context.chefText;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 22, child: Center(child: mark)),
-          const SizedBox(width: 12),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: c.meterTrack(tip.tint), borderRadius: BorderRadius.circular(12)),
+            child: Icon(tip.icon, color: tip.tint, size: 20),
+          ),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14.5,
-                color: done || active ? TourColors.cream : TourColors.muted.withValues(alpha: 0.55),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tip.title, style: t.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(tip.body, style: t.bodyMedium?.copyWith(color: c.contentSecondary)),
+              ],
             ),
           ),
         ],

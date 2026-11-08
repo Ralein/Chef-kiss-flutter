@@ -32,8 +32,29 @@
   <meta name="theme-color" content="#C2552F">
   <title>Chef’s Kiss</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Launch screen: the app icon's cream disc on the app's canvas, as on
+       Android and iOS, until Flutter draws its first frame. -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #FAF7F2; }
+    @media (prefers-color-scheme: dark) { html, body { background: #161412; } }
+    #launch {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      transition: opacity 320ms ease-out; pointer-events: none;
+    }
+    #launch img { width: 144px; height: 144px; }
+  </style>
 </head>
 <body>
+  <div id="launch" aria-hidden="true"><img src="assets/assets/illustrations/splash_medallion.png" alt=""></div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var launch = document.getElementById('launch');
+      if (!launch) return;
+      launch.style.opacity = '0';
+      setTimeout(function () { launch.remove(); }, 400);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

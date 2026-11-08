@@ -7,6 +7,7 @@ import 'decor_art.dart';
 import 'shelf_art.dart';
 import 'shelf_edit_controller.dart';
 import 'shelf_layout.dart';
+import 'shelf_scene.dart' show ShelfMiniRoom;
 
 enum _Category {
   looks('Looks', LucideIcons.swatchBook),
@@ -310,9 +311,9 @@ class _ShelfStyleEditorState extends State<ShelfStyleEditor> {
                 label: look.name,
                 selected: style.looksLike(look.style),
                 onTap: () => _c.applyLook(look),
-                child: _MiniRoom(look.style),
+                child: ShelfMiniRoom(look.style),
               ),
-            _Tile(label: 'Bare shelves', selected: _c.pieces.isEmpty, onTap: _c.clearDecor, child: _MiniRoom(bare)),
+            _Tile(label: 'Bare shelves', selected: _c.pieces.isEmpty, onTap: _c.clearDecor, child: ShelfMiniRoom(bare)),
           ]),
           const SizedBox(height: 10),
         ];
@@ -530,59 +531,6 @@ class _PaletteTile extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A ready-made room in miniature: its wall, two shelves and their decor.
-class _MiniRoom extends StatelessWidget {
-  final ShelfStyle style;
-  const _MiniRoom(this.style);
-
-  static const _width = 390.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = ShelfMetrics.forWidth(_width);
-    final children = <Widget>[
-      Positioned.fill(
-        child: CustomPaint(
-          painter: WallPainter(style: style.wall, tint: style.wallColor),
-        ),
-      ),
-    ];
-    var top = 8.0;
-    Widget plank(double height) => ShelfPlank(wood: style.wood, glow: style.glow, height: height);
-    children.add(Positioned(left: 4, right: 4, top: top, child: plank(10)));
-    top += 13;
-    for (var shelf = 0; shelf < 2; shelf++) {
-      for (final d in style.pieces.where((p) => p.shelf == shelf)) {
-        final size = m.sizeOf(d);
-        children.add(
-          Positioned(
-            left: ShelfMetrics.inset + m.leftOf(d),
-            top: d.piece.hangs ? top : top + m.room - size.height,
-            width: size.width,
-            height: size.height,
-            child: DecorArt(d.piece, seed: d.seed, flipped: d.flipped),
-          ),
-        );
-      }
-      top += m.room;
-      children.add(Positioned(left: 4, right: 4, top: top, child: plank(m.plank)));
-      top += m.plank + 3;
-    }
-    return IgnorePointer(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        alignment: Alignment.topCenter,
-        clipBehavior: Clip.hardEdge,
-        child: SizedBox(
-          width: _width,
-          height: top,
-          child: Stack(children: children),
         ),
       ),
     );
