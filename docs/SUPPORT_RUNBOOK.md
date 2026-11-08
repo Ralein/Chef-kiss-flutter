@@ -92,21 +92,25 @@ by 20 % or more; the UI says so and never presents them as medical advice.
 
 ---
 
-## 7. Developer preview features
+## 7. Welcome tour and starter recipes
 
-The *Cloud sync & vault* and *Illustration moderation* tools run against an **in-memory demo server** and are
-only visible in `dev`/`staging` flavors (`AppEnvironment.flags`). Nothing synced there is persisted. They are
-hidden in production builds; do not document them to end users.
+- A new install opens on the welcome tour: the cook's name, a few questions, a look for the shelves, starter
+  recipes to begin with and a goal for the year. It runs once (`onboarding.done` in preferences); *Erase all
+  data* keeps preferences, so it doesn't run again.
+- Starter recipes are added only when picked in the tour. Name and goal can be changed in Settings → Profile.
+- Updating from a version that added sample recipes moves those five samples to *Recently deleted*
+  (Settings → Your data), where they can be restored or removed for good.
 
 ---
 
 ## 8. Release checklist
 
 1. `flutter analyze` and all test suites pass (CI runs them on every push).
-2. `APP_FLAVOR=production` and the AI proxy `--dart-define`s are set.
+2. `version:` in `pubspec.yaml` is bumped; Settings → About shows it.
 3. Android: `android/key.properties` points at the upload keystore (release builds otherwise fall back to the
    debug key and must not be uploaded).
 4. iOS: camera and photo-library usage strings are present in `Info.plist`.
 5. macOS: network-client and user-selected-file entitlements are present; sign with a team for keychain access.
 6. Web: run `tool/fetch_web_db_assets.sh` before `flutter build web` so `sqlite3.wasm` and `drift_worker.js` ship.
-7. Privacy policy discloses that analyzed photos/text are processed by Anthropic.
+7. The in-app Privacy Policy and Terms of Use (`lib/features/about/presentation/legal_screen.dart`) still match
+   what the app does, and `AppInfo` holds the right developer name and contact address.

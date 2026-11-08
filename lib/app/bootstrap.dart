@@ -121,6 +121,9 @@ class ChefApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Until it's known whether the welcome tour is done, a plain canvas
+    // rather than a glimpse of the wrong screen.
+    final deciding = ref.watch(onboardingDoneProvider).isLoading;
     return MaterialApp.router(
       title: 'Chef’s Kiss',
       debugShowCheckedModeBanner: false,
@@ -129,11 +132,8 @@ class ChefApp extends ConsumerWidget {
       themeMode: ref.watch(appearanceProvider).valueOrNull ?? ThemeMode.system,
       scaffoldMessengerKey: ChefToastService.messengerKey,
       routerConfig: ref.watch(routerProvider),
-      // Until it's known whether the welcome tour is done, a plain canvas
-      // rather than a glimpse of the wrong screen.
-      builder: (context, child) => ref.watch(onboardingDoneProvider).isLoading
-          ? ColoredBox(color: Theme.of(context).scaffoldBackgroundColor)
-          : child!,
+      builder: (context, child) =>
+          deciding ? ColoredBox(color: Theme.of(context).scaffoldBackgroundColor) : child!,
     );
   }
 }

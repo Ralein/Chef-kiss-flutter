@@ -50,5 +50,5 @@ All third-party open-source software libraries, packages, fonts, and assets inco
 ## 4. Policy Compliance
 
 1. **Copyleft Audit**: No GPL, AGPL, or restrictive copyleft dependencies are utilized in client binaries.
-2. **Attribution Surface**: License texts are programmatically accessible to users via the standard `LicensePage` (`showLicensePage()`).
+2. **Attribution Surface**: Third-party license notices ship inside the app bundle (Flutter's generated `NOTICES` file, and `assets/fonts/DMSerifDisplay-OFL.txt` for the font). The app no longer shows a licenses page.
 3. **Automated CI Enforcement**: License compliance is validated during the CI build gate.

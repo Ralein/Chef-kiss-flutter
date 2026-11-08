@@ -34,13 +34,11 @@ The app picks the first available mode at startup (`lib/core/ai/ai_connection.da
 | `CHEFS_KISS_AI_PROXY_TOKEN` | *(empty)* | Sent as `Authorization: Bearer …` to the proxy. **Not a secret** — it ships in the app binary. Use it only to identify the build; do real auth per user. |
 | `CHEFS_KISS_AI_MODEL` | `claude-opus-5-5` | Model id. |
 | `CHEFS_KISS_ALLOW_USER_API_KEY` | `true` | Set `false` to hide the "bring your own key" option. |
-| `APP_FLAVOR` | `production` in release, `dev` otherwise | `dev` / `staging` / `production`. Developer-preview features (in-memory cloud sync, illustration moderation) are never shown in production. |
 
 Example production build:
 
 ```bash
 flutter build ipa --release \
-  --dart-define=APP_FLAVOR=production \
   --dart-define=CHEFS_KISS_AI_PROXY_URL=https://ai.example.com \
   --dart-define=CHEFS_KISS_ALLOW_USER_API_KEY=false
 ```

@@ -262,7 +262,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
       markup: 'How often do you cook *each week?*',
       options: _frequencies,
       isSelected: (id) => _answers.frequency == id,
-      onTap: (id) => setState(() => _answers.frequency = id),
+      onTap: (id) => setState(() {
+        _answers.frequency = id;
+        if (!_goalTouched) _answers.goal = _goalFor[id] ?? _answers.goal;
+      }),
       canContinue: _answers.frequency != null,
       onNext: _next,
     ),
@@ -284,11 +287,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
       canContinue: _answers.keeps != null,
       onNext: _next,
     ),
-    _Step.honest => _Words(
-      markup: 'Be honest: how many family recipes live only in *someone’s memory?*',
-      body: 'A recipe that’s never written down is one forgotten dinner away from being lost.',
-      onNext: _next,
-    ),
+    _Step.honest => _Words(markup: _honest.markup, body: _honest.body, onNext: _next),
     _Step.reassure => _Words(
       markup: 'It doesn’t have to be this way, *$_cook*',
       body: 'Every dish you love deserves a place to live on, beautifully, for years to come.',
@@ -307,6 +306,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
     _Step.plates => _platesScreen(),
     _Step.building => _buildingScreen(),
   };
+
+  /// A nudge that answers where the cook keeps their recipes now.
+  ({String markup, String body}) get _honest => switch (_answers.keeps) {
+    'screenshots' => (
+      markup: 'Be honest: how many recipes are *lost in your screenshots?*',
+      body: 'Somewhere between the memes and the receipts, a perfect curry is waiting.',
+    ),
+    'notebook' => (
+      markup: 'Be honest: how many recipe cards have *a splash of sauce on them?*',
+      body: 'Paper is lovely, until the page you need goes missing.',
+    ),
+    'apps' => (
+      markup: 'Be honest: how many apps does it take to *cook one dinner?*',
+      body: 'A bookmark here, a note there and a timer somewhere else.',
+    ),
+    'nowhere' => (
+      markup: 'Be honest: how many dishes have you loved and *never made again?*',
+      body: 'A recipe that isn’t kept anywhere slowly slips away.',
+    ),
+    _ => (
+      markup: 'Be honest: how many family recipes live only in *someone’s memory?*',
+      body: 'A recipe that’s never written down is one forgotten dinner away from being lost.',
+    ),
+  };
+
+  /// How often they cook suggests a goal, until they set one themselves.
+  static const _goalFor = {'now-and-then': 12, '1-2': 24, '3-4': 52, 'most': 52, 'daily': 104};
+  bool _goalTouched = false;
 
   // --- Name -------------------------------------------------------------------------
 
@@ -396,6 +423,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
   Widget _vibeScreen() {
     final index = shelfLooks.indexOf(_answers.look);
     void show(int i) => _looks.animateToPage(i, duration: ChefMotion.emphasis, curve: ChefMotion.easeStandard);
+    if (!_looks.hasClients && index > 0) {
+      // Back from a later screen: open on the look chosen before.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_looks.hasClients) _looks.jumpToPage(index);
+      });
+    }
     return _Scene(
       top: const Column(
         children: [
@@ -542,7 +575,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
 
   // --- Goal -------------------------------------------------------------------------
 
-  void _setGoal(int value) => setState(() => _answers.goal = value.clamp(1, 365));
+  void _setGoal(int value) => setState(() {
+    _goalTouched = true;
+    _answers.goal = value.clamp(1, 365);
+  });
 
   String get _goalHint {
     final n = _answers.goal;
@@ -659,7 +695,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Ticker
       'Setting up your ${_answers.look.name.toLowerCase()} shelves',
       first == null ? 'Opening your cookbook' : 'Adding ${first.title}',
       'Saving your ${_answers.goal}-recipe goal',
-      'Warming up the kitchen',
+      switch (_answers.wants) {
+        final w when w.contains('eating') => 'Opening your food log',
+        final w when w.contains('ideas') => 'Warming up Chef’s Kiss AI',
+        final w when w.contains('remember') => 'Binding your cookbook journal',
+        _ => 'Warming up the kitchen',
+      },
     ];
     return _Page(
       children: [
@@ -777,6 +818,7 @@ class _Words extends StatelessWidget {
     final align = centered ? TextAlign.center : TextAlign.start;
     final action = onNext == null ? null : TourButton(label: button, onPressed: onNext, trailing: trailing);
     return _Page(
+      scroll: true,
       children: [
         Spacer(flex: centered ? 5 : 3),
         TourHeadline(markup, align: align, size: centered ? 30 : 32),
