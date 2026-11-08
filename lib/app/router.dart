@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/about/presentation/developer_screen.dart';
+import '../features/about/presentation/legal_screen.dart';
 import '../features/collections/presentation/collection_detail_screen.dart';
 import '../features/collections/presentation/collections_screen.dart';
 import '../features/cook_mode/presentation/cook_mode_screen.dart';
@@ -10,6 +13,8 @@ import '../features/imports/presentation/dish_ideas_screen.dart';
 import '../features/imports/presentation/import_review_screen.dart';
 import '../features/library/presentation/book_editor_screen.dart';
 import '../features/library/presentation/library_screen.dart';
+import '../features/onboarding/application/onboarding.dart';
+import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/recipe_detail/presentation/recipe_detail_screen.dart';
 import '../features/recipe_editor/presentation/recipe_editor_screen.dart';
 import '../features/scan/presentation/scan_analysis_screen.dart';
@@ -22,17 +27,55 @@ import 'app_shell.dart';
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
 /// One router per app instance (tests get a fresh one per ProviderScope).
+/// Until the welcome tour is finished, every page leads to it.
 final routerProvider = Provider<GoRouter>((ref) {
-  final router = createRouter();
-  ref.onDispose(router.dispose);
+  final onboarded = ValueNotifier<bool?>(null);
+  ref.listen(onboardingDoneProvider, (_, next) => onboarded.value = next.valueOrNull, fireImmediately: true);
+  final router = createRouter(onboarded: onboarded);
+  ref.onDispose(() {
+    router.dispose();
+    onboarded.dispose();
+  });
   return router;
 });
 
-GoRouter createRouter({String initialLocation = '/'}) {
+/// Pages a cook can open before finishing the welcome tour.
+const _openBeforeWelcome = {'/welcome', '/privacy', '/terms'};
+
+/// [onboarded] is whether the welcome tour is done; null while unknown.
+GoRouter createRouter({String initialLocation = '/', ValueListenable<bool?>? onboarded}) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: initialLocation,
+    refreshListenable: onboarded,
+    redirect: (context, state) {
+      final done = onboarded?.value;
+      final at = state.matchedLocation;
+      if (done == false && !_openBeforeWelcome.contains(at)) return '/welcome';
+      if (done == true && at == '/welcome') return '/';
+      return null;
+    },
     routes: [
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/welcome',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/about',
+        builder: (context, state) => const DeveloperScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/privacy',
+        builder: (context, state) => const LegalScreen(document: LegalDocument.privacy),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/terms',
+        builder: (context, state) => const LegalScreen(document: LegalDocument.terms),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [

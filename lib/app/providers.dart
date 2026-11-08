@@ -1,5 +1,4 @@
 import 'package:app_contracts/app_contracts.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recipe_domain/recipe_domain.dart';
@@ -17,23 +16,14 @@ import '../data/repositories/drift_food_log_repository.dart';
 import '../data/repositories/drift_recipe_repository.dart';
 import '../data/repositories/drift_settings_repository.dart';
 import '../features/cook_mode/voice/voice_cook_assistant.dart';
-import '../features/illustrations/data/illustration_governance_service.dart';
-import '../features/illustrations/data/illustration_matcher.dart';
 import '../features/imports/data/local_import_repository.dart';
 import '../features/imports/services/ai_recipe_service.dart';
 import '../features/imports/services/smart_recipe_extractor.dart';
 import '../features/nutrition/data/ai_nutrition_service.dart';
 import '../features/scan/data/food_vision_service.dart';
-import '../features/sync/data/drift_sync_mediator.dart';
-import '../features/sync/data/in_memory_cloud_sync_server.dart';
-import '../features/sync/data/local_auth_repository.dart';
-import '../features/sync/data/remote_backup_repository_impl.dart';
-import '../features/sync/services/cloud_encryption_service.dart';
 import '../features/voice/read_aloud_controller.dart';
 
-// --- Environment & infrastructure ------------------------------------------
-
-final appEnvironmentProvider = Provider<AppEnvironment>((ref) => AppEnvironment.resolve(isRelease: kReleaseMode));
+// --- Infrastructure -----------------------------------------------------------
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase.defaults();
@@ -118,20 +108,6 @@ final appearanceProvider = StreamProvider<ThemeMode>((ref) {
 /// Shared countdowns for the recipe page and Cook Mode.
 final kitchenTimersProvider = ChangeNotifierProvider<KitchenTimersController>((ref) => KitchenTimersController());
 
-// --- Illustrations (internal tooling) -----------------------------------------
-
-final illustrationGovernanceServiceProvider = Provider<IllustrationGovernanceService>((ref) {
-  final service = IllustrationGovernanceService();
-  ref.onDispose(service.dispose);
-  return service;
-});
-
-final illustrationCandidatesStreamProvider = StreamProvider<List<IllustrationCandidate>>((ref) {
-  return ref.watch(illustrationGovernanceServiceProvider).watchCandidates();
-});
-
-final illustrationMatcherProvider = Provider<IllustrationMatcher>((ref) => IllustrationMatcher());
-
 // --- AI services (null until AI is configured) --------------------------------
 
 final aiRecipeServiceProvider = Provider<AiRecipeService?>((ref) {
@@ -183,37 +159,6 @@ final importRepositoryProvider = Provider<ImportRepository>((ref) {
 });
 
 final backupRepositoryProvider = Provider<BackupRepository>((ref) => DriftBackupRepository(ref.watch(databaseProvider)));
-
-// --- Cloud sync (developer preview; in-memory server) -----------------------------
-
-final cloudSyncServerProvider = Provider<InMemoryCloudSyncServer>((ref) => InMemoryCloudSyncServer());
-
-final cloudEncryptionServiceProvider = Provider<CloudEncryptionService>((ref) => CloudEncryptionService());
-
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final repo = LocalAuthRepository(server: ref.watch(cloudSyncServerProvider));
-  ref.onDispose(repo.dispose);
-  return repo;
-});
-
-final syncMediatorProvider = Provider<SyncMediator>((ref) {
-  final mediator = DriftSyncMediator(
-    db: ref.watch(databaseProvider),
-    server: ref.watch(cloudSyncServerProvider),
-    authRepo: ref.watch(authRepositoryProvider),
-  );
-  ref.onDispose(mediator.dispose);
-  return mediator;
-});
-
-final remoteBackupRepositoryProvider = Provider<RemoteBackupRepository>((ref) {
-  return RemoteBackupRepositoryImpl(
-    localBackupRepo: ref.watch(backupRepositoryProvider),
-    cryptoService: ref.watch(cloudEncryptionServiceProvider),
-    server: ref.watch(cloudSyncServerProvider),
-    authRepo: ref.watch(authRepositoryProvider),
-  );
-});
 
 // --- Reactive state & queries ------------------------------------------------------
 
@@ -276,14 +221,4 @@ final foodLogWeekProvider = StreamProvider.family<List<DailyNutritionSummary>, S
   final end = dateForDayKey(dayKey);
   final start = end.subtract(const Duration(days: 6));
   return ref.watch(foodLogRepositoryProvider).watchSummaries(fromDayKey: dayKeyFor(start), toDayKey: dayKey);
-});
-
-// Cloud sync streams (developer preview) ---------------------------------------------
-
-final authSessionStreamProvider = StreamProvider<AuthSession>((ref) => ref.watch(authRepositoryProvider).watchSession());
-
-final syncStateStreamProvider = StreamProvider<SyncEngineState>((ref) => ref.watch(syncMediatorProvider).watchSyncState());
-
-final pendingConflictsStreamProvider = StreamProvider<List<SyncConflict>>((ref) {
-  return ref.watch(syncMediatorProvider).watchPendingConflicts();
 });

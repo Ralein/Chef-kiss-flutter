@@ -13,6 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
+import '../support/welcome_done.dart';
+
 Recipe _salad() => Recipe(
       id: 'salad',
       profileId: 'default',
@@ -45,6 +47,7 @@ Future<AppDatabase> _pumpApp(WidgetTester tester, Size size) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(db),
+      ...welcomeDone,
       secretStoreProvider.overrideWithValue(InMemorySecretStore()),
       screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
     ],

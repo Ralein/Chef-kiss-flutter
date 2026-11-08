@@ -57,7 +57,7 @@ class _RecipeDetailScreenState extends ConsumerState<RecipeDetailScreen> {
       case _MenuAction.decorate:
         context.go('/?view=journal&recipe=${recipe.id}&decorate=1');
       case _MenuAction.cover:
-        final choice = await showCoverPhotoSheet(context, theme: recipe.theme);
+        final choice = await showCoverPhotoSheet(context);
         if (choice == null || !mounted) return;
         await _save(
           choice.source == null ? recipe.copyWith(clearCoverImage: true) : recipe.copyWith(coverImage: choice.source),

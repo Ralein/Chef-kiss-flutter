@@ -266,7 +266,6 @@ class _RecipeEditorScreenState extends ConsumerState<RecipeEditorScreen> {
           origin: Origin.manual,
           createdAt: now,
           updatedAt: now,
-          coverImage: RecipeArt.coverFor(title, ingredients.map((i) => i.displayName)),
         );
     var recipe = base.copyWith(
       title: title,

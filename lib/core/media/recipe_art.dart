@@ -1,43 +1,8 @@
 import 'package:recipe_domain/recipe_domain.dart';
 
-/// Picks bundled artwork and icons for recipes that have no photo of their own.
+/// Picks a culinary icon for each ingredient.
 class RecipeArt {
   RecipeArt._();
-
-  static const pasta = 'assets/illustrations/sketchbook_pasta.jpg';
-  static const crepes = 'assets/illustrations/sketchbook_crepes.jpg';
-  static const ramen = 'assets/illustrations/sketchbook_ramen.jpg';
-  static const salad = 'assets/illustrations/sketchbook_salad.jpg';
-  static const sourdough = 'assets/illustrations/sketchbook_sourdough.jpg';
-
-  static const all = [pasta, crepes, ramen, salad, sourdough];
-
-  static const Map<String, List<String>> _keywords = {
-    ramen: ['ramen', 'noodle soup', 'pho', 'udon', 'soba', 'miso soup', 'laksa', 'broth', 'soup', 'stew', 'curry'],
-    pasta: ['pasta', 'spaghetti', 'fettuccine', 'penne', 'rigatoni', 'linguine', 'lasagna', 'lasagne', 'gnocchi',
-        'carbonara', 'pomodoro', 'bolognese', 'macaroni', 'tagliatelle', 'orzo', 'risotto'],
-    crepes: ['crepe', 'pancake', 'waffle', 'french toast', 'cake', 'cookie', 'tart', 'pie', 'pastry', 'muffin',
-        'brownie', 'dessert', 'pudding', 'custard', 'scone'],
-    sourdough: ['bread', 'sourdough', 'loaf', 'focaccia', 'baguette', 'boule', 'bun', 'roll', 'brioche', 'bagel',
-        'pizza', 'flatbread', 'dough'],
-    salad: ['salad', 'avocado', 'toast', 'bowl', 'slaw', 'greens', 'vegetable', 'veggie', 'grain bowl', 'poke'],
-  };
-
-  /// Best-matching illustration for [title] (then ingredients), or null when
-  /// nothing fits — callers then render a themed placeholder rather than a
-  /// misleading picture.
-  static String? coverFor(String title, [Iterable<String> ingredientNames = const []]) {
-    String norm(String s) => FoodMatcher.normalizeWords(s).join(' ');
-    final t = ' ${norm(title)} ';
-    for (final entry in _keywords.entries) {
-      if (entry.value.any((k) => t.contains(' ${norm(k)} '))) return entry.key;
-    }
-    final ingredients = ' ${ingredientNames.map(norm).join(' ')} ';
-    for (final entry in _keywords.entries) {
-      if (entry.value.any((k) => ingredients.contains(' ${norm(k)} '))) return entry.key;
-    }
-    return null;
-  }
 
   static const Map<String, String> _iconForFood = {
     'flour_ap': 'wheat', 'flour_bread': 'wheat', 'flour_ww': 'wheat', 'semolina': 'wheat', 'oats': 'wheat',

@@ -101,7 +101,7 @@ class _BookEditorScreenState extends ConsumerState<BookEditorScreen> {
   /// A new photo prints the spine in its colours, in a pattern of this
   /// book's own; Shuffle tries the others.
   Future<void> _changePhoto() async {
-    final choice = await showCoverPhotoSheet(context, theme: ScrapbookTheme.terracottaClassic);
+    final choice = await showCoverPhotoSheet(context);
     if (choice == null || !mounted) return;
     final source = choice.source;
     if (source == null) {

@@ -22,6 +22,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
+import '../support/welcome_done.dart';
+
 Recipe _recipe(String id, String title, {int steps = 2, List<ScrapbookSticker> stickers = const []}) => Recipe(
       id: id,
       profileId: 'default',
@@ -59,6 +61,7 @@ Future<(AppDatabase, ProviderContainer)> _pumpApp(
   await tester.pumpWidget(ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(db),
+      ...welcomeDone,
       secretStoreProvider.overrideWithValue(InMemorySecretStore()),
       screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
       imageStoreProvider.overrideWithValue(const NoopImageStore()),
@@ -111,21 +114,6 @@ void main() {
 
       final saved = (await repo.getRecipeById('r')).orNull!;
       expect(saved.stickers.map((s) => s.id), ['a', 'b']);
-    });
-  });
-
-  group('starter decorations', () {
-    test('the minimal journal removes only the stickers v2 bundled', () async {
-      final db = AppDatabase(NativeDatabase.memory());
-      addTearDown(db.close);
-      final repo = DriftRecipeRepository(db);
-      ScrapbookSticker sticker(String id) =>
-          ScrapbookSticker(id: id, content: 'food-donut', type: 'doodle', pageSide: 'left', x: 5, y: 5, rotation: 0, scale: 1);
-      await repo.saveRecipe(_recipe('soup', 'Soup', stickers: [sticker('soup-stk-stamp'), sticker('soup-stk-seal'), sticker('mine')]));
-      await repo.saveRecipe(_recipe('plain', 'Plain'));
-
-      expect(await removeBundledDecorations(repo, ['soup', 'plain', 'missing']), 1);
-      expect((await repo.getRecipeById('soup')).orNull!.stickers.map((s) => s.id), ['mine']);
     });
   });
 
@@ -363,6 +351,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(db),
+        ...welcomeDone,
         secretStoreProvider.overrideWithValue(InMemorySecretStore()),
         screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
         imageStoreProvider.overrideWithValue(const NoopImageStore()),

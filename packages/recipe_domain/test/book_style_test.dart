@@ -32,7 +32,7 @@ void main() {
       baseServings: Rational(2),
       createdAt: 1,
       updatedAt: 2,
-      coverImage: 'assets/illustrations/sketchbook_ramen.jpg',
+      coverImage: 'https://example.com/ramen.jpg',
       chefTip: 'Salt the water.',
       theme: ScrapbookTheme.matchaSage,
       moodStamps: const ['Cozy'],

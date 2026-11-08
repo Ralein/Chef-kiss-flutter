@@ -390,7 +390,7 @@ class JournalViewState extends ConsumerState<JournalView> {
     if (choice == null || !mounted) return;
     switch (choice) {
       case 'photo':
-        final cover = await showCoverPhotoSheet(context, theme: recipe.theme);
+        final cover = await showCoverPhotoSheet(context);
         if (cover == null || !mounted) return;
         await _edit(
           recipe,

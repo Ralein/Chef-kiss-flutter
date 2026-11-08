@@ -1,4 +1,3 @@
-import 'package:app_contracts/app_contracts.dart';
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../../app/app_info.dart';
 import '../../../app/chef_toast_service.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/common_widgets.dart';
@@ -16,8 +16,8 @@ import '../../../core/platform/tts_voices.dart';
 import '../../../core/platform/flutter_tts_speech_service.dart';
 import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
-import '../../illustrations/presentation/illustration_approval_screen.dart';
-import '../../sync/presentation/cloud_sync_section.dart';
+import '../../onboarding/application/onboarding.dart';
+import '../../recipe_detail/presentation/widgets/recipe_sheets.dart' show showTextPromptDialog;
 import '../../voice/listen_button.dart';
 import '../../voice/read_aloud_controller.dart';
 import '../../voice/spoken_text.dart';
@@ -35,7 +35,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final t = context.chefText;
-    final env = ref.watch(appEnvironmentProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -48,6 +47,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               children: [
                 Semantics(header: true, child: Text('Settings', style: t.headlineMedium)),
                 const SizedBox(height: 16),
+                const _ProfileSection(),
+                const SizedBox(height: 16),
                 const _AiSection(),
                 const SizedBox(height: 16),
                 const _AppearanceSection(),
@@ -57,12 +58,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const _GoalsSection(),
                 const SizedBox(height: 16),
                 const _DataSection(),
-                if (env.flags.cloudSyncPreviewEnabled || env.flags.illustrationGovernanceEnabled) ...[
-                  const SizedBox(height: 16),
-                  _DeveloperSection(env: env),
-                ],
                 const SizedBox(height: 16),
-                _AboutSection(env: env),
+                const _AboutSection(),
               ],
             ),
           ),
@@ -97,6 +94,50 @@ class _Section extends StatelessWidget {
           ...children,
         ],
       ),
+    );
+  }
+}
+
+// --- Profile -------------------------------------------------------------------
+
+/// The name the welcome tour asked for, and the cook's goal for the year.
+class _ProfileSection extends ConsumerWidget {
+  const _ProfileSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = context.chefText;
+    final name = ref.watch(cookNameProvider);
+    final goal = ref.watch(cookingGoalProvider).valueOrNull;
+    return _Section(
+      title: 'Profile',
+      icon: LucideIcons.userRound,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Name'),
+          trailing: Text(name ?? 'Add', style: t.labelLarge),
+          onTap: () async {
+            final value = await showTextPromptDialog(context, title: 'Your name', initial: name, hint: 'Type your name');
+            if (value == null || value.trim().isEmpty) return;
+            await saveCookName(ref.read(settingsRepositoryProvider), value);
+          },
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Cooking goal'),
+          subtitle: Text('New recipes to try in ${DateTime.now().year}'),
+          trailing: Text(goal == null ? 'Set' : '$goal', style: t.labelLarge),
+          onTap: () async {
+            final value = await showDialog<double>(
+              context: context,
+              builder: (_) => _NumberDialog(title: 'Cooking goal', initial: (goal ?? 52).toDouble(), unit: 'recipes', max: 365),
+            );
+            if (value == null) return;
+            await ref.read(preferencesRepositoryProvider).writeJson(cookingGoalKey, value.round());
+          },
+        ),
+      ],
     );
   }
 }
@@ -424,7 +465,8 @@ class _NumberDialog extends StatefulWidget {
   final String title;
   final double initial;
   final String unit;
-  const _NumberDialog({required this.title, required this.initial, required this.unit});
+  final double max;
+  const _NumberDialog({required this.title, required this.initial, required this.unit, this.max = 20000});
 
   @override
   State<_NumberDialog> createState() => _NumberDialogState();
@@ -442,8 +484,8 @@ class _NumberDialogState extends State<_NumberDialog> {
 
   void _submit() {
     final v = double.tryParse(_controller.text.trim());
-    if (v == null || v <= 0 || v > 20000) {
-      setState(() => _error = 'Enter a number between 1 and 20,000');
+    if (v == null || v <= 0 || v > widget.max) {
+      setState(() => _error = 'Enter a number between 1 and ${KitchenFormat.kcal(widget.max)}');
       return;
     }
     Navigator.pop(context, v);
@@ -608,75 +650,54 @@ class _TrashSheet extends ConsumerWidget {
   }
 }
 
-// --- Developer preview -------------------------------------------------------------
-
-class _DeveloperSection extends StatelessWidget {
-  final AppEnvironment env;
-  const _DeveloperSection({required this.env});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.chefText;
-    return _Section(
-      title: 'Developer preview',
-      icon: LucideIcons.flaskConical,
-      children: [
-        Text(
-          'Visible in ${env.flavor.name} builds only. Cloud sync runs against an in-memory demo server — '
-          'nothing here is persisted or backed up.',
-          style: t.bodySmall,
-        ),
-        const SizedBox(height: 8),
-        if (env.flags.cloudSyncPreviewEnabled) const CloudSyncSection(),
-        if (env.flags.illustrationGovernanceEnabled)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(LucideIcons.palette),
-            title: const Text('Illustration moderation'),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const IllustrationApprovalScreen())),
-          ),
-      ],
-    );
-  }
-}
-
 // --- About ------------------------------------------------------------------------
 
-class _AboutSection extends StatelessWidget {
-  final AppEnvironment env;
-  const _AboutSection({required this.env});
+/// Who makes the app and how to reach them, the policies, and the version.
+class _AboutSection extends ConsumerWidget {
+  const _AboutSection();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = context.chefText;
+    final version = ref.watch(appVersionProvider).valueOrNull;
+    Widget link(IconData icon, String title, VoidCallback onTap, {String? subtitle}) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: subtitle == null ? null : Text(subtitle),
+      trailing: const Icon(LucideIcons.chevronRight),
+      onTap: onTap,
+    );
     return _Section(
       title: 'About',
       icon: LucideIcons.info,
       children: [
-        Text(
-          'Your recipes, cookbooks and food log are stored only on this device. Chef’s Kiss has no account, '
-          'ads or tracking. AI requests you start are processed by Anthropic under its commercial terms.',
-          style: t.bodyMedium,
+        link(
+          LucideIcons.heartHandshake,
+          'Meet the developer',
+          () => context.push('/about'),
+          subtitle: 'A note from ${AppInfo.developerName}',
         ),
-        const SizedBox(height: 10),
+        link(
+          LucideIcons.mail,
+          'Contact ${AppInfo.developerFirstName}',
+          () => emailDeveloper(context, subject: AppInfo.appName),
+          subtitle: AppInfo.contactEmail,
+        ),
+        link(LucideIcons.shieldCheck, 'Privacy Policy', () => context.push('/privacy')),
+        link(LucideIcons.scrollText, 'Terms of Use', () => context.push('/terms')),
+        const SizedBox(height: 8),
         Text(
-          'Nutrition, allergen and food-safety information is approximate and for general guidance only — '
-          'always check labels, and follow safe cooking temperatures.',
+          'Nutrition, allergen and food-safety information is approximate and for general guidance only. '
+          'Always check labels, and follow safe cooking temperatures.',
           style: t.bodySmall,
         ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(LucideIcons.fileText),
-          title: const Text('Open-source licenses'),
-          onTap: () => showLicensePage(
-            context: context,
-            applicationName: 'Chef’s Kiss',
-            applicationVersion: '${env.version}${env.flavor.isProduction ? '' : ' (${env.flavor.name})'}',
-          ),
-        ),
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text('Version ${env.version}', style: t.bodySmall),
+          padding: const EdgeInsets.only(top: 10, bottom: 8),
+          child: Text(
+            '${AppInfo.appName}${version == null ? '' : ' $version'} · Made by ${AppInfo.developerName}',
+            style: t.bodySmall,
+          ),
         ),
       ],
     );

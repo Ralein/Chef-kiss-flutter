@@ -1,7 +1,7 @@
 name: chefs_kiss
 description: "Chef's Kiss — a personal, visual-first recipe book and calm cooking companion."
 publish_to: 'none'
-version: 1.0.0+1
+version: 0.0.1+1
 
 environment:
   sdk: ^3.11.5
@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^2.0.0
   flutter_tts: ^4.2.5
   lucide_icons_flutter: 3.1.25
+  url_launcher: ^6.3.3
+  package_info_plus: ^10.2.2
 
 dev_dependencies:
   test: ^1.25.0

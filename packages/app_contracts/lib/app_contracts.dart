@@ -1,7 +1,6 @@
 export 'src/failures.dart';
 export 'src/result.dart';
 export 'src/logging/app_logger.dart';
-export 'src/environment/app_environment.dart';
 export 'src/capabilities/platform_capabilities.dart';
 export 'src/repositories/recipe_repository.dart';
 export 'src/repositories/cooking_session_repository.dart';

@@ -104,7 +104,6 @@ class AiRecipeMapper {
       difficulty: RecipeDifficulty.fromString(_str(json['difficulty'])),
       totalMinutes: totalMinutes > 0 ? totalMinutes.clamp(1, 7 * 24 * 60) : timedMinutes.round(),
       origin: origin,
-      coverImage: RecipeArt.coverFor(title, ingredients.map((i) => i.displayName)),
       polaroidCaption: title,
       theme: theme,
       moodStamps: _strings(json['tags']).take(3).map(_sentenceCase).toList(),

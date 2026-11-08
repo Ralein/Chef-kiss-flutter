@@ -1,320 +1,1497 @@
 [
-  {
-    "id": "pasta-pomodoro",
-    "profileId": "system",
-    "title": "Artisanal Ribbon Fettuccine al Pomodoro",
-    "slug": "pasta-pomodoro",
-    "summary": "Silky handmade egg pasta tossed with sweet San Marzano tomatoes, garlic, extra virgin olive oil, and fragrant fresh basil.",
-    "status": "ready",
-    "baseServingsNum": 2,
-    "baseServingsDen": 1,
-    "difficulty": "medium",
-    "totalMinutes": 35,
-    "visualTemplate": "ingredient_forward",
-    "visualStyleVersion": "v1",
-    "isCurated": true,
-    "origin": "curated",
-    "isFavorite": true,
-    "coverImage": "assets/illustrations/sketchbook_pasta.jpg",
-    "polaroidCaption": "Handmade Pasta al Pomodoro",
-    "theme": "terracotta-classic",
-    "moodStamps": ["Al Dente", "Slow Simmered", "Chef's Signature"],
-    "chefTip": "Vigorously toss the pasta with a splash of starchy cooking water to emulsify the sauce into a glossy glaze.",
-    "chefTipIcon": "chefHat",
-    "chefTipIconColor": "#C85A32",
-    "stickers": [],
-    "washiTapes": [],
-    "ingredients": [
-      { "id": "p-1", "displayName": "Type 00 Flour", "quantityNum": 200, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
-      { "id": "p-2", "displayName": "Fresh Farm Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "egg", "iconColor": "#E5A124" },
-      { "id": "p-3", "displayName": "San Marzano Tomatoes", "quantityNum": 1, "quantityDen": 1, "unitCode": "can (400g)", "position": 3, "icon": "apple", "iconColor": "#D94B34" },
-      { "id": "p-4", "displayName": "Extra Virgin Olive Oil", "quantityNum": 3, "quantityDen": 1, "unitCode": "tbsp", "position": 4, "icon": "droplets", "iconColor": "#4A6B53" },
-      { "id": "p-5", "displayName": "Garlic Cloves (thinly sliced)", "quantityNum": 3, "quantityDen": 1, "unitCode": "cloves", "position": 5, "icon": "leaf", "iconColor": "#8C7355" },
-      { "id": "p-6", "displayName": "Fresh Basil Leaves", "quantityNum": 1, "quantityDen": 1, "unitCode": "handful", "position": 6, "icon": "leaf", "iconColor": "#3D7A5A" },
-      { "id": "p-7", "displayName": "Parmigiano Reggiano", "quantityNum": 40, "quantityDen": 1, "unitCode": "g", "position": 7, "icon": "milk", "iconColor": "#E5A124" }
-    ],
-    "steps": [
-      {
-        "id": "ps-1",
-        "position": 1,
-        "actionKey": "Knead",
-        "iconKey": "chefHat",
-        "instructionShort": "Make a flour well on your wooden board, crack in the eggs, and knead into silky dough.",
-        "instructionDetail": "Knead for 8-10 mins until elastic and smooth, then rest wrapped for 20 mins.",
-        "timers": [{ "id": "pt-1", "label": "Dough Rest", "durationSeconds": 1200, "position": 1 }]
-      },
-      {
-        "id": "ps-2",
-        "position": 2,
-        "actionKey": "Slice",
-        "iconKey": "scissors",
-        "instructionShort": "Roll out dough thinly and slice into delicate ribbon fettuccine strands.",
-        "instructionDetail": "Dust lightly with semolina flour to prevent sticking."
-      },
-      {
-        "id": "ps-3",
-        "position": 3,
-        "actionKey": "Sauté",
-        "iconKey": "flame",
-        "instructionShort": "Sauté garlic in olive oil until golden, then crush in tomatoes and simmer 15 mins.",
-        "instructionDetail": "Cook over low heat until sauce is sweet, glossy, and fragrant.",
-        "timers": [{ "id": "pt-2", "label": "Sauce Simmer", "durationSeconds": 900, "position": 1 }]
-      },
-      {
-        "id": "ps-4",
-        "position": 4,
-        "actionKey": "Simmer",
-        "iconKey": "cookingPot",
-        "instructionShort": "Boil pasta 2-3 minutes, toss vigorously into sauce with fresh basil and parmesan.",
-        "instructionDetail": "Toss with starchy pasta water to emulsify the sauce into a rich glaze.",
-        "timers": [{ "id": "pt-3", "label": "Pasta Boil", "durationSeconds": 150, "position": 1 }]
-      }
-    ]
+ {
+  "id": "starter-aglio-e-olio",
+  "profileId": "default",
+  "title": "Spaghetti Aglio e Olio",
+  "slug": "aglio-e-olio",
+  "summary": "Rome's midnight pasta: spaghetti tossed with golden garlic, chilli and olive oil, made glossy with a splash of the pasta water.",
+  "status": "ready",
+  "baseServingsNum": 2,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 20,
+  "visualTemplate": "process_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Spaghetti Aglio e Olio",
+  "theme": "terracotta-classic",
+  "moodStamps": [
+   "Pantry staples",
+   "Weeknight"
+  ],
+  "chefTip": "Start the garlic in cool oil over low heat. Pale gold garlic is sweet; brown garlic turns bitter.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#7A2E2A",
+   "textColor": "#E3C77F",
+   "pattern": "bands"
   },
-  {
-    "id": "french-crepes",
-    "profileId": "system",
-    "title": "French Crêpes Suzette with Sweet Berries",
-    "slug": "french-crepes",
-    "summary": "Delicate French crêpes layered with sweet strawberry compote, whipped vanilla cream, and dusted with powdered sugar.",
-    "status": "ready",
-    "baseServingsNum": 2,
-    "baseServingsDen": 1,
-    "difficulty": "easy",
-    "totalMinutes": 25,
-    "visualTemplate": "ingredient_forward",
-    "visualStyleVersion": "v1",
-    "isCurated": true,
-    "origin": "curated",
-    "isFavorite": true,
-    "coverImage": "assets/illustrations/sketchbook_crepes.jpg",
-    "polaroidCaption": "French Crêpes Suzette",
-    "theme": "artisan-kraft",
-    "moodStamps": ["Pastry Craft", "Chef's Signature", "Golden Crust"],
-    "chefTip": "Rest the batter for 15 minutes before cooking so the gluten relaxes for paper-thin, delicate crêpes.",
-    "chefTipIcon": "chefHat",
-    "chefTipIconColor": "#8C7355",
-    "stickers": [],
-    "washiTapes": [],
-    "ingredients": [
-      { "id": "c-1", "displayName": "Type 00 Pastry Flour", "quantityNum": 120, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
-      { "id": "c-2", "displayName": "Ceremonial Matcha Powder", "quantityNum": 2, "quantityDen": 1, "unitCode": "tsp", "position": 2, "icon": "leaf", "iconColor": "#4A6B53" },
-      { "id": "c-3", "displayName": "Farm Fresh Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "eggs", "position": 3, "icon": "egg", "iconColor": "#E5A124" },
-      { "id": "c-4", "displayName": "Whole Milk", "quantityNum": 250, "quantityDen": 1, "unitCode": "ml", "position": 4, "icon": "milk", "iconColor": "#4A6B53" },
-      { "id": "c-5", "displayName": "Melted Sweet Butter", "quantityNum": 25, "quantityDen": 1, "unitCode": "g", "position": 5, "icon": "droplets", "iconColor": "#E5A124" },
-      { "id": "c-6", "displayName": "Fresh Strawberries", "quantityNum": 150, "quantityDen": 1, "unitCode": "g", "position": 6, "icon": "cherry", "iconColor": "#D94B34" },
-      { "id": "c-7", "displayName": "Pure Honey or Maple", "quantityNum": 2, "quantityDen": 1, "unitCode": "tbsp", "position": 7, "icon": "droplets", "iconColor": "#D9822B" }
-    ],
-    "steps": [
-      {
-        "id": "cs-1",
-        "position": 1,
-        "actionKey": "Whisk",
-        "iconKey": "utensils",
-        "instructionShort": "Whisk flour, matcha powder, eggs, and milk into a smooth emerald batter.",
-        "instructionDetail": "Strain through fine sieve to remove any lumps and let rest 15 mins.",
-        "timers": [{ "id": "ct-1", "label": "Batter Rest", "durationSeconds": 900, "position": 1 }]
-      },
-      {
-        "id": "cs-2",
-        "position": 2,
-        "actionKey": "Bake",
-        "iconKey": "flame",
-        "instructionShort": "Swirl thin layer in buttered pan and cook 1 min per side until edges curl.",
-        "instructionDetail": "Flip gently with spatula once the surface sets.",
-        "timers": [{ "id": "ct-2", "label": "Crêpe Flip Timer", "durationSeconds": 60, "position": 1 }]
-      },
-      {
-        "id": "cs-3",
-        "position": 3,
-        "actionKey": "Fold",
-        "iconKey": "layers",
-        "instructionShort": "Layer with sliced sweet strawberries, whipped cream, and fold gently into triangles.",
-        "instructionDetail": "Garnish with fresh mint and a light dusting of powdered sugar."
-      }
+  "labels": [
+   {
+    "id": "aglio-e-olio-l-italian",
+    "labelId": "cuisine:italian",
+    "kind": "cuisine",
+    "canonicalKey": "italian",
+    "displayName": "Italian"
+   },
+   {
+    "id": "aglio-e-olio-l-quick",
+    "labelId": "tag:quick",
+    "kind": "tag",
+    "canonicalKey": "quick",
+    "displayName": "Quick"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "aglio-e-olio-i1",
+    "displayName": "Spaghetti",
+    "position": 1,
+    "quantityNum": 200,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "aglio-e-olio-i2",
+    "displayName": "Extra virgin olive oil",
+    "position": 2,
+    "quantityNum": 4,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "aglio-e-olio-i3",
+    "displayName": "Garlic",
+    "position": 3,
+    "quantityNum": 4,
+    "quantityDen": 1,
+    "unitCode": "cloves",
+    "prepText": "thinly sliced"
+   },
+   {
+    "id": "aglio-e-olio-i4",
+    "displayName": "Red pepper flakes",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "aglio-e-olio-i5",
+    "displayName": "Flat-leaf parsley",
+    "position": 5,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "finely chopped"
+   },
+   {
+    "id": "aglio-e-olio-i6",
+    "displayName": "Salt",
+    "position": 6,
+    "prepText": "for the pasta water",
+    "scalingPolicy": "to_taste"
+   }
+  ],
+  "steps": [
+   {
+    "id": "aglio-e-olio-s1",
+    "position": 1,
+    "instructionShort": "Bring 3 litres of water to a rolling boil and add 1 tablespoon of salt.",
+    "actionKey": "Boil",
+    "iconKey": "cooking-pot"
+   },
+   {
+    "id": "aglio-e-olio-s2",
+    "position": 2,
+    "instructionShort": "Cook the spaghetti until just shy of al dente, about 1 minute less than the packet says.",
+    "actionKey": "Boil",
+    "iconKey": "timer",
+    "instructionDetail": "Scoop out a mugful (about 240 ml) of the starchy pasta water before you drain it.",
+    "durationSeconds": 480,
+    "timers": [
+     {
+      "id": "aglio-e-olio-s2-t1",
+      "label": "Spaghetti",
+      "durationSeconds": 480,
+      "position": 1
+     }
     ]
+   },
+   {
+    "id": "aglio-e-olio-s3",
+    "position": 3,
+    "instructionShort": "Meanwhile, warm the olive oil and garlic in a large frying pan over medium-low heat until the garlic is pale gold.",
+    "actionKey": "Sauté",
+    "iconKey": "flame",
+    "instructionDetail": "Keep it gentle, 3–4 minutes. Stir in the chilli flakes for the last 30 seconds.",
+    "durationSeconds": 210,
+    "timers": [
+     {
+      "id": "aglio-e-olio-s3-t1",
+      "label": "Garlic",
+      "durationSeconds": 210,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "aglio-e-olio-s4",
+    "position": 4,
+    "instructionShort": "Add the drained spaghetti and 120 ml of pasta water to the pan and toss over medium heat until the sauce turns glossy and clings.",
+    "actionKey": "Toss",
+    "iconKey": "utensils",
+    "instructionDetail": "About 2 minutes. Add another splash of pasta water if it looks dry.",
+    "durationSeconds": 120,
+    "timers": [
+     {
+      "id": "aglio-e-olio-s4-t1",
+      "label": "Toss",
+      "durationSeconds": 120,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "aglio-e-olio-s5",
+    "position": 5,
+    "instructionShort": "Take the pan off the heat, toss through the parsley, taste for salt and serve straight away.",
+    "actionKey": "Serve",
+    "iconKey": "chef-hat"
+   }
+  ]
+ },
+ {
+  "id": "starter-shakshuka",
+  "profileId": "default",
+  "title": "Shakshuka",
+  "slug": "shakshuka",
+  "summary": "Eggs gently poached in a spiced tomato and pepper sauce, served bubbling from the pan with bread for dipping.",
+  "status": "ready",
+  "baseServingsNum": 2,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 35,
+  "visualTemplate": "ingredient_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Shakshuka",
+  "theme": "terracotta-classic",
+  "moodStamps": [
+   "One pan",
+   "Brunch"
+  ],
+  "chefTip": "Take the pan off the heat while the yolks still wobble. They keep cooking in the hot sauce.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#A04E3B",
+   "textColor": "#F3EBDD",
+   "accentColor": "#D98A6A",
+   "pattern": "dots"
   },
-  {
-    "id": "avocado-brioche",
-    "profileId": "system",
-    "title": "Smashed Avocado Brioche & Jammy Egg",
-    "slug": "avocado-brioche",
-    "summary": "Golden toasted brioche loaded with lemon-mashed avocado, heirloom cherry tomatoes, flaky sea salt, and a 6-minute jammy egg.",
-    "status": "ready",
-    "baseServingsNum": 2,
-    "baseServingsDen": 1,
-    "difficulty": "easy",
-    "totalMinutes": 15,
-    "visualTemplate": "ingredient_forward",
-    "visualStyleVersion": "v1",
-    "isCurated": true,
-    "origin": "curated",
-    "isFavorite": true,
-    "coverImage": "assets/illustrations/sketchbook_salad.jpg",
-    "polaroidCaption": "Artisan Brioche & Avocado",
-    "theme": "matcha-sage",
-    "moodStamps": ["Garden Fresh", "Slow Morning", "Culinary Craft"],
-    "chefTip": "A splash of fresh lemon juice prevents avocado oxidation and adds a bright zesty punch.",
-    "chefTipIcon": "chefHat",
-    "chefTipIconColor": "#4A6B53",
-    "stickers": [],
-    "washiTapes": [],
-    "ingredients": [
-      { "id": "a-1", "displayName": "Artisan Brioche Slices", "quantityNum": 2, "quantityDen": 1, "unitCode": "thick slices", "position": 1, "icon": "wheat", "iconColor": "#D9822B" },
-      { "id": "a-2", "displayName": "Ripe Hass Avocado", "quantityNum": 1, "quantityDen": 1, "unitCode": "large", "position": 2, "icon": "salad", "iconColor": "#4A6B53" },
-      { "id": "a-3", "displayName": "Meyer Lemon Juice", "quantityNum": 1, "quantityDen": 1, "unitCode": "tbsp", "position": 3, "icon": "citrus", "iconColor": "#E5A124" },
-      { "id": "a-4", "displayName": "6-Minute Jammy Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "eggs", "position": 4, "icon": "egg", "iconColor": "#E5A124" },
-      { "id": "a-5", "displayName": "Microgreens & Chili Flakes", "authoredQuantity": "pinch", "position": 5, "icon": "leaf", "iconColor": "#D94B34" }
-    ],
-    "steps": [
-      {
-        "id": "as-1",
-        "position": 1,
-        "actionKey": "Bake",
-        "iconKey": "flame",
-        "instructionShort": "Toast brioche in a buttered pan until golden and crispy on both sides.",
-        "instructionDetail": "Keep heat medium to develop uniform golden browning.",
-        "timers": [{ "id": "at-1", "label": "Brioche Toast", "durationSeconds": 180, "position": 1 }]
-      },
-      {
-        "id": "as-2",
-        "position": 2,
-        "actionKey": "Fold",
-        "iconKey": "utensils",
-        "instructionShort": "Coarsely mash avocado with lemon juice, flaky salt, and olive oil.",
-        "instructionDetail": "Keep texture chunky rather than fully pureed."
-      },
-      {
-        "id": "as-3",
-        "position": 3,
-        "actionKey": "Slice",
-        "iconKey": "scissors",
-        "instructionShort": "Spread generously over toast, crown with halved jammy egg and microgreens.",
-        "instructionDetail": "Finish with flaky Maldon sea salt and cracked black pepper."
-      }
+  "labels": [
+   {
+    "id": "shakshuka-l-north-african",
+    "labelId": "cuisine:north-african",
+    "kind": "cuisine",
+    "canonicalKey": "north-african",
+    "displayName": "North African"
+   },
+   {
+    "id": "shakshuka-l-breakfast",
+    "labelId": "tag:breakfast",
+    "kind": "tag",
+    "canonicalKey": "breakfast",
+    "displayName": "Breakfast"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "shakshuka-i1",
+    "displayName": "Olive oil",
+    "position": 1,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "shakshuka-i2",
+    "displayName": "Onion",
+    "position": 2,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "diced"
+   },
+   {
+    "id": "shakshuka-i3",
+    "displayName": "Red bell pepper",
+    "position": 3,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "diced"
+   },
+   {
+    "id": "shakshuka-i4",
+    "displayName": "Garlic",
+    "position": 4,
+    "quantityNum": 3,
+    "quantityDen": 1,
+    "unitCode": "cloves",
+    "prepText": "minced"
+   },
+   {
+    "id": "shakshuka-i5",
+    "displayName": "Ground cumin",
+    "position": 5,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "shakshuka-i6",
+    "displayName": "Sweet paprika",
+    "position": 6,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "shakshuka-i7",
+    "displayName": "Red pepper flakes",
+    "position": 7,
+    "quantityNum": 1,
+    "quantityDen": 4,
+    "unitCode": "tsp",
+    "isOptional": true
+   },
+   {
+    "id": "shakshuka-i8",
+    "displayName": "Canned chopped tomatoes",
+    "position": 8,
+    "quantityNum": 400,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "shakshuka-i9",
+    "displayName": "Eggs",
+    "position": 9,
+    "quantityNum": 4,
+    "quantityDen": 1
+   },
+   {
+    "id": "shakshuka-i10",
+    "displayName": "Salt and black pepper",
+    "position": 10,
+    "scalingPolicy": "to_taste"
+   },
+   {
+    "id": "shakshuka-i11",
+    "displayName": "Fresh parsley or cilantro",
+    "position": 11,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "chopped"
+   },
+   {
+    "id": "shakshuka-i12",
+    "displayName": "Feta",
+    "position": 12,
+    "quantityNum": 50,
+    "quantityDen": 1,
+    "unitCode": "g",
+    "isOptional": true,
+    "prepText": "crumbled"
+   }
+  ],
+  "steps": [
+   {
+    "id": "shakshuka-s1",
+    "position": 1,
+    "instructionShort": "Heat the olive oil in a 25–30 cm frying pan over medium heat and soften the onion and pepper, stirring now and then.",
+    "actionKey": "Sauté",
+    "iconKey": "flame",
+    "instructionDetail": "About 7 minutes, until soft and sweet.",
+    "durationSeconds": 420,
+    "timers": [
+     {
+      "id": "shakshuka-s1-t1",
+      "label": "Onion & pepper",
+      "durationSeconds": 420,
+      "position": 1
+     }
     ]
+   },
+   {
+    "id": "shakshuka-s2",
+    "position": 2,
+    "instructionShort": "Stir in the garlic, cumin, paprika and chilli and cook for 1 minute until fragrant.",
+    "actionKey": "Stir",
+    "iconKey": "flame",
+    "durationSeconds": 60,
+    "timers": [
+     {
+      "id": "shakshuka-s2-t1",
+      "label": "Spices",
+      "durationSeconds": 60,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "shakshuka-s3",
+    "position": 3,
+    "instructionShort": "Add the tomatoes, season with salt and pepper and simmer until slightly thickened.",
+    "actionKey": "Simmer",
+    "iconKey": "cooking-pot",
+    "instructionDetail": "About 10 minutes. Add a splash of water if it gets too thick.",
+    "durationSeconds": 600,
+    "timers": [
+     {
+      "id": "shakshuka-s3-t1",
+      "label": "Sauce",
+      "durationSeconds": 600,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "shakshuka-s4",
+    "position": 4,
+    "instructionShort": "Make 4 hollows in the sauce, crack an egg into each, then cover and cook on low until the whites are set but the yolks are still runny.",
+    "actionKey": "Poach",
+    "iconKey": "egg",
+    "instructionDetail": "5–8 minutes, depending on how you like your eggs.",
+    "durationSeconds": 360,
+    "timers": [
+     {
+      "id": "shakshuka-s4-t1",
+      "label": "Eggs",
+      "durationSeconds": 360,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "shakshuka-s5",
+    "position": 5,
+    "instructionShort": "Scatter over the herbs and feta and serve from the pan with warm bread.",
+    "actionKey": "Serve",
+    "iconKey": "chef-hat"
+   }
+  ]
+ },
+ {
+  "id": "starter-dal-tadka",
+  "profileId": "default",
+  "title": "Dal Tadka",
+  "slug": "dal-tadka",
+  "summary": "Creamy yellow lentils finished with a sizzling tempering of ghee, cumin, garlic and chilli. Comfort in a bowl.",
+  "status": "ready",
+  "baseServingsNum": 4,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 55,
+  "visualTemplate": "process_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Dal Tadka",
+  "theme": "artisan-kraft",
+  "moodStamps": [
+   "Comfort food",
+   "Make ahead"
+  ],
+  "chefTip": "Let the cumin seeds sizzle and darken a shade before anything else goes in. That's where the tadka's flavour comes from.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#B8862D",
+   "textColor": "#2A221C",
+   "accentColor": "#E6C27A",
+   "pattern": "florals"
   },
-  {
-    "id": "tokyo-ramen",
-    "profileId": "system",
-    "title": "Tokyo Shoyu Craft Ramen with Ajitsuke Egg",
-    "slug": "tokyo-ramen",
-    "summary": "Silky fragrant chicken-dashi broth served over springy noodles, soft-boiled ajitsuke egg, nori crisp, and toasted sesame oil.",
-    "status": "ready",
-    "baseServingsNum": 2,
-    "baseServingsDen": 1,
-    "difficulty": "medium",
-    "totalMinutes": 30,
-    "visualTemplate": "ingredient_forward",
-    "visualStyleVersion": "v1",
-    "isCurated": true,
-    "origin": "curated",
-    "isFavorite": false,
-    "coverImage": "assets/illustrations/sketchbook_ramen.jpg",
-    "polaroidCaption": "Tokyo Shoyu Ramen",
-    "theme": "matcha-sage",
-    "moodStamps": ["Tokyo Craft", "Slow Simmered", "Umami Rich"],
-    "chefTip": "Boil noodles for exactly 90 seconds for that perfect bouncy springiness.",
-    "chefTipIcon": "chefHat",
-    "chefTipIconColor": "#8C7355",
-    "stickers": [],
-    "washiTapes": [],
-    "ingredients": [
-      { "id": "r-1", "displayName": "Fresh Ramen Noodles", "quantityNum": 2, "quantityDen": 1, "unitCode": "portions", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
-      { "id": "r-2", "displayName": "Chicken Dashi Broth", "quantityNum": 600, "quantityDen": 1, "unitCode": "ml", "position": 2, "icon": "soup", "iconColor": "#D9822B" },
-      { "id": "r-3", "displayName": "Ajitsuke Soft-Boiled Eggs", "quantityNum": 2, "quantityDen": 1, "unitCode": "halved", "position": 3, "icon": "egg", "iconColor": "#E5A124" },
-      { "id": "r-4", "displayName": "Toasted Sesame Oil", "quantityNum": 1, "quantityDen": 1, "unitCode": "tbsp", "position": 4, "icon": "droplets", "iconColor": "#8C7355" },
-      { "id": "r-5", "displayName": "Scallions & Nori Sheets", "quantityNum": 2, "quantityDen": 1, "unitCode": "stalks", "position": 5, "icon": "leaf", "iconColor": "#4A6B53" }
-    ],
-    "steps": [
-      {
-        "id": "rs-1",
-        "position": 1,
-        "actionKey": "Simmer",
-        "iconKey": "cookingPot",
-        "instructionShort": "Simmer broth gently with ginger and garlic to release soothing aromas.",
-        "instructionDetail": "Keep at gentle bare simmer to maintain clarity.",
-        "timers": [{ "id": "rt-1", "label": "Broth Simmer", "durationSeconds": 600, "position": 1 }]
-      },
-      {
-        "id": "rs-2",
-        "position": 2,
-        "actionKey": "Simmer",
-        "iconKey": "flame",
-        "instructionShort": "Boil ramen noodles for 90 seconds, then drain thoroughly.",
-        "instructionDetail": "Shake off excess water vigorously before placing into bowls.",
-        "timers": [{ "id": "rt-2", "label": "Noodle Boil", "durationSeconds": 90, "position": 1 }]
-      },
-      {
-        "id": "rs-3",
-        "position": 3,
-        "actionKey": "Fold",
-        "iconKey": "utensils",
-        "instructionShort": "Pour broth over noodles, arrange jammy egg, scallions, and nori with care.",
-        "instructionDetail": "Drizzle with aromatic toasted sesame oil right before serving."
-      }
+  "labels": [
+   {
+    "id": "dal-tadka-l-indian",
+    "labelId": "cuisine:indian",
+    "kind": "cuisine",
+    "canonicalKey": "indian",
+    "displayName": "Indian"
+   },
+   {
+    "id": "dal-tadka-l-comfort-food",
+    "labelId": "tag:comfort-food",
+    "kind": "tag",
+    "canonicalKey": "comfort-food",
+    "displayName": "Comfort food"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "dal-tadka-i1",
+    "displayName": "Yellow lentils (toor or moong dal)",
+    "position": 1,
+    "quantityNum": 200,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "dal-tadka-i2",
+    "displayName": "Water",
+    "position": 2,
+    "quantityNum": 750,
+    "quantityDen": 1,
+    "unitCode": "ml"
+   },
+   {
+    "id": "dal-tadka-i3",
+    "displayName": "Ground turmeric",
+    "position": 3,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "dal-tadka-i4",
+    "displayName": "Salt",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "dal-tadka-i5",
+    "displayName": "Ghee",
+    "position": 5,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "or oil"
+   },
+   {
+    "id": "dal-tadka-i6",
+    "displayName": "Cumin seeds",
+    "position": 6,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "dal-tadka-i7",
+    "displayName": "Dried red chillies",
+    "position": 7,
+    "quantityNum": 2,
+    "quantityDen": 1
+   },
+   {
+    "id": "dal-tadka-i8",
+    "displayName": "Onion",
+    "position": 8,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "finely chopped"
+   },
+   {
+    "id": "dal-tadka-i9",
+    "displayName": "Garlic",
+    "position": 9,
+    "quantityNum": 3,
+    "quantityDen": 1,
+    "unitCode": "cloves",
+    "prepText": "chopped"
+   },
+   {
+    "id": "dal-tadka-i10",
+    "displayName": "Fresh ginger",
+    "position": 10,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp",
+    "prepText": "grated"
+   },
+   {
+    "id": "dal-tadka-i11",
+    "displayName": "Tomato",
+    "position": 11,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "chopped"
+   },
+   {
+    "id": "dal-tadka-i12",
+    "displayName": "Kashmiri chilli powder",
+    "position": 12,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "dal-tadka-i13",
+    "displayName": "Garam masala",
+    "position": 13,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "dal-tadka-i14",
+    "displayName": "Fresh cilantro",
+    "position": 14,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "chopped"
+   }
+  ],
+  "steps": [
+   {
+    "id": "dal-tadka-s1",
+    "position": 1,
+    "instructionShort": "Rinse the lentils in a few changes of water until it runs almost clear.",
+    "actionKey": "Rinse",
+    "iconKey": "droplets"
+   },
+   {
+    "id": "dal-tadka-s2",
+    "position": 2,
+    "instructionShort": "Simmer the lentils with the water, turmeric and salt, partly covered, until completely soft and falling apart.",
+    "actionKey": "Simmer",
+    "iconKey": "cooking-pot",
+    "instructionDetail": "30–45 minutes (toor dal takes longest); top up with hot water if it gets too thick. In a pressure cooker, about 3 whistles on medium heat.",
+    "durationSeconds": 2100,
+    "timers": [
+     {
+      "id": "dal-tadka-s2-t1",
+      "label": "Lentils",
+      "durationSeconds": 2100,
+      "position": 1
+     }
     ]
+   },
+   {
+    "id": "dal-tadka-s3",
+    "position": 3,
+    "instructionShort": "Whisk the lentils until creamy, loosen with hot water to a pourable consistency and keep warm on low.",
+    "actionKey": "Whisk",
+    "iconKey": "utensils"
+   },
+   {
+    "id": "dal-tadka-s4",
+    "position": 4,
+    "instructionShort": "For the tadka, heat the ghee in a small pan, add the cumin seeds and dried chillies and let them sizzle, then fry the onion until golden.",
+    "actionKey": "Fry",
+    "iconKey": "flame",
+    "instructionDetail": "About 30 seconds for the seeds, then 5–6 minutes for the onion.",
+    "durationSeconds": 330,
+    "timers": [
+     {
+      "id": "dal-tadka-s4-t1",
+      "label": "Onion",
+      "durationSeconds": 330,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "dal-tadka-s5",
+    "position": 5,
+    "instructionShort": "Add the garlic and ginger for 1 minute, then the tomato and chilli powder; cook until the tomato softens.",
+    "actionKey": "Sauté",
+    "iconKey": "flame",
+    "instructionDetail": "3–4 minutes.",
+    "durationSeconds": 210,
+    "timers": [
+     {
+      "id": "dal-tadka-s5-t1",
+      "label": "Tomato",
+      "durationSeconds": 210,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "dal-tadka-s6",
+    "position": 6,
+    "instructionShort": "Pour the tadka over the dal, simmer for 2 minutes, then stir in the garam masala and cilantro. Serve with rice or roti.",
+    "actionKey": "Serve",
+    "iconKey": "chef-hat",
+    "durationSeconds": 120,
+    "timers": [
+     {
+      "id": "dal-tadka-s6-t1",
+      "label": "Simmer",
+      "durationSeconds": 120,
+      "position": 1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "starter-lemon-garlic-chicken",
+  "profileId": "default",
+  "title": "Lemon Garlic Roast Chicken Thighs",
+  "slug": "lemon-garlic-chicken",
+  "summary": "Crisp-skinned chicken thighs roasted with lemon, garlic and oregano until the pan juices turn sticky and golden.",
+  "status": "ready",
+  "baseServingsNum": 4,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 55,
+  "visualTemplate": "safety_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Lemon Garlic Roast Chicken Thighs",
+  "theme": "matcha-sage",
+  "moodStamps": [
+   "Sheet pan",
+   "Weeknight"
+  ],
+  "chefTip": "Give the thighs space in the tin. Crowded chicken steams instead of crisping.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#2F4A3A",
+   "textColor": "#E3C77F",
+   "accentColor": "#6E8F6A",
+   "pattern": "leaves"
   },
-  {
-    "id": "rustic-sourdough",
-    "profileId": "system",
-    "title": "Rustic Country Sourdough Boule",
-    "slug": "rustic-sourdough",
-    "summary": "A golden crackling blistered crust with an airy open crumb, wild yeast fermentation, and rich roasted grain depth.",
-    "status": "ready",
-    "baseServingsNum": 4,
-    "baseServingsDen": 1,
-    "difficulty": "hard",
-    "totalMinutes": 180,
-    "visualTemplate": "ingredient_forward",
-    "visualStyleVersion": "v1",
-    "isCurated": true,
-    "origin": "curated",
-    "isFavorite": true,
-    "coverImage": "assets/illustrations/sketchbook_sourdough.jpg",
-    "polaroidCaption": "Artisan Sourdough Boule",
-    "theme": "artisan-kraft",
-    "moodStamps": ["Wild Ferment", "Golden Crust", "Artisanal Craft"],
-    "chefTip": "Bake with the Dutch oven lid closed for 20 minutes to trap steam and create explosive oven spring blisters.",
-    "chefTipIcon": "chefHat",
-    "chefTipIconColor": "#8C7355",
-    "stickers": [],
-    "washiTapes": [],
-    "ingredients": [
-      { "id": "s-1", "displayName": "Unbleached Bread Flour", "quantityNum": 450, "quantityDen": 1, "unitCode": "g", "position": 1, "icon": "wheat", "iconColor": "#8C7355" },
-      { "id": "s-2", "displayName": "Whole Wheat Flour", "quantityNum": 50, "quantityDen": 1, "unitCode": "g", "position": 2, "icon": "wheat", "iconColor": "#8C7355" },
-      { "id": "s-3", "displayName": "Warm Water (26°C)", "quantityNum": 375, "quantityDen": 1, "unitCode": "ml", "position": 3, "icon": "droplets", "iconColor": "#4A6B53" },
-      { "id": "s-4", "displayName": "Active Sourdough Starter", "quantityNum": 100, "quantityDen": 1, "unitCode": "g", "position": 4, "icon": "wheat", "iconColor": "#D9822B" },
-      { "id": "s-5", "displayName": "Fine Sea Salt", "quantityNum": 10, "quantityDen": 1, "unitCode": "g", "position": 5, "icon": "scale", "iconColor": "#8C7355" }
-    ],
-    "steps": [
-      {
-        "id": "ss-1",
-        "position": 1,
-        "actionKey": "Whisk",
-        "iconKey": "utensils",
-        "instructionShort": "Dissolve starter in warm water, mix with flours, and autolyse 45 mins.",
-        "instructionDetail": "Allow flour to fully hydrate before incorporating salt.",
-        "timers": [{ "id": "st-1", "label": "Autolyse Rest", "durationSeconds": 2700, "position": 1 }]
-      },
-      {
-        "id": "ss-2",
-        "position": 2,
-        "actionKey": "Fold",
-        "iconKey": "layers",
-        "instructionShort": "Fold in salt and perform 4 sets of stretch-and-folds every 30 minutes.",
-        "instructionDetail": "Pull dough gently upwards and fold over the center.",
-        "timers": [{ "id": "st-2", "label": "Stretch & Fold", "durationSeconds": 1800, "position": 1 }]
-      },
-      {
-        "id": "ss-3",
-        "position": 3,
-        "actionKey": "Bake",
-        "iconKey": "flame",
-        "instructionShort": "Score with razor blade and bake in hot Dutch oven at 230°C for 40 mins.",
-        "instructionDetail": "Bake 20 mins lid on, then 20 mins lid off for deep caramelization.",
-        "timers": [{ "id": "st-3", "label": "Dutch Oven Bake", "durationSeconds": 2400, "position": 1 }]
-      }
+  "labels": [
+   {
+    "id": "lemon-garlic-chicken-l-mediterranean",
+    "labelId": "cuisine:mediterranean",
+    "kind": "cuisine",
+    "canonicalKey": "mediterranean",
+    "displayName": "Mediterranean"
+   },
+   {
+    "id": "lemon-garlic-chicken-l-weeknight",
+    "labelId": "tag:weeknight",
+    "kind": "tag",
+    "canonicalKey": "weeknight",
+    "displayName": "Weeknight"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "lemon-garlic-chicken-i1",
+    "displayName": "Bone-in, skin-on chicken thighs",
+    "position": 1,
+    "quantityNum": 8,
+    "quantityDen": 1,
+    "prepText": "about 1.2 kg"
+   },
+   {
+    "id": "lemon-garlic-chicken-i2",
+    "displayName": "Olive oil",
+    "position": 2,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "lemon-garlic-chicken-i3",
+    "displayName": "Garlic",
+    "position": 3,
+    "quantityNum": 4,
+    "quantityDen": 1,
+    "unitCode": "cloves",
+    "prepText": "minced"
+   },
+   {
+    "id": "lemon-garlic-chicken-i4",
+    "displayName": "Lemon",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "zested and juiced"
+   },
+   {
+    "id": "lemon-garlic-chicken-i5",
+    "displayName": "Dried oregano",
+    "position": 5,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "lemon-garlic-chicken-i6",
+    "displayName": "Smoked paprika",
+    "position": 6,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "lemon-garlic-chicken-i7",
+    "displayName": "Salt",
+    "position": 7,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "lemon-garlic-chicken-i8",
+    "displayName": "Black pepper",
+    "position": 8,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "lemon-garlic-chicken-i9",
+    "displayName": "Fresh parsley",
+    "position": 9,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "chopped, to serve"
+   }
+  ],
+  "steps": [
+   {
+    "id": "lemon-garlic-chicken-s1",
+    "position": 1,
+    "instructionShort": "Heat the oven to 220 °C (425 °F) and pat the chicken thighs very dry with kitchen paper.",
+    "actionKey": "Preheat",
+    "iconKey": "flame",
+    "temperatureC": 220,
+    "temperatureF": 425
+   },
+   {
+    "id": "lemon-garlic-chicken-s2",
+    "position": 2,
+    "instructionShort": "Mix the olive oil, garlic, lemon zest and juice, oregano, paprika, salt and pepper in a large bowl, add the chicken and toss to coat.",
+    "actionKey": "Mix",
+    "iconKey": "utensils",
+    "instructionDetail": "Rub a little of the mixture under the skin too."
+   },
+   {
+    "id": "lemon-garlic-chicken-s3",
+    "position": 3,
+    "instructionShort": "Arrange the thighs skin side up in a roasting tin, leaving space between them.",
+    "actionKey": "Arrange",
+    "iconKey": "layers"
+   },
+   {
+    "id": "lemon-garlic-chicken-s4",
+    "position": 4,
+    "instructionShort": "Roast until the skin is deep golden and crisp and the thickest piece reads at least 74 °C (165 °F) near the bone.",
+    "actionKey": "Roast",
+    "iconKey": "timer",
+    "instructionDetail": "35–45 minutes. Use a thermometer if you have one.",
+    "temperatureC": 220,
+    "temperatureF": 425,
+    "durationSeconds": 2400,
+    "timers": [
+     {
+      "id": "lemon-garlic-chicken-s4-t1",
+      "label": "Roast",
+      "durationSeconds": 2400,
+      "position": 1
+     }
     ]
-  }
+   },
+   {
+    "id": "lemon-garlic-chicken-s5",
+    "position": 5,
+    "instructionShort": "Rest for 5 minutes, spoon over the pan juices and scatter with parsley.",
+    "actionKey": "Rest",
+    "iconKey": "chef-hat",
+    "durationSeconds": 300,
+    "timers": [
+     {
+      "id": "lemon-garlic-chicken-s5-t1",
+      "label": "Rest",
+      "durationSeconds": 300,
+      "position": 1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "starter-egg-fried-rice",
+  "profileId": "default",
+  "title": "Egg Fried Rice",
+  "slug": "egg-fried-rice",
+  "summary": "Day-old rice stir-fried with egg, peas and spring onion, seasoned with soy and a drop of sesame oil. Ready in 15 minutes.",
+  "status": "ready",
+  "baseServingsNum": 2,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 15,
+  "visualTemplate": "process_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Egg Fried Rice",
+  "theme": "nordic-slate",
+  "moodStamps": [
+   "Leftovers",
+   "15 minutes"
+  ],
+  "chefTip": "Use cold, day-old rice. It's drier, so the grains fry and separate instead of turning mushy.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#273A5C",
+   "textColor": "#F3EBDD",
+   "accentColor": "#7C93B8",
+   "pattern": "waves"
+  },
+  "labels": [
+   {
+    "id": "egg-fried-rice-l-chinese",
+    "labelId": "cuisine:chinese",
+    "kind": "cuisine",
+    "canonicalKey": "chinese",
+    "displayName": "Chinese"
+   },
+   {
+    "id": "egg-fried-rice-l-quick",
+    "labelId": "tag:quick",
+    "kind": "tag",
+    "canonicalKey": "quick",
+    "displayName": "Quick"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "egg-fried-rice-i1",
+    "displayName": "Cold cooked rice",
+    "position": 1,
+    "quantityNum": 500,
+    "quantityDen": 1,
+    "unitCode": "g",
+    "prepText": "day-old"
+   },
+   {
+    "id": "egg-fried-rice-i2",
+    "displayName": "Eggs",
+    "position": 2,
+    "quantityNum": 3,
+    "quantityDen": 1,
+    "prepText": "beaten with a pinch of salt"
+   },
+   {
+    "id": "egg-fried-rice-i3",
+    "displayName": "Vegetable oil",
+    "position": 3,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "egg-fried-rice-i4",
+    "displayName": "Garlic",
+    "position": 4,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "cloves",
+    "prepText": "minced"
+   },
+   {
+    "id": "egg-fried-rice-i5",
+    "displayName": "Spring onions",
+    "position": 5,
+    "quantityNum": 3,
+    "quantityDen": 1,
+    "prepText": "sliced, whites and greens kept apart"
+   },
+   {
+    "id": "egg-fried-rice-i6",
+    "displayName": "Frozen peas",
+    "position": 6,
+    "quantityNum": 100,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "egg-fried-rice-i7",
+    "displayName": "Light soy sauce",
+    "position": 7,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "egg-fried-rice-i8",
+    "displayName": "Toasted sesame oil",
+    "position": 8,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "egg-fried-rice-i9",
+    "displayName": "White pepper",
+    "position": 9,
+    "quantityNum": 1,
+    "quantityDen": 4,
+    "unitCode": "tsp"
+   }
+  ],
+  "steps": [
+   {
+    "id": "egg-fried-rice-s1",
+    "position": 1,
+    "instructionShort": "Heat 1 tablespoon of oil in a wok or large frying pan over high heat and scramble the eggs until just set, then tip them onto a plate.",
+    "actionKey": "Scramble",
+    "iconKey": "egg",
+    "instructionDetail": "30–60 seconds; they finish cooking later."
+   },
+   {
+    "id": "egg-fried-rice-s2",
+    "position": 2,
+    "instructionShort": "Add the rest of the oil, then the garlic and spring onion whites; stir-fry for 30 seconds.",
+    "actionKey": "Stir-fry",
+    "iconKey": "flame"
+   },
+   {
+    "id": "egg-fried-rice-s3",
+    "position": 3,
+    "instructionShort": "Add the peas and stir-fry for 1–2 minutes.",
+    "actionKey": "Stir-fry",
+    "iconKey": "flame",
+    "durationSeconds": 90,
+    "timers": [
+     {
+      "id": "egg-fried-rice-s3-t1",
+      "label": "Peas",
+      "durationSeconds": 90,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "egg-fried-rice-s4",
+    "position": 4,
+    "instructionShort": "Add the rice, breaking up any clumps, and stir-fry until piping hot and starting to toast.",
+    "actionKey": "Stir-fry",
+    "iconKey": "flame",
+    "instructionDetail": "3–4 minutes. Press it against the hot pan now and then.",
+    "durationSeconds": 210,
+    "timers": [
+     {
+      "id": "egg-fried-rice-s4-t1",
+      "label": "Rice",
+      "durationSeconds": 210,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "egg-fried-rice-s5",
+    "position": 5,
+    "instructionShort": "Add the soy sauce, white pepper, eggs and spring onion greens and toss for 1 minute. Off the heat, drizzle with sesame oil and taste for salt.",
+    "actionKey": "Toss",
+    "iconKey": "chef-hat",
+    "durationSeconds": 60,
+    "timers": [
+     {
+      "id": "egg-fried-rice-s5-t1",
+      "label": "Finish",
+      "durationSeconds": 60,
+      "position": 1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "starter-pancakes",
+  "profileId": "default",
+  "title": "Fluffy Pancakes",
+  "slug": "pancakes",
+  "summary": "Tall, tender buttermilk-style pancakes from pantry staples. Whisk, rest, flip, stack.",
+  "status": "ready",
+  "baseServingsNum": 4,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 25,
+  "visualTemplate": "bake_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Fluffy Pancakes",
+  "theme": "artisan-kraft",
+  "moodStamps": [
+   "Breakfast",
+   "Pantry staples"
+  ],
+  "chefTip": "Stop stirring as soon as the flour disappears. A lumpy batter makes the fluffiest pancakes.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#E8DFCF",
+   "textColor": "#5B3A2A",
+   "accentColor": "#C9A57E",
+   "pattern": "stripes",
+   "display": "cover"
+  },
+  "labels": [
+   {
+    "id": "pancakes-l-american",
+    "labelId": "cuisine:american",
+    "kind": "cuisine",
+    "canonicalKey": "american",
+    "displayName": "American"
+   },
+   {
+    "id": "pancakes-l-breakfast",
+    "labelId": "tag:breakfast",
+    "kind": "tag",
+    "canonicalKey": "breakfast",
+    "displayName": "Breakfast"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "pancakes-i1",
+    "displayName": "All-purpose flour",
+    "position": 1,
+    "quantityNum": 190,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "pancakes-i2",
+    "displayName": "Sugar",
+    "position": 2,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tbsp"
+   },
+   {
+    "id": "pancakes-i3",
+    "displayName": "Baking powder",
+    "position": 3,
+    "quantityNum": 3,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "pancakes-i4",
+    "displayName": "Salt",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 4,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "pancakes-i5",
+    "displayName": "Milk",
+    "position": 5,
+    "quantityNum": 300,
+    "quantityDen": 1,
+    "unitCode": "ml"
+   },
+   {
+    "id": "pancakes-i6",
+    "displayName": "Egg",
+    "position": 6,
+    "quantityNum": 1,
+    "quantityDen": 1
+   },
+   {
+    "id": "pancakes-i7",
+    "displayName": "Butter",
+    "position": 7,
+    "quantityNum": 45,
+    "quantityDen": 1,
+    "unitCode": "g",
+    "prepText": "melted, plus more for the pan"
+   }
+  ],
+  "steps": [
+   {
+    "id": "pancakes-s1",
+    "position": 1,
+    "instructionShort": "Whisk the flour, sugar, baking powder and salt in a large bowl.",
+    "actionKey": "Whisk",
+    "iconKey": "utensils"
+   },
+   {
+    "id": "pancakes-s2",
+    "position": 2,
+    "instructionShort": "Whisk the milk, egg and melted butter together, pour into the dry ingredients and stir just until combined. Rest the batter for 5 minutes.",
+    "actionKey": "Mix",
+    "iconKey": "timer",
+    "durationSeconds": 300,
+    "timers": [
+     {
+      "id": "pancakes-s2-t1",
+      "label": "Batter rest",
+      "durationSeconds": 300,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "pancakes-s3",
+    "position": 3,
+    "instructionShort": "Heat a non-stick pan over medium heat and brush it lightly with butter.",
+    "actionKey": "Heat",
+    "iconKey": "flame"
+   },
+   {
+    "id": "pancakes-s4",
+    "position": 4,
+    "instructionShort": "Pour in about 60 ml of batter per pancake. Cook until bubbles cover the top and the edges look set, then flip and cook until golden.",
+    "actionKey": "Cook",
+    "iconKey": "flame",
+    "instructionDetail": "2–3 minutes on the first side, 1–2 on the second.",
+    "durationSeconds": 240,
+    "timers": [
+     {
+      "id": "pancakes-s4-t1",
+      "label": "First side",
+      "durationSeconds": 150,
+      "position": 1
+     },
+     {
+      "id": "pancakes-s4-t2",
+      "label": "Second side",
+      "durationSeconds": 90,
+      "position": 2
+     }
+    ]
+   },
+   {
+    "id": "pancakes-s5",
+    "position": 5,
+    "instructionShort": "Keep the cooked pancakes warm in a low oven while you make the rest, then serve with maple syrup, berries or butter.",
+    "actionKey": "Serve",
+    "iconKey": "chef-hat",
+    "instructionDetail": "95 °C (200 °F) keeps them soft without drying them out.",
+    "temperatureC": 95,
+    "temperatureF": 200
+   }
+  ]
+ },
+ {
+  "id": "starter-banana-bread",
+  "profileId": "default",
+  "title": "Banana Bread",
+  "slug": "banana-bread",
+  "summary": "A moist, one-bowl loaf that turns overripe bananas into the best thing on the counter.",
+  "status": "ready",
+  "baseServingsNum": 10,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 75,
+  "visualTemplate": "bake_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Banana Bread",
+  "theme": "artisan-kraft",
+  "moodStamps": [
+   "One bowl",
+   "Baking"
+  ],
+  "chefTip": "The blacker the bananas, the sweeter and more fragrant the loaf.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#6E5034",
+   "textColor": "#F3EBDD",
+   "pattern": "ribs"
+  },
+  "labels": [
+   {
+    "id": "banana-bread-l-american",
+    "labelId": "cuisine:american",
+    "kind": "cuisine",
+    "canonicalKey": "american",
+    "displayName": "American"
+   },
+   {
+    "id": "banana-bread-l-baking",
+    "labelId": "tag:baking",
+    "kind": "tag",
+    "canonicalKey": "baking",
+    "displayName": "Baking"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "banana-bread-i1",
+    "displayName": "Very ripe bananas",
+    "position": 1,
+    "quantityNum": 3,
+    "quantityDen": 1
+   },
+   {
+    "id": "banana-bread-i2",
+    "displayName": "Butter",
+    "position": 2,
+    "quantityNum": 75,
+    "quantityDen": 1,
+    "unitCode": "g",
+    "prepText": "melted"
+   },
+   {
+    "id": "banana-bread-i3",
+    "displayName": "Baking soda",
+    "position": 3,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "banana-bread-i4",
+    "displayName": "Salt",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 4,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "banana-bread-i5",
+    "displayName": "Brown sugar",
+    "position": 5,
+    "quantityNum": 150,
+    "quantityDen": 1,
+    "unitCode": "g"
+   },
+   {
+    "id": "banana-bread-i6",
+    "displayName": "Egg",
+    "position": 6,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "beaten"
+   },
+   {
+    "id": "banana-bread-i7",
+    "displayName": "Vanilla extract",
+    "position": 7,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "banana-bread-i8",
+    "displayName": "All-purpose flour",
+    "position": 8,
+    "quantityNum": 190,
+    "quantityDen": 1,
+    "unitCode": "g"
+   }
+  ],
+  "steps": [
+   {
+    "id": "banana-bread-s1",
+    "position": 1,
+    "instructionShort": "Heat the oven to 175 °C (350 °F) and butter a 23 × 13 cm (9 × 5 in) loaf tin.",
+    "actionKey": "Preheat",
+    "iconKey": "flame",
+    "temperatureC": 175,
+    "temperatureF": 350
+   },
+   {
+    "id": "banana-bread-s2",
+    "position": 2,
+    "instructionShort": "Mash the bananas in a large bowl until smooth, then stir in the melted butter.",
+    "actionKey": "Mash",
+    "iconKey": "banana"
+   },
+   {
+    "id": "banana-bread-s3",
+    "position": 3,
+    "instructionShort": "Mix in the baking soda and salt, then the sugar, egg and vanilla.",
+    "actionKey": "Mix",
+    "iconKey": "utensils"
+   },
+   {
+    "id": "banana-bread-s4",
+    "position": 4,
+    "instructionShort": "Add the flour and fold until no dry streaks remain. Don't overmix.",
+    "actionKey": "Fold",
+    "iconKey": "wheat"
+   },
+   {
+    "id": "banana-bread-s5",
+    "position": 5,
+    "instructionShort": "Scrape into the tin and bake until a skewer in the middle comes out clean.",
+    "actionKey": "Bake",
+    "iconKey": "timer",
+    "instructionDetail": "55–65 minutes. Cover loosely with foil if the top browns too fast.",
+    "temperatureC": 175,
+    "temperatureF": 350,
+    "durationSeconds": 3600,
+    "timers": [
+     {
+      "id": "banana-bread-s5-t1",
+      "label": "Bake",
+      "durationSeconds": 3600,
+      "position": 1
+     }
+    ]
+   },
+   {
+    "id": "banana-bread-s6",
+    "position": 6,
+    "instructionShort": "Cool in the tin for 10 minutes, then turn out onto a rack to cool before slicing.",
+    "actionKey": "Cool",
+    "iconKey": "bread",
+    "durationSeconds": 600,
+    "timers": [
+     {
+      "id": "banana-bread-s6-t1",
+      "label": "Cool in tin",
+      "durationSeconds": 600,
+      "position": 1
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "starter-guacamole",
+  "profileId": "default",
+  "title": "Classic Guacamole",
+  "slug": "guacamole",
+  "summary": "Chunky avocado mashed with lime, onion, chilli and cilantro. Ten minutes, no cooking.",
+  "status": "ready",
+  "baseServingsNum": 4,
+  "baseServingsDen": 1,
+  "difficulty": "easy",
+  "totalMinutes": 10,
+  "visualTemplate": "ingredient_forward",
+  "visualStyleVersion": "v1",
+  "isCurated": true,
+  "origin": "curated",
+  "isFavorite": false,
+  "polaroidCaption": "Classic Guacamole",
+  "theme": "matcha-sage",
+  "moodStamps": [
+   "No cook",
+   "10 minutes"
+  ],
+  "chefTip": "Pick avocados that give slightly when pressed near the stem. Rock-hard ones won't mash.",
+  "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#4A6B3A",
+   "textColor": "#F3EBDD",
+   "accentColor": "#9DBB7A",
+   "pattern": "chevrons"
+  },
+  "labels": [
+   {
+    "id": "guacamole-l-mexican",
+    "labelId": "cuisine:mexican",
+    "kind": "cuisine",
+    "canonicalKey": "mexican",
+    "displayName": "Mexican"
+   },
+   {
+    "id": "guacamole-l-quick",
+    "labelId": "tag:quick",
+    "kind": "tag",
+    "canonicalKey": "quick",
+    "displayName": "Quick"
+   }
+  ],
+  "ingredients": [
+   {
+    "id": "guacamole-i1",
+    "displayName": "Ripe avocados",
+    "position": 1,
+    "quantityNum": 3,
+    "quantityDen": 1
+   },
+   {
+    "id": "guacamole-i2",
+    "displayName": "Lime juice",
+    "position": 2,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "about 1 lime"
+   },
+   {
+    "id": "guacamole-i3",
+    "displayName": "Salt",
+    "position": 3,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "unitCode": "tsp"
+   },
+   {
+    "id": "guacamole-i4",
+    "displayName": "Small white onion",
+    "position": 4,
+    "quantityNum": 1,
+    "quantityDen": 2,
+    "prepText": "finely chopped"
+   },
+   {
+    "id": "guacamole-i5",
+    "displayName": "Jalapeño",
+    "position": 5,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "prepText": "seeded and minced"
+   },
+   {
+    "id": "guacamole-i6",
+    "displayName": "Fresh cilantro",
+    "position": 6,
+    "quantityNum": 2,
+    "quantityDen": 1,
+    "unitCode": "tbsp",
+    "prepText": "chopped"
+   },
+   {
+    "id": "guacamole-i7",
+    "displayName": "Roma tomato",
+    "position": 7,
+    "quantityNum": 1,
+    "quantityDen": 1,
+    "isOptional": true,
+    "prepText": "seeded and diced"
+   }
+  ],
+  "steps": [
+   {
+    "id": "guacamole-s1",
+    "position": 1,
+    "instructionShort": "Halve the avocados, remove the stones and scoop the flesh into a bowl.",
+    "actionKey": "Scoop",
+    "iconKey": "avocado"
+   },
+   {
+    "id": "guacamole-s2",
+    "position": 2,
+    "instructionShort": "Mash with a fork to the texture you like, then stir in the lime juice and salt straight away.",
+    "actionKey": "Mash",
+    "iconKey": "utensils",
+    "instructionDetail": "The lime keeps the colour bright."
+   },
+   {
+    "id": "guacamole-s3",
+    "position": 3,
+    "instructionShort": "Fold in the onion, jalapeño, cilantro and tomato. Taste and add more lime or salt if it needs it.",
+    "actionKey": "Fold",
+    "iconKey": "leaf"
+   },
+   {
+    "id": "guacamole-s4",
+    "position": 4,
+    "instructionShort": "Serve right away with tortilla chips, or press cling film onto the surface and chill for up to 2 hours.",
+    "actionKey": "Serve",
+    "iconKey": "chef-hat"
+   }
+  ]
+ }
 ]

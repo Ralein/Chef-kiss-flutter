@@ -8,12 +8,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../app/chef_toast_service.dart';
 import '../../../../app/providers.dart';
-import '../../../../app/widgets/recipe_image.dart';
 import '../../../../core/media/image_prep.dart';
 import '../../../../core/media/image_store.dart';
 import '../../../../core/media/local_image_store.dart';
 import '../../../../core/media/photo_picker.dart';
-import '../../../../core/media/recipe_art.dart';
 import '../../../library/domain/book_covers.dart';
 
 /// Result of the cover picker: a new image source, or [remove].
@@ -23,18 +21,17 @@ class CoverChoice {
   static const remove = CoverChoice(null);
 }
 
-Future<CoverChoice?> showCoverPhotoSheet(BuildContext context, {required ScrapbookTheme theme}) {
+Future<CoverChoice?> showCoverPhotoSheet(BuildContext context) {
   return showModalBottomSheet<CoverChoice>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    builder: (_) => _CoverSheet(theme: theme),
+    builder: (_) => const _CoverSheet(),
   );
 }
 
 class _CoverSheet extends ConsumerStatefulWidget {
-  final ScrapbookTheme theme;
-  const _CoverSheet({required this.theme});
+  const _CoverSheet();
 
   @override
   ConsumerState<_CoverSheet> createState() => _CoverSheetState();
@@ -118,25 +115,6 @@ class _CoverSheetState extends ConsumerState<_CoverSheet> {
               leading: const Icon(LucideIcons.link),
               title: const Text('Use an image link'),
               onTap: _busy ? null : _link,
-            ),
-            const SizedBox(height: 8),
-            Text('Illustrations', style: t.labelLarge),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 84,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: RecipeArt.all.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, i) => InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => Navigator.pop(context, CoverChoice(RecipeArt.all[i])),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(width: 112, child: RecipeImage(source: RecipeArt.all[i], theme: widget.theme)),
-                  ),
-                ),
-              ),
             ),
             const SizedBox(height: 8),
             TextButton.icon(

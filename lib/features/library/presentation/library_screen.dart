@@ -16,6 +16,7 @@ import '../../imports/presentation/import_flows.dart';
 import '../../nutrition/presentation/recipe_insights.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../journal/presentation/journal_view.dart';
+import '../../onboarding/application/onboarding.dart';
 import '../../recipe_detail/presentation/widgets/recipe_sheets.dart'
     show createBook, showMoveToBookSheet, showTextPromptDialog;
 import '../domain/book_covers.dart';
@@ -688,6 +689,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           sliver: SliverToBoxAdapter(child: Text('$visible of ${all.length} recipes', style: t.bodySmall)),
         ),
       const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      if (!_narrowed && !(ref.watch(welcomeCardDismissedProvider).valueOrNull ?? true))
+        const SliverToBoxAdapter(child: _WelcomeCard()),
     ];
   }
 
@@ -1078,6 +1081,64 @@ class _ViewToggle extends StatelessWidget {
       ],
       selected: {view},
       onSelectionChanged: (s) => onChanged(s.first),
+    );
+  }
+}
+
+/// New in the kitchen: a card to meet the developer, until it's closed or
+/// followed.
+class _WelcomeCard extends ConsumerWidget {
+  const _WelcomeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.chefColors;
+    final t = context.chefText;
+    final name = ref.watch(cookNameProvider);
+    void dismiss() => ref.read(preferencesRepositoryProvider).writeJson(welcomeCardDismissedKey, true);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Material(
+        color: c.surfacePaper.withValues(alpha: 0.95),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ChefRadius.tile),
+          side: BorderSide(color: c.outlineSubtle),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () {
+            dismiss();
+            context.push('/about');
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: c.tomatoSoft,
+                  child: Icon(LucideIcons.heartHandshake, size: 20, color: c.accentTomato),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name == null ? 'Welcome to Chef’s Kiss!' : 'Welcome to Chef’s Kiss, $name!',
+                        style: t.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text('Meet the developer and share your ideas', style: t.bodySmall),
+                    ],
+                  ),
+                ),
+                IconButton(tooltip: 'Close', onPressed: dismiss, icon: const Icon(LucideIcons.x, size: 18)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

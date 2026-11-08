@@ -5,14 +5,12 @@ import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:chefs_kiss/features/imports/services/heuristic_recipe_extractor.dart';
 import 'package:chefs_kiss/features/imports/data/local_import_repository.dart';
-import 'package:chefs_kiss/features/illustrations/data/illustration_matcher.dart';
 
 void main() {
   late AppDatabase db;
   late DriftRecipeRepository recipeRepo;
   late HeuristicRecipeExtractor extractor;
   late LocalImportRepository importRepo;
-  late IllustrationMatcher illustrationMatcher;
 
   setUp(() {
     db = AppDatabase(NativeDatabase.memory());
@@ -22,7 +20,6 @@ void main() {
       recipeRepo: recipeRepo,
       extractor: extractor,
     );
-    illustrationMatcher = IllustrationMatcher();
   });
 
   tearDown(() async {
@@ -175,26 +172,6 @@ Instructions:
       final fetchedFromDb = (await recipeRepo.getRecipeById(savedRecipe.id)).orNull!;
       expect(fetchedFromDb.title, equals('Crispy Garlic Butter Chicken'));
       expect(fetchedFromDb.origin, equals(Origin.imported));
-    });
-
-    test('IllustrationMatcher matches recipe categories accurately', () {
-      final pastaRecipe = Recipe(
-        id: 'r_pasta',
-        profileId: 'default',
-        title: 'Rigatoni Carbonara with Guanciale',
-        status: RecipeStatus.ready,
-        baseServings: Rational(2),
-        difficulty: RecipeDifficulty.medium,
-        totalMinutes: 20,
-        createdAt: 1000,
-        updatedAt: 1000,
-        ingredients: const [],
-        steps: const [],
-      );
-
-      final match = illustrationMatcher.matchRecipe(pastaRecipe);
-      expect(match.canonicalKey, equals('pasta'));
-      expect(match.category, equals('pasta'));
     });
   });
 }

@@ -123,7 +123,7 @@ class JsonLdRecipeParser {
       createdAt: now,
       updatedAt: now,
       origin: Origin.imported,
-      coverImage: image ?? RecipeArt.coverFor(resolvedTitle, ingredients.map((i) => i.displayName)),
+      coverImage: image,
       polaroidCaption: resolvedTitle,
       ingredients: ingredients,
       steps: steps,

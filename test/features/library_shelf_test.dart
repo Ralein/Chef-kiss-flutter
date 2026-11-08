@@ -31,6 +31,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
+import '../support/welcome_done.dart';
+
 Recipe _recipe(String id, String title, {bool favorite = false, String? caption}) => Recipe(
   id: id,
   profileId: 'default',
@@ -83,6 +85,7 @@ Future<(AppDatabase, ProviderContainer)> _pumpApp(
     ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(db),
+        ...welcomeDone,
         secretStoreProvider.overrideWithValue(InMemorySecretStore()),
         screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
         imageStoreProvider.overrideWithValue(const NoopImageStore()),

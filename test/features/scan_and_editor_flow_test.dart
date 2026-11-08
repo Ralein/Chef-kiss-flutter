@@ -19,6 +19,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:recipe_domain/recipe_domain.dart';
 
+import '../support/welcome_done.dart';
+
 final _tinyPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
 );
@@ -67,6 +69,7 @@ Future<(AppDatabase, ProviderContainer)> _pump(WidgetTester tester, {List<Overri
   await tester.pumpWidget(ProviderScope(
     overrides: [
       databaseProvider.overrideWithValue(db),
+      ...welcomeDone,
       secretStoreProvider.overrideWithValue(InMemorySecretStore()),
       screenAwakeServiceProvider.overrideWithValue(FakeScreenAwakeService()),
       imageStoreProvider.overrideWithValue(const NoopImageStore()),
@@ -141,7 +144,7 @@ void main() {
       baseServings: Rational(6),
       createdAt: 42,
       updatedAt: 42,
-      coverImage: 'assets/illustrations/sketchbook_crepes.jpg',
+      coverImage: 'https://example.com/crepes.jpg',
       isFavorite: true,
       stickers: const [ScrapbookSticker(id: 'st', content: 'food-donut', x: 30, y: 40)],
       ingredients: [RecipeIngredient(id: 'i', recipeId: 'keepsake', displayName: 'Flour', quantity: Rational(2), unitCode: 'cup', position: 1)],
@@ -157,7 +160,7 @@ void main() {
 
     final edited = (await repo.getRecipeById('keepsake')).orNull!;
     expect(edited.title, 'Grandma’s apple pie');
-    expect(edited.coverImage, 'assets/illustrations/sketchbook_crepes.jpg');
+    expect(edited.coverImage, 'https://example.com/crepes.jpg');
     expect(edited.stickers.single.id, 'st');
     expect(edited.isFavorite, isTrue);
     expect(edited.createdAt, 42);

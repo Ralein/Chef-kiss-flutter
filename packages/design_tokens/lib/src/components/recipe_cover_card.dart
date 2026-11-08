@@ -28,8 +28,6 @@ class RecipeCoverCard extends StatelessWidget {
     final accents = [colors.accentTomato, colors.accentHerb, colors.accentYolk];
     final cardAccent = accents[recipe.title.hashCode.abs() % accents.length];
 
-    final illustrationAsset = _getIllustrationAsset(recipe);
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -51,7 +49,7 @@ class RecipeCoverCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Hero cover / illustrated sketchbook region
+              // Hero cover region
               Stack(
                 children: [
                   Container(
@@ -64,15 +62,7 @@ class RecipeCoverCard extends StatelessWidget {
                       ),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: illustrationAsset != null
-                        ? Image.asset(
-                            illustrationAsset,
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _buildFallbackHero(cardAccent, isCompact, recipe, textTheme),
-                          )
-                        : _buildFallbackHero(cardAccent, isCompact, recipe, textTheme),
+                    child: _buildFallbackHero(cardAccent, isCompact, recipe, textTheme),
                   ),
 
                   // Washi Tape accent in top-left
@@ -226,26 +216,6 @@ class RecipeCoverCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String? _getIllustrationAsset(Recipe recipe) {
-    final title = recipe.title.toLowerCase();
-    if (title.contains('pasta') || title.contains('fettuccine') || title.contains('spaghetti') || title.contains('pomodoro') || title.contains('tomato')) {
-      return 'assets/illustrations/sketchbook_pasta.jpg';
-    }
-    if (title.contains('sourdough') || title.contains('bread') || title.contains('toast') || title.contains('dough') || title.contains('bake')) {
-      return 'assets/illustrations/sketchbook_sourdough.jpg';
-    }
-    if (title.contains('ramen') || title.contains('noodle') || title.contains('soup') || title.contains('broth')) {
-      return 'assets/illustrations/sketchbook_ramen.jpg';
-    }
-    if (title.contains('crêpe') || title.contains('crepe') || title.contains('pancake') || title.contains('berry') || title.contains('dessert')) {
-      return 'assets/illustrations/sketchbook_crepes.jpg';
-    }
-    if (title.contains('salad') || title.contains('greek') || title.contains('mediterranean') || title.contains('feta')) {
-      return 'assets/illustrations/sketchbook_salad.jpg';
-    }
-    return null;
   }
 
   IconData _getCategoryIcon(Recipe recipe) {
