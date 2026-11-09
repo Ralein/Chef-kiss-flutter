@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ splash icon: drawn in a 288dp box, so a 72dp inset leaves the
-     medallion at 144dp, the same size as on the other launch screens. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/splash_medallion"
-    android:inset="72dp" />
