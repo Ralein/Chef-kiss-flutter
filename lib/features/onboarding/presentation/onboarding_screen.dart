@@ -10,10 +10,11 @@ import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/app_info.dart';
 import '../../../app/providers.dart';
+import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/splash_view.dart';
 import '../../library/domain/cookbook.dart';
 import '../../library/domain/shelf_style.dart';
-import '../../library/presentation/widgets/recipe_card.dart';
+import '../../library/presentation/widgets/library_books.dart' show BookCoverFace;
 import '../../library/presentation/widgets/shelf_scene.dart';
 import '../../scan/presentation/scan_screen.dart' show ScanModeCopy;
 import '../application/onboarding.dart';
@@ -284,7 +285,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: Text(all ? 'Clear' : 'Select all'),
             ),
           ),
-        // The library's own cards, two to a row.
+        // Each recipe as a book, two to a row.
         for (var row = 0; row * columns < starters.length; row++) ...[
           if (row > 0) const SizedBox(height: 12),
           Row(
@@ -590,7 +591,7 @@ class _LookTile extends StatelessWidget {
   }
 }
 
-/// A starter recipe as the library's own card, to tick by tapping it.
+/// A starter recipe as a book, to tick by tapping it.
 class _StarterCard extends StatelessWidget {
   final Recipe recipe;
   final bool owned;
@@ -603,51 +604,67 @@ class _StarterCard extends StatelessWidget {
     final c = context.chefColors;
     final t = context.chefText;
     final on = owned || selected;
-    final radius = BorderRadius.circular(ChefRadius.tile);
+    final cuisine = recipe.labels.where((l) => l.kind == 'cuisine').firstOrNull?.displayName;
+    final meta = owned ? 'In your cookbook' : [?cuisine, KitchenFormat.minutes(recipe.totalMinutes)].join(' · ');
     return Semantics(
+      button: true,
       selected: on,
       enabled: !owned,
-      hint: owned ? 'In your cookbook' : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Stack(
+      label: '${recipe.title}, $meta',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: owned ? null : onTap,
+        child: Opacity(
+          opacity: owned ? 0.6 : 1,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Opacity(
-                opacity: owned ? 0.6 : 1,
-                child: RecipeCard(recipe: recipe, onTap: owned ? () {} : onTap),
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedContainer(
-                    duration: ChefMotion.quick,
-                    decoration: BoxDecoration(
-                      borderRadius: radius,
-                      border: Border.all(color: on ? c.accentTomato : Colors.transparent, width: 2),
-                    ),
+              AspectRatio(
+                aspectRatio: 0.7,
+                child: AnimatedContainer(
+                  duration: ChefMotion.quick,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: on ? c.accentTomato : Colors.transparent, width: 2),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6, offset: const Offset(1, 3)),
+                          ],
+                        ),
+                        // Drawn at shelf size and scaled, so titles break as on the shelf.
+                        child: FittedBox(
+                          fit: BoxFit.fill,
+                          child: SizedBox(width: 124, height: 177, child: BookCoverFace(recipe: recipe)),
+                        ),
+                      ),
+                      if (on)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(color: c.accentTomato, shape: BoxShape.circle),
+                            child: const Icon(LucideIcons.check, size: 16, color: Colors.white),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
-              if (on)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: IgnorePointer(
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(color: c.accentTomato, shape: BoxShape.circle),
-                      child: const Icon(LucideIcons.check, size: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
+              const SizedBox(height: 8),
+              Text(recipe.title, style: t.titleSmall, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text(meta, style: t.bodySmall, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
           ),
-          if (owned) ...[
-            const SizedBox(height: 6),
-            Text('In your cookbook', style: t.labelMedium?.copyWith(color: c.contentSecondary), textAlign: TextAlign.center),
-          ],
-        ],
+        ),
       ),
     );
   }

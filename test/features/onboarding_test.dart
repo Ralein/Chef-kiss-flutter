@@ -12,7 +12,6 @@ import 'package:chefs_kiss/data/seed/starter_recipes.dart';
 import 'package:chefs_kiss/features/library/domain/shelf_style.dart';
 import 'package:chefs_kiss/features/library/presentation/library_screen.dart';
 import 'package:chefs_kiss/features/library/presentation/widgets/library_books.dart';
-import 'package:chefs_kiss/features/library/presentation/widgets/recipe_card.dart';
 import 'package:chefs_kiss/features/onboarding/application/onboarding.dart';
 import 'package:chefs_kiss/features/onboarding/presentation/onboarding_screen.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
@@ -178,8 +177,8 @@ void main() {
     // Starter recipes, as the library's cards: nothing is added unless picked.
     expect(find.text('Start with a few classics'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Continue'), findsOneWidget);
-    await tap(find.widgetWithText(RecipeCard, 'Dal Tadka'));
-    await tap(find.widgetWithText(RecipeCard, 'Shakshuka'));
+    await tap(find.text('Dal Tadka').last);
+    await tap(find.text('Shakshuka').last);
     expect(find.widgetWithText(FilledButton, 'Add 2 recipes'), findsOneWidget);
     await tap(find.widgetWithText(FilledButton, 'Add 2 recipes'));
 

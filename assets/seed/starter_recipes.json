@@ -23,6 +23,11 @@
   ],
   "chefTip": "Start the garlic in cool oil over low heat. Pale gold garlic is sweet; brown garlic turns bitter.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#7A2E2A",
+   "textColor": "#E3C77F",
+   "pattern": "bands"
+  },
   "labels": [
    {
     "id": "aglio-e-olio-l-italian",
@@ -182,6 +187,12 @@
   ],
   "chefTip": "Take the pan off the heat while the yolks still wobble. They keep cooking in the hot sauce.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#A04E3B",
+   "textColor": "#F3EBDD",
+   "accentColor": "#D98A6A",
+   "pattern": "dots"
+  },
   "labels": [
    {
     "id": "shakshuka-l-north-african",
@@ -399,6 +410,12 @@
   ],
   "chefTip": "Let the cumin seeds sizzle and darken a shade before anything else goes in. That's where the tadka's flavour comes from.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#B8862D",
+   "textColor": "#2A221C",
+   "accentColor": "#E6C27A",
+   "pattern": "florals"
+  },
   "labels": [
    {
     "id": "dal-tadka-l-indian",
@@ -640,6 +657,12 @@
   ],
   "chefTip": "Give the thighs space in the tin. Crowded chicken steams instead of crisping.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#2F4A3A",
+   "textColor": "#E3C77F",
+   "accentColor": "#6E8F6A",
+   "pattern": "leaves"
+  },
   "labels": [
    {
     "id": "lemon-garlic-chicken-l-mediterranean",
@@ -818,6 +841,12 @@
   ],
   "chefTip": "Use cold, day-old rice. It's drier, so the grains fry and separate instead of turning mushy.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#273A5C",
+   "textColor": "#F3EBDD",
+   "accentColor": "#7C93B8",
+   "pattern": "waves"
+  },
   "labels": [
    {
     "id": "egg-fried-rice-l-chinese",
@@ -1001,6 +1030,13 @@
   ],
   "chefTip": "Stop stirring as soon as the flour disappears. A lumpy batter makes the fluffiest pancakes.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#E8DFCF",
+   "textColor": "#5B3A2A",
+   "accentColor": "#C9A57E",
+   "pattern": "stripes",
+   "display": "cover"
+  },
   "labels": [
    {
     "id": "pancakes-l-american",
@@ -1165,6 +1201,11 @@
   ],
   "chefTip": "The blacker the bananas, the sweeter and more fragrant the loaf.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#6E5034",
+   "textColor": "#F3EBDD",
+   "pattern": "ribs"
+  },
   "labels": [
    {
     "id": "banana-bread-l-american",
@@ -1339,6 +1380,12 @@
   ],
   "chefTip": "Pick avocados that give slightly when pressed near the stem. Rock-hard ones won't mash.",
   "chefTipIcon": "chef-hat",
+  "bookStyle": {
+   "spineColor": "#4A6B3A",
+   "textColor": "#F3EBDD",
+   "accentColor": "#9DBB7A",
+   "pattern": "chevrons"
+  },
   "labels": [
    {
     "id": "guacamole-l-mexican",
