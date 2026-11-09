@@ -16,8 +16,6 @@ import '../../../core/platform/tts_voices.dart';
 import '../../../core/platform/flutter_tts_speech_service.dart';
 import '../../backup/presentation/backup_export_dialog.dart';
 import '../../backup/presentation/backup_restore_dialog.dart';
-import '../../onboarding/application/onboarding.dart';
-import '../../recipe_detail/presentation/widgets/recipe_sheets.dart' show showTextPromptDialog;
 import '../../voice/listen_button.dart';
 import '../../voice/read_aloud_controller.dart';
 import '../../voice/spoken_text.dart';
@@ -46,8 +44,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
               children: [
                 Semantics(header: true, child: Text('Settings', style: t.headlineMedium)),
-                const SizedBox(height: 16),
-                const _ProfileSection(),
                 const SizedBox(height: 16),
                 const _AiSection(),
                 const SizedBox(height: 16),
@@ -94,50 +90,6 @@ class _Section extends StatelessWidget {
           ...children,
         ],
       ),
-    );
-  }
-}
-
-// --- Profile -------------------------------------------------------------------
-
-/// The name the welcome tour asked for, and the cook's goal for the year.
-class _ProfileSection extends ConsumerWidget {
-  const _ProfileSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = context.chefText;
-    final name = ref.watch(cookNameProvider);
-    final goal = ref.watch(cookingGoalProvider).valueOrNull;
-    return _Section(
-      title: 'Profile',
-      icon: LucideIcons.userRound,
-      children: [
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Name'),
-          trailing: Text(name ?? 'Add', style: t.labelLarge),
-          onTap: () async {
-            final value = await showTextPromptDialog(context, title: 'Your name', initial: name, hint: 'Type your name');
-            if (value == null || value.trim().isEmpty) return;
-            await saveCookName(ref.read(settingsRepositoryProvider), value);
-          },
-        ),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Cooking goal'),
-          subtitle: Text('New recipes to try in ${DateTime.now().year}'),
-          trailing: Text(goal == null ? 'Set' : '$goal', style: t.labelLarge),
-          onTap: () async {
-            final value = await showDialog<double>(
-              context: context,
-              builder: (_) => _NumberDialog(title: 'Cooking goal', initial: (goal ?? 52).toDouble(), unit: 'recipes', max: 365),
-            );
-            if (value == null) return;
-            await ref.read(preferencesRepositoryProvider).writeJson(cookingGoalKey, value.round());
-          },
-        ),
-      ],
     );
   }
 }
@@ -465,8 +417,8 @@ class _NumberDialog extends StatefulWidget {
   final String title;
   final double initial;
   final String unit;
-  final double max;
-  const _NumberDialog({required this.title, required this.initial, required this.unit, this.max = 20000});
+  static const double max = 20000;
+  const _NumberDialog({required this.title, required this.initial, required this.unit});
 
   @override
   State<_NumberDialog> createState() => _NumberDialogState();
@@ -484,8 +436,8 @@ class _NumberDialogState extends State<_NumberDialog> {
 
   void _submit() {
     final v = double.tryParse(_controller.text.trim());
-    if (v == null || v <= 0 || v > widget.max) {
-      setState(() => _error = 'Enter a number between 1 and ${KitchenFormat.kcal(widget.max)}');
+    if (v == null || v <= 0 || v > _NumberDialog.max) {
+      setState(() => _error = 'Enter a number between 1 and ${KitchenFormat.kcal(_NumberDialog.max)}');
       return;
     }
     Navigator.pop(context, v);

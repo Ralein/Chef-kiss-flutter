@@ -4,6 +4,7 @@ import 'package:recipe_domain/recipe_domain.dart';
 
 import '../../../app/providers.dart';
 import '../../../data/seed/starter_recipes.dart';
+import '../../library/domain/book_covers.dart';
 import '../../library/domain/shelf_style.dart';
 
 /// The welcome tour finished on this device: the tour's version once it's
@@ -78,6 +79,7 @@ Future<void> saveOnboarding(
   required List<Recipe> starters,
   required PreferencesRepository prefs,
   required RecipeRepository recipes,
+  required CollectionRepository books,
 }) async {
   // A fresh look for the shelves; books already arranged stay where they are.
   if (answers.look case final look?) {
@@ -89,7 +91,16 @@ Future<void> saveOnboarding(
     for (final r in starters)
       if (answers.starterIds.contains(r.id)) r,
   ];
-  if (picked.isNotEmpty) await recipes.seedStarterRecipes(picked);
+  if (picked.isEmpty) return;
+  await recipes.seedStarterRecipes(picked);
+  // Each classic stands on the shelf as its own book, dressed as it was
+  // shown in the tour.
+  for (final r in picked) {
+    final book = (await books.createCollection(profileId: 'default', name: r.title, colorToken: 'accent.herb')).orNull;
+    if (book == null) continue;
+    await books.addRecipeToCollection(book.id, r.id);
+    await saveBookCover(prefs, book.id, BookCover(style: r.bookStyle));
+  }
 }
 
 Future<void> saveCookName(SettingsRepository settings, String name) async {

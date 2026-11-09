@@ -6,6 +6,7 @@ import 'package:chefs_kiss/app/providers.dart';
 import 'package:chefs_kiss/core/ai/ai_connection.dart';
 import 'package:chefs_kiss/data/db/app_database.dart';
 import 'package:chefs_kiss/data/repositories/drift_food_log_repository.dart' show DriftPreferencesRepository;
+import 'package:chefs_kiss/data/repositories/drift_collection_repository.dart';
 import 'package:chefs_kiss/data/repositories/drift_recipe_repository.dart';
 import 'package:chefs_kiss/data/repositories/drift_settings_repository.dart';
 import 'package:chefs_kiss/data/seed/starter_recipes.dart';
@@ -99,7 +100,7 @@ void main() {
       final answers = OnboardingAnswers()..look = shelfLooks[2];
       answers.starterIds.addAll(['starter-dal-tadka', 'starter-guacamole']);
 
-      await saveOnboarding(answers, starters: _starters(), prefs: prefs, recipes: recipes);
+      await saveOnboarding(answers, starters: _starters(), prefs: prefs, recipes: recipes, books: DriftCollectionRepository(db));
 
       expect((await settings.getProfile()).orNull!.displayName, defaultCookName, reason: 'the tour asks no name');
       expect(ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey)).looksLike(shelfLooks[2].style), isTrue);
@@ -120,7 +121,7 @@ void main() {
       expect(answers.look, isNull);
       expect(answers.ownShelves, mine);
 
-      await saveOnboarding(answers, starters: const [], prefs: prefs, recipes: DriftRecipeRepository(db));
+      await saveOnboarding(answers, starters: const [], prefs: prefs, recipes: DriftRecipeRepository(db), books: DriftCollectionRepository(db));
       expect(ShelfStyle.fromJson(await prefs.readJson(shelfStyleKey)), mine);
     });
   });
@@ -184,7 +185,7 @@ void main() {
 
     // Ready: their kitchen and where to begin.
     expect(find.text('Your kitchen is ready'), findsOneWidget);
-    expect(find.textContaining('and 1 more are waiting in My Recipes.'), findsOneWidget);
+    expect(find.textContaining('and 1 more are on your shelf.'), findsOneWidget);
     expect(find.text('Scan a recipe'), findsOneWidget);
     expect(find.text('Bring recipes from the web'), findsOneWidget);
     expect(find.text('Cook step by step'), findsOneWidget);
@@ -192,7 +193,8 @@ void main() {
 
     expect(find.byType(OnboardingScreen), findsNothing);
     expect(find.byType(LibraryScreen), findsOneWidget);
-    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'My Recipes'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'Dal Tadka'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is ShelfBook && w.recipe.title == 'Shakshuka'), findsOneWidget);
     expect(find.text('Welcome to Chef’s Kiss!'), findsOneWidget);
 
     // What the tour saved, as the app now shows it.

@@ -12,6 +12,7 @@ import '../../../app/app_info.dart';
 import '../../../app/providers.dart';
 import '../../../app/widgets/kitchen_format.dart';
 import '../../../app/widgets/splash_view.dart';
+import '../../library/domain/book_covers.dart';
 import '../../library/domain/cookbook.dart';
 import '../../library/domain/shelf_style.dart';
 import '../../library/presentation/widgets/library_books.dart' show BookCoverFace;
@@ -103,6 +104,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         starters: starters,
         prefs: ref.read(preferencesRepositoryProvider),
         recipes: ref.read(recipeRepositoryProvider),
+        books: ref.read(collectionRepositoryProvider),
       );
     } catch (e, st) {
       // The kitchen opens either way; the answers are a nicety.
@@ -269,7 +271,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     const columns = 2;
     return _Page(
       title: 'Start with a few classics',
-      subtitle: 'Tested recipes you can cook from today. Pick any you like; they go into My Recipes.',
+      subtitle: 'Tested recipes you can cook from today. Each one you pick goes on your shelf as a book.',
       action: FilledButton(
         onPressed: _saving ? null : _save,
         child: _saving
@@ -340,16 +342,26 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final t = context.chefText;
     final c = context.chefColors;
     final starters = ref.watch(starterRecipesProvider).valueOrNull ?? const <Recipe>[];
-    final picked = [
+    final chosen = [
       for (final r in starters)
-        if (_answers.starterIds.contains(r.id)) r.title,
+        if (_answers.starterIds.contains(r.id)) r,
+    ];
+    final picked = [for (final r in chosen) r.title];
+    // The books as the shelf will stand them: each classic its own volume.
+    final books = [
+      for (final r in chosen)
+        Cookbook.volume(
+          RecipeCollection(id: r.id, profileId: 'default', name: r.title, colorToken: 'accent.herb', createdAt: 0, updatedAt: 0, recipeIds: [r.id]),
+          recipes: 1,
+          cover: BookCover(style: r.bookStyle),
+        ),
     ];
     final name = ref.watch(cookNameProvider);
     return _Page(
       centered: true,
       action: FilledButton(onPressed: _openKitchen, child: const Text('Open my kitchen')),
       children: [
-        _ShelfPreview(style: _answers.shelves, books: [Cookbook.myRecipes(recipes: picked.length)], height: 220),
+        _ShelfPreview(style: _answers.shelves, books: books.isEmpty ? [Cookbook.myRecipes(recipes: 0)] : books, height: 220),
         const SizedBox(height: 24),
         Semantics(
           header: true,
@@ -363,8 +375,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         Text(
           switch (picked.length) {
             0 => 'Your shelves are set up. Add your first recipe whenever you like.',
-            1 => '${picked.first} is waiting in My Recipes.',
-            final n => '${picked.first} and ${n - 1} more are waiting in My Recipes.',
+            1 => '${picked.first} is on your shelf.',
+            final n => '${picked.first} and ${n - 1} more are on your shelf.',
           },
           style: t.bodyLarge?.copyWith(color: c.contentSecondary),
           textAlign: TextAlign.center,
