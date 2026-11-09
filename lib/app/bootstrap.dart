@@ -128,7 +128,11 @@ class ChefApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Until it's known whether the welcome tour is done: the splash, rather
     // than a glimpse of the wrong screen.
-    final deciding = ref.watch(onboardingDoneProvider).isLoading;
+    final onboarded = ref.watch(onboardingDoneProvider);
+    // A returning cook's shelf opens filled, not on a loading spinner.
+    final deciding = !ref.watch(splashShownProvider) ||
+        onboarded.isLoading ||
+        (onboarded.valueOrNull == true && ref.watch(allRecipesProvider).isLoading);
     return MaterialApp.router(
       title: 'Chef’s Kiss',
       debugShowCheckedModeBanner: false,

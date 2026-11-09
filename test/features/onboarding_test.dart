@@ -204,7 +204,7 @@ void main() {
 
     // The welcome card leads to the developer's note and then steps aside.
     await tap(find.text('Welcome to Chef’s Kiss!'));
-    expect(find.text('A note from the developer'), findsOneWidget);
+    expect(find.text('Meet the developer'), findsOneWidget);
     await tap(find.byTooltip('Back'));
     expect(find.text('Welcome to Chef’s Kiss!'), findsNothing);
 

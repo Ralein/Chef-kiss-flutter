@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:design_tokens/design_tokens.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_info.dart';
 
@@ -52,34 +53,36 @@ Future<void> precacheSplashArt() async {
   stream.removeListener(listener);
 }
 
-/// Shown while the app works out where to open: the medallion where the
-/// system splash left it, then the name, and a progress line only if it's
-/// taking a while.
-class SplashView extends StatefulWidget {
+/// How long the splash stays up at least, however fast the app is ready.
+const splashMinimum = Duration(seconds: 2);
+
+/// Set once the splash has been up for [splashMinimum].
+final splashShownProvider = StateProvider<bool>((ref) => false);
+
+/// The splash: the medallion where the system splash left it, the name
+/// fading in, and a line that fills over [splashMinimum] before the app
+/// takes over.
+class SplashView extends ConsumerStatefulWidget {
   const SplashView({super.key});
 
   @override
-  State<SplashView> createState() => _SplashViewState();
+  ConsumerState<SplashView> createState() => _SplashViewState();
 }
 
-class _SplashViewState extends State<SplashView> {
-  bool _named = false;
-  bool _slow = false;
-  final _timers = <Timer>[];
+class _SplashViewState extends ConsumerState<SplashView> with SingleTickerProviderStateMixin {
+  late final _fill = AnimationController(vsync: this, duration: splashMinimum);
 
   @override
   void initState() {
     super.initState();
-    _timers
-      ..add(Timer(const Duration(milliseconds: 350), () => setState(() => _named = true)))
-      ..add(Timer(const Duration(milliseconds: 1600), () => setState(() => _slow = true)));
+    _fill.forward().whenComplete(() {
+      if (mounted) ref.read(splashShownProvider.notifier).state = true;
+    });
   }
 
   @override
   void dispose() {
-    for (final t in _timers) {
-      t.cancel();
-    }
+    _fill.dispose();
     super.dispose();
   }
 
@@ -88,40 +91,43 @@ class _SplashViewState extends State<SplashView> {
     final c = context.chefColors;
     final t = context.chefText;
     // The medallion stays dead centre, where the system splash drew it; the
-    // name and progress line sit below without moving it.
+    // name and the line sit below without moving it.
     const below = splashMedallionSize / 2 + 28;
     return Material(
       color: c.surfaceCanvas,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const Center(child: BrandMedallion()),
-          Center(
-            child: Transform.translate(
-              offset: const Offset(0, below + 14),
-              child: AnimatedOpacity(
-                opacity: _named ? 1 : 0,
-                duration: ChefMotion.emphasis,
-                child: Text(AppInfo.appName, style: t.headlineSmall),
+      child: AnimatedBuilder(
+        animation: _fill,
+        builder: (context, _) {
+          final v = _fill.value;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              const Center(child: BrandMedallion()),
+              Center(
+                child: Transform.translate(
+                  offset: const Offset(0, below + 14),
+                  child: Opacity(
+                    opacity: Curves.easeOut.transform(((v - 0.1) / 0.3).clamp(0.0, 1.0)),
+                    child: Text(AppInfo.appName, style: t.headlineSmall),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Center(
-            child: Transform.translate(
-              offset: const Offset(0, below + 56),
-              // Built only once it's needed: the line animates for as long as it's there.
-              child: AnimatedSwitcher(
-                duration: ChefMotion.emphasis,
-                child: _slow
-                    ? SizedBox(
-                        width: 96,
-                        child: LinearProgressIndicator(minHeight: 4, borderRadius: BorderRadius.circular(2)),
-                      )
-                    : const SizedBox(width: 96, height: 4),
+              Center(
+                child: Transform.translate(
+                  offset: const Offset(0, below + 56),
+                  child: SizedBox(
+                    width: 96,
+                    child: LinearProgressIndicator(
+                      value: Curves.easeInOut.transform(v),
+                      minHeight: 4,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
